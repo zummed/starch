@@ -26,6 +26,21 @@ export type {
   DiagramHandle,
 } from './core/types';
 
+// Composites
+export type {
+  StateMachineState,
+  StateMachineTransition,
+  StateMachineProps,
+} from './core/composites';
+export {
+  expandStateMachine,
+  stateId,
+  transitionId,
+  initialMarkerId,
+  initialArrowId,
+  finalMarkerId,
+} from './core/composites';
+
 // Components
 export { Diagram, useDiagram } from './components/Diagram';
 export type { DiagramProps } from './components/Diagram';

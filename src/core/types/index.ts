@@ -18,3 +18,10 @@ export type { EasingName, Keyframe, Chapter, AnimConfig, TrackKeyframe, Tracks }
 
 // Events
 export type { StarchEventType, StarchEvent, StarchEventHandler, DiagramHandle } from './events';
+
+// Composites (re-export for convenience)
+export type {
+  StateMachineState,
+  StateMachineTransition,
+  StateMachineProps,
+} from '../composites';
