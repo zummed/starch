@@ -275,6 +275,84 @@ text title {
   7.0s: fsm__final__closed__arrow.progress = 1 ease:easeInOut
 }`,
 
+  'Slack Bot': `# Slack Bot Interaction
+
+text title { x: 400 y: 30 text: "Slack Bot Interaction" size: 18 color: #e2e5ea bold: true }
+
+# ── Bot State Machine (left) ──
+text smLabel { x: 150 y: 75 text: "Bot States" size: 12 color: #4a4f59 }
+
+box idle { x: 150 y: 140 size: 120 40 fill: #0f1923 stroke: #22d3ee radius: 20 text: "Idle" }
+box parsing { x: 150 y: 230 size: 120 40 fill: #191710 stroke: #fbbf24 radius: 8 text: "Parsing" }
+box processing { x: 150 y: 320 size: 140 40 fill: #131825 stroke: #a78bfa radius: 8 text: "Processing" }
+box replying { x: 150 y: 410 size: 120 40 fill: #0f1916 stroke: #34d399 radius: 8 text: "Replying" }
+
+line t1 { from: idle to: parsing stroke: #fbbf24 label: "event" }
+line t2 { from: parsing to: processing stroke: #a78bfa label: "valid" }
+line t3 { from: processing to: replying stroke: #34d399 label: "done" }
+line t4 { from: replying to: idle stroke: #22d3ee dashed: true label: "reset" }
+
+# ── Slack Channel (right) ──
+text slackLabel { x: 600 y: 75 text: "Slack Channel" size: 12 color: #4a4f59 }
+
+box channel { x: 600 y: 110 size: 250 34 fill: #14161c stroke: #2a2d35 radius: 6 text: "# ops-deploy" textColor: #e2e5ea }
+
+box msg1 { x: 600 y: 180 size: 230 50 fill: #1e2028 stroke: #3a3f49 radius: 8 text: "/deploy staging" textColor: #60a5fa opacity: 0 }
+
+box msg2 { x: 600 y: 265 size: 230 50 fill: #1c1830 stroke: #352d5e radius: 8 text: "Deploying staging..." textColor: #a78bfa opacity: 0 }
+
+box msg3 { x: 600 y: 350 size: 230 50 fill: #0f1916 stroke: #1e4a3a radius: 8 text: "Deploy complete!" textColor: #34d399 opacity: 0 }
+
+# ── Flow arrows ──
+line webhook { from: msg1 to: parsing stroke: #60a5fa label: "Events API" dashed: true }
+line apiReply { from: replying to: msg2 stroke: #34d399 label: "Web API" dashed: true }
+
+@animate duration:10s loop:true {
+  0.0s: idle.scale = 1.12
+  0.4s: idle.scale = 1 ease:easeOutBack
+
+  0.5s: msg1.opacity = 0
+  1.0s: msg1.opacity = 1 ease:easeOut
+  1.0s: msg1.scale = 1.06
+  1.3s: msg1.scale = 1 ease:easeOutBack
+
+  1.3s: webhook.progress = 0
+  2.3s: webhook.progress = 1 ease:easeInOut
+
+  2.3s: t1.progress = 0
+  3.0s: t1.progress = 1 ease:easeInOut
+  3.0s: parsing.scale = 1.12, parsing.fill = #2a2410
+  3.4s: parsing.scale = 1 ease:easeOutBack, parsing.fill = #191710 ease:easeOut
+
+  3.4s: t2.progress = 0
+  4.2s: t2.progress = 1 ease:easeInOut
+  4.2s: processing.scale = 1.12, processing.fill = #1c1840
+  4.6s: processing.scale = 1 ease:easeOutBack, processing.fill = #131825 ease:easeOut
+
+  4.6s: t3.progress = 0
+  5.4s: t3.progress = 1 ease:easeInOut
+  5.4s: replying.scale = 1.12, replying.fill = #1a2e22
+  5.8s: replying.scale = 1 ease:easeOutBack, replying.fill = #0f1916 ease:easeOut
+
+  5.8s: apiReply.progress = 0
+  6.8s: apiReply.progress = 1 ease:easeInOut
+
+  6.8s: msg2.opacity = 0
+  7.2s: msg2.opacity = 1 ease:easeOut
+  7.2s: msg2.scale = 1.06
+  7.5s: msg2.scale = 1 ease:easeOutBack
+
+  7.5s: t4.progress = 0
+  8.3s: t4.progress = 1 ease:easeInOut
+  8.3s: idle.scale = 1.12
+  8.6s: idle.scale = 1 ease:easeOutBack
+
+  8.3s: msg3.opacity = 0
+  8.8s: msg3.opacity = 1 ease:easeOut
+  8.8s: msg3.scale = 1.08
+  9.2s: msg3.scale = 1 ease:easeOutBack
+}`,
+
   'Easing Demo': `# Easing comparison
 
 text title { x: 400  y: 30  text: "Easing Functions"  size: 18  color: #e2e5ea  bold: true }
