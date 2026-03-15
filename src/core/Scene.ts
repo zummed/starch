@@ -14,6 +14,8 @@ import type {
   StarchEventType,
   StarchEventHandler,
 } from './types';
+import type { StateMachineProps } from './composites';
+import { expandStateMachine } from './composites';
 
 class AnimationBuilder {
   private config: AnimConfig;
@@ -94,6 +96,16 @@ export class Scene {
       if (this._objects[childId]) {
         this._objects[childId].groupId = id;
       }
+    }
+    return this;
+  }
+
+  // ── Composites ─────────────────────────────────
+
+  stateMachine(id: string, props: StateMachineProps): this {
+    const expanded = expandStateMachine(id, props);
+    for (const [objId, obj] of Object.entries(expanded)) {
+      this._objects[objId] = obj;
     }
     return this;
   }

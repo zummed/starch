@@ -215,6 +215,66 @@ line query { from: server  to: db  stroke: #a78bfa  label: "SELECT *" }
   9.5s: db.scale = 1 ease:easeOutBack, db.fill = #131825 ease:easeOut
 }`,
 
+  'State Machine (Composite)': `# State Machine using composite object
+
+state_machine fsm {
+  x: 200
+  y: 200
+  direction: horizontal
+  spacing: 180
+  initialState: idle
+  finalStates: closed
+
+  stateFill: #0f1923
+  stateStroke: #22d3ee
+  stateWidth: 130
+  stateHeight: 46
+  stateRadius: 8
+  transitionStroke: #60a5fa
+  markerFill: #22d3ee
+  markerStroke: #22d3ee
+
+  state idle { label: "Idle"; fill: #0f1923; stroke: #22d3ee }
+  state connecting { label: "Connecting"; fill: #191710; stroke: #fbbf24 }
+  state connected { label: "Connected"; fill: #0f1916; stroke: #34d399 }
+  state closed { label: "Closed"; fill: #1c0f0f; stroke: #ef4444 }
+
+  transition idle -> connecting { label: "connect()" }
+  transition connecting -> connected { label: "established" }
+  transition connected -> closed { label: "close()" }
+  transition connecting -> idle { label: "timeout"; dashed: true }
+}
+
+text title {
+  x: 400
+  y: 80
+  text: "Connection State Machine"
+  size: 18
+  color: #e2e5ea
+  bold: true
+}
+
+@animate duration:8s loop:true {
+  0.2s: fsm__initial__arrow.progress = 0
+  0.8s: fsm__initial__arrow.progress = 1 ease:easeInOut
+  0.8s: fsm__state__idle.scale = 1.12
+  1.2s: fsm__state__idle.scale = 1 ease:easeOutBack
+  1.2s: fsm__transition__idle__connecting.progress = 0
+  2.0s: fsm__transition__idle__connecting.progress = 1 ease:easeInOut
+  2.0s: fsm__state__connecting.scale = 1.12
+  2.5s: fsm__state__connecting.scale = 1 ease:easeOutBack
+  2.5s: fsm__transition__connecting__connected.progress = 0
+  3.5s: fsm__transition__connecting__connected.progress = 1 ease:easeInOut
+  3.5s: fsm__state__connected.scale = 1.12
+  4.0s: fsm__state__connected.scale = 1 ease:easeOutBack
+  4.0s: fsm__transition__connected__closed.progress = 0
+  5.0s: fsm__transition__connected__closed.progress = 1 ease:easeInOut
+  5.0s: fsm__state__closed.scale = 1.15
+  5.5s: fsm__state__closed.scale = 1 ease:bounce
+  6.0s: fsm__final__closed__arrow.progress = 0
+  7.0s: fsm__final__closed__arrow.progress = 1 ease:easeInOut
+}`,
+
   'Easing Demo': `# Easing comparison
 
 text title { x: 400  y: 30  text: "Easing Functions"  size: 18  color: #e2e5ea  bold: true }

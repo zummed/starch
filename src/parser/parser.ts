@@ -4,6 +4,8 @@ import type {
   ObjectType,
   Chapter,
 } from '../core/types';
+import type { StateMachineState, StateMachineTransition, StateMachineProps } from '../core/composites';
+import { expandStateMachine } from '../core/composites';
 
 export interface ParseResult {
   objects: Record<string, SceneObject>;
@@ -26,6 +28,117 @@ function parseValue(val: string): number | boolean | string {
 const VALID_TYPES = new Set<string>([
   'box', 'circle', 'text', 'table', 'line', 'path', 'group',
 ]);
+
+function parseStateMachineBody(bodyLines: string[]): StateMachineProps {
+  const props: Partial<StateMachineProps> = {
+    x: 0,
+    y: 0,
+    states: {},
+    transitions: [],
+  };
+
+  for (let j = 0; j < bodyLines.length; j++) {
+    const bl = bodyLines[j].trim();
+    if (!bl || bl.startsWith('#')) continue;
+
+    // ── state name { ... } ──────────────────
+    const stateMatch = bl.match(/^state\s+(\w+)\s*\{(.*)$/);
+    if (stateMatch) {
+      const name = stateMatch[1];
+      let stateBody = stateMatch[2];
+      if (!stateBody.includes('}')) {
+        // Multi-line state block
+        j++;
+        const parts: string[] = [stateBody];
+        while (j < bodyLines.length && !bodyLines[j].trim().startsWith('}')) {
+          parts.push(bodyLines[j].trim());
+          j++;
+        }
+        stateBody = parts.join('; ');
+      } else {
+        stateBody = stateBody.slice(0, stateBody.indexOf('}')).trim();
+      }
+      const state: StateMachineState = { label: name };
+      for (const seg of stateBody.split(';')) {
+        const colonIdx = seg.indexOf(':');
+        if (colonIdx < 0) continue;
+        const key = seg.slice(0, colonIdx).trim();
+        const val = seg.slice(colonIdx + 1).trim();
+        if (key === 'label') state.label = parseValue(val) as string;
+        else if (key === 'fill') state.fill = val;
+        else if (key === 'stroke') state.stroke = val;
+        else if (key === 'textColor') state.textColor = val;
+        else if (key === 'textSize') state.textSize = parseFloat(val);
+        else if (key === 'radius') state.radius = parseFloat(val);
+      }
+      props.states![name] = state;
+      continue;
+    }
+
+    // ── transition from -> to { ... } ───────
+    const transMatch = bl.match(/^transition\s+(\w+)\s*->\s*(\w+)\s*(?:\{(.*))?$/);
+    if (transMatch) {
+      const from = transMatch[1];
+      const to = transMatch[2];
+      let transBody = transMatch[3] ?? '';
+      if (transBody && !transBody.includes('}')) {
+        j++;
+        const parts: string[] = [transBody];
+        while (j < bodyLines.length && !bodyLines[j].trim().startsWith('}')) {
+          parts.push(bodyLines[j].trim());
+          j++;
+        }
+        transBody = parts.join('; ');
+      } else if (transBody) {
+        transBody = transBody.slice(0, transBody.indexOf('}')).trim();
+      }
+      const t: StateMachineTransition = { from, to };
+      for (const seg of transBody.split(';')) {
+        const colonIdx = seg.indexOf(':');
+        if (colonIdx < 0) continue;
+        const key = seg.slice(0, colonIdx).trim();
+        const val = seg.slice(colonIdx + 1).trim();
+        if (key === 'label') t.label = parseValue(val) as string;
+        else if (key === 'stroke') t.stroke = val;
+        else if (key === 'strokeWidth') t.strokeWidth = parseFloat(val);
+        else if (key === 'dashed') t.dashed = val === 'true';
+      }
+      props.transitions!.push(t);
+      continue;
+    }
+
+    // ── Top-level properties ────────────────
+    const colonIdx = bl.indexOf(':');
+    if (colonIdx > 0) {
+      const key = bl.slice(0, colonIdx).trim();
+      const val = bl.slice(colonIdx + 1).trim();
+
+      if (key === 'x') props.x = parseFloat(val);
+      else if (key === 'y') props.y = parseFloat(val);
+      else if (key === 'pos') {
+        const parts = val.split(/\s+/).map(Number);
+        props.x = parts[0];
+        props.y = parts[1];
+      }
+      else if (key === 'direction') props.direction = val as 'horizontal' | 'vertical';
+      else if (key === 'spacing') props.spacing = parseFloat(val);
+      else if (key === 'initialState') props.initialState = val;
+      else if (key === 'finalStates') props.finalStates = val.split(/\s+/).filter(Boolean);
+      else if (key === 'stateFill') props.stateFill = val;
+      else if (key === 'stateStroke') props.stateStroke = val;
+      else if (key === 'stateTextColor') props.stateTextColor = val;
+      else if (key === 'stateWidth') props.stateWidth = parseFloat(val);
+      else if (key === 'stateHeight') props.stateHeight = parseFloat(val);
+      else if (key === 'stateRadius') props.stateRadius = parseFloat(val);
+      else if (key === 'transitionStroke') props.transitionStroke = val;
+      else if (key === 'markerRadius') props.markerRadius = parseFloat(val);
+      else if (key === 'markerFill') props.markerFill = val;
+      else if (key === 'markerStroke') props.markerStroke = val;
+    }
+  }
+
+  return props as StateMachineProps;
+}
 
 export function parseDSL(src: string): ParseResult {
   const objects: Record<string, SceneObject> = {};
@@ -111,6 +224,31 @@ export function parseDSL(src: string): ParseResult {
         }
       }
       i++;
+      continue;
+    }
+
+    // ── Composite: state_machine id { ... } ──────
+    const smMatch = line.match(/^state_machine\s+(\w+)\s*\{/);
+    if (smMatch) {
+      const smId = smMatch[1];
+      const bodyLines: string[] = [];
+      i++;
+      let depth = 1;
+      while (i < lines.length && depth > 0) {
+        const bl = lines[i];
+        for (const ch of bl) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth > 0) bodyLines.push(bl);
+        i++;
+      }
+
+      const smProps = parseStateMachineBody(bodyLines);
+      const expanded = expandStateMachine(smId, smProps);
+      for (const [objId, obj] of Object.entries(expanded)) {
+        objects[objId] = obj;
+      }
       continue;
     }
 
