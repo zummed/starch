@@ -5,7 +5,6 @@ import type { LabelProps } from './label';
 import type { TableProps } from './table';
 import type { LineProps } from './line';
 import type { PathProps } from './path';
-import type { GroupProps } from './group';
 
 // ─── Scene Object ───────────────────────────────────────────────
 
@@ -16,13 +15,12 @@ export type PropsForType<T extends ObjectType> =
   T extends 'table' ? TableProps :
   T extends 'line' ? LineProps :
   T extends 'path' ? PathProps :
-  T extends 'group' ? GroupProps :
   never;
 
 export interface SceneObject<T extends ObjectType = ObjectType> {
   type: T;
   id: string;
   props: PropsForType<T>;
-  groupId?: string; // which group this object belongs to, if any
   _inputKeys?: Set<string>; // props explicitly set by the user (vs schema defaults)
+  _definitionOrder?: number; // insertion order for layout tie-breaking
 }

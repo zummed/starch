@@ -9,14 +9,6 @@ export type EasingName =
   | 'bounce' | 'elastic' | 'spring'
   | 'snap' | 'step';
 
-export interface Keyframe {
-  time: number;
-  target: string;
-  prop: string;
-  value: number | string | boolean;
-  easing: EasingName;
-}
-
 export interface Chapter {
   id: string;
   time: number;
@@ -24,12 +16,28 @@ export interface Chapter {
   description?: string;
 }
 
+// ─── Keyframe Block Format ──────────────────────────────────────
+
+export interface ObjectChanges {
+  easing?: EasingName;
+  [prop: string]: unknown;
+}
+
+export interface KeyframeBlock {
+  time: number;
+  easing?: EasingName;
+  changes: Record<string, ObjectChanges>;
+}
+
 export interface AnimConfig {
-  duration: number;
-  loop: boolean;
-  keyframes: Keyframe[];
+  duration?: number;
+  loop?: boolean;
+  easing?: EasingName;
+  keyframes: KeyframeBlock[];
   chapters: Chapter[];
 }
+
+// ─── Internal Track Format (unchanged) ──────────────────────────
 
 export interface TrackKeyframe {
   time: number;
