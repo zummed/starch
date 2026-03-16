@@ -30,11 +30,15 @@ export function createBox(props: Record<string, unknown>): BoxHandles {
 
 export function updateBox(h: BoxHandles, props: Record<string, unknown>): void {
   const {
-    x = 0, y = 0, w = 140, h: height = 50,
+    x = 0, y = 0, w: rawW = 140, h: rawH = 50,
+    _layoutW, _layoutH,
     fill = '#1a1d24', stroke = '#22d3ee', strokeWidth = 1.5,
     radius = 8, text, textColor = '#e2e5ea', textSize = 13,
     opacity = 1, scale = 1, bold = false, anchor = 'center', textOffset,
   } = props as Record<string, number | string | boolean | number[] | undefined>;
+
+  const w = (_layoutW as number) || (rawW as number);
+  const height = (_layoutH as number) || (rawH as number);
 
   const { outerTranslate, innerTransform } = scaleAroundAnchor(
     x as number, y as number, scale as number, anchor as AnchorPoint,

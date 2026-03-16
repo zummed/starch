@@ -10,8 +10,10 @@ export function BoxRenderer({ props }: BoxRendererProps) {
   const {
     x = 0,
     y = 0,
-    w = 140,
-    h = 50,
+    w: rawW = 140,
+    h: rawH = 50,
+    _layoutW,
+    _layoutH,
     fill = '#1a1d24',
     stroke = '#22d3ee',
     strokeWidth = 1.5,
@@ -25,6 +27,9 @@ export function BoxRenderer({ props }: BoxRendererProps) {
     anchor = 'center',
     textOffset,
   } = props as Record<string, number | string | boolean | number[] | undefined>;
+
+  const w = (_layoutW as number) || (rawW as number);
+  const h = (_layoutH as number) || (rawH as number);
 
   const { outerTranslate, innerTransform } = scaleAroundAnchor(
     x as number, y as number, scale as number, anchor as AnchorPoint,

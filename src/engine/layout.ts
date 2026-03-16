@@ -142,11 +142,14 @@ export function computeLayout(
     const padding = (containerProps.padding as number) || 0;
     const isRow = direction === 'row';
 
-    const containerW = (containerProps._layoutW as number) || (containerProps.w as number) || 0;
-    const containerH = (containerProps._layoutH as number) || (containerProps.h as number) || 0;
+    const inputKeys = objects[containerId]?._inputKeys;
+    const hasExplicitW = inputKeys ? (inputKeys.has('w') || inputKeys.has('size')) : !!(containerProps.w as number);
+    const hasExplicitH = inputKeys ? (inputKeys.has('h') || inputKeys.has('size')) : !!(containerProps.h as number);
+    const hasExplicitSize = hasExplicitW || hasExplicitH;
+    const containerW = hasExplicitW ? ((containerProps._layoutW as number) || (containerProps.w as number) || 0) : 0;
+    const containerH = hasExplicitH ? ((containerProps._layoutH as number) || (containerProps.h as number) || 0) : 0;
     const containerMain = isRow ? containerW : containerH;
     const containerCross = isRow ? containerH : containerW;
-    const hasExplicitSize = !!((containerProps.w as number) || (containerProps.h as number));
     const shouldWrap = (containerProps.wrap as boolean) ?? false;
 
     // Resolve child sizes
@@ -286,10 +289,10 @@ export function computeLayout(
     const autoMain = totalContentMain + padding * 2;
     const autoCross = totalCrossExtent + padding * 2;
 
-    if (!containerProps.w && !containerProps._layoutW) {
+    if (!hasExplicitW) {
       containerProps._layoutW = isRow ? autoMain : autoCross;
     }
-    if (!containerProps.h && !containerProps._layoutH) {
+    if (!hasExplicitH) {
       containerProps._layoutH = isRow ? autoCross : autoMain;
     }
 
