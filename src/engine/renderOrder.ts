@@ -1,62 +1,67 @@
 import type { SceneObject } from '../core/types';
 
+function computeGroupDepths(
+  objects: Record<string, SceneObject>,
+  allProps: Record<string, Record<string, unknown>>,
+): Record<string, number> {
+  const depths: Record<string, number> = {};
+
+  function getDepth(id: string, visited: Set<string>): number {
+    if (depths[id] !== undefined) return depths[id];
+    if (visited.has(id)) return 0;
+    visited.add(id);
+
+    const props = allProps[id];
+    const groupId = props?.group as string | undefined;
+    if (groupId && objects[groupId]) {
+      depths[id] = getDepth(groupId, visited) + 1;
+    } else {
+      depths[id] = 0;
+    }
+    return depths[id];
+  }
+
+  for (const id of Object.keys(objects)) {
+    getDepth(id, new Set());
+  }
+
+  return depths;
+}
+
 export function computeRenderOrder(
   objects: Record<string, SceneObject>,
+  allProps?: Record<string, Record<string, unknown>>,
 ): Array<[string, SceneObject]> {
-  const entries = Object.entries(objects).filter(([, o]) => !o.groupId);
+  const entries = Object.entries(objects);
+  const props = allProps || {};
 
-  // Compute group nesting depth for each object
-  const groupDepth: Record<string, number> = {};
-  const computeDepth = (id: string): number => {
-    if (groupDepth[id] !== undefined) return groupDepth[id];
-    const obj = objects[id];
-    if (!obj) return 0;
-    const p = obj.props as Record<string, unknown>;
-    const children = p.children as string[] | undefined;
-    if (children && children.length > 0) {
-      const maxChild = Math.max(0, ...children.map(computeDepth));
-      groupDepth[id] = maxChild + 1;
-    } else {
-      groupDepth[id] = 0;
-    }
-    return groupDepth[id];
-  };
-  for (const id of Object.keys(objects)) computeDepth(id);
+  const groupDepths = allProps
+    ? computeGroupDepths(objects, allProps)
+    : {};
 
   const effectiveDepth = ([id, obj]: [string, SceneObject]): number => {
-    const p = obj.props as Record<string, unknown>;
+    const p = (props[id] || obj.props) as Record<string, unknown>;
     if (typeof p.depth === 'number') return p.depth;
-    if (obj.type === 'line') {
-      const from = p.from as string | undefined;
-      const to = p.to as string | undefined;
-      let d = 0;
-      if (from && objects[from]) {
-        const gid = objects[from].groupId;
-        d = Math.max(d, gid ? (groupDepth[gid] ?? 0) : 0);
-      }
-      if (to && objects[to]) {
-        const gid = objects[to].groupId;
-        d = Math.max(d, gid ? (groupDepth[gid] ?? 0) : 0);
-      }
-      return d;
-    }
-    return groupDepth[id] ?? 0;
+    return groupDepths[id] ?? 0;
   };
 
-  const typeOrder = (o: SceneObject): number => {
-    const p = o.props as Record<string, unknown>;
-    const hasKids = Array.isArray(p.children) && (p.children as string[]).length > 0;
+  const isContainer = (id: string): boolean => {
+    const p = (props[id] || objects[id]?.props) as Record<string, unknown>;
+    return !!p?.direction;
+  };
+
+  const typeOrder = (id: string, o: SceneObject): number => {
     if (o.type === 'path') return 0;
     if (o.type === 'label') return 1;
-    if (o.type === 'group' || hasKids) return 2;
+    if (isContainer(id)) return 2;
     if (o.type === 'line') return 4;
-    return 3; // box, circle, table
+    return 3;
   };
 
   return entries.sort((a, b) => {
     const da = effectiveDepth(a);
     const db = effectiveDepth(b);
     if (da !== db) return da - db;
-    return typeOrder(a[1]) - typeOrder(b[1]);
+    return typeOrder(a[0], a[1]) - typeOrder(b[0], b[1]);
   });
 }
