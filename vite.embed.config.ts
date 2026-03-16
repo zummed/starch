@@ -1,11 +1,9 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [react()],
   build: {
     lib: {
-      entry: 'src/embed.tsx',
+      entry: 'src/embed.ts',
       name: 'StarchEmbed',
       fileName: 'starch-embed',
       formats: ['iife'],
@@ -17,8 +15,5 @@ export default defineConfig({
         inlineDynamicImports: true,
       },
     },
-  },
-  define: {
-    'process.env.NODE_ENV': '"production"',
   },
 });

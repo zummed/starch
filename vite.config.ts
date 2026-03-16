@@ -5,7 +5,7 @@ import dts from 'vite-plugin-dts';
 export default defineConfig({
   plugins: [
     react(),
-    dts({ include: ['src'], exclude: ['src/main.tsx', 'src/App.tsx'] }),
+    dts({ include: ['src'], exclude: ['src/main.tsx', 'src/App.tsx', 'src/embed.ts'] }),
   ],
   build: {
     lib: {
@@ -15,7 +15,7 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', /^@codemirror\//, /^@lezer\//],
+      external: [/^@codemirror\//, /^@lezer\//],
     },
   },
 });

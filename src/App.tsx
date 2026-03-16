@@ -698,7 +698,7 @@ export default function App() {
         style={{ flex: 1, display: 'flex', overflow: 'hidden', userSelect: isDragging ? 'none' : 'auto' }}
         onMouseMove={(e) => {
           if (!dragging.current) return;
-          const newWidth = Math.min(Math.max(e.clientX, 200), 800);
+          const newWidth = Math.max(e.clientX, 200);
           setEditorWidth(newWidth);
         }}
         onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
