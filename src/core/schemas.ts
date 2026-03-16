@@ -33,6 +33,21 @@ const BaseSchema = z.object({
   visible: z.boolean().default(true),
   follow: z.string().optional(),
   pathProgress: z.number().optional(),
+  rotation: z.number().default(0),
+  direction: z.enum(['row', 'column']).optional(),
+  gap: z.number().default(0),
+  justify: z.enum(['start', 'center', 'end', 'spaceBetween', 'spaceAround']).default('start'),
+  align: z.enum(['start', 'center', 'end', 'stretch']).default('start'),
+  wrap: z.boolean().default(false),
+  padding: z.number().default(0),
+  group: z.string().optional(),
+  order: z.number().default(0),
+  grow: z.number().default(0),
+  shrink: z.number().default(0),
+  alignSelf: z.enum(['start', 'center', 'end', 'stretch']).optional(),
+  cascadeOpacity: z.boolean().default(true),
+  cascadeScale: z.boolean().default(true),
+  cascadeRotation: z.boolean().default(true),
 }).passthrough();
 
 // ─── Shape Schemas ──────────────────────────────────────────────
@@ -106,18 +121,6 @@ export const PathSchema = z.object({
   colour: z.string().optional(),
 }).passthrough();
 
-export const GroupSchema = BaseSchema.extend({
-  children: z.array(z.string()).default([]),
-  direction: z.enum(['row', 'column']).optional(),
-  gap: z.number().default(0),
-  justify: z.enum(['start', 'center', 'end', 'spread']).default('center'),
-  align: z.enum(['start', 'center', 'end']).default('center'),
-  padding: z.number().default(0),
-  rotation: z.number().default(0),
-  strokeWidth: z.number().default(2),
-  radius: z.number().default(0),
-}).passthrough();
-
 // ─── Schema Registry ────────────────────────────────────────────
 
 const SCHEMAS: Record<string, z.ZodType> = {
@@ -127,7 +130,6 @@ const SCHEMAS: Record<string, z.ZodType> = {
   line: LineSchema,
   table: TableSchema,
   path: PathSchema,
-  group: GroupSchema,
 };
 
 /**
@@ -146,20 +148,19 @@ export function parseShape(
 }
 
 export const VALID_TYPES = new Set<string>([
-  'box', 'circle', 'label', 'table', 'line', 'path', 'group',
+  'box', 'circle', 'label', 'table', 'line', 'path',
 ]);
 
 export const SCHEMA_METADATA = {
   types: [...VALID_TYPES],
   props: {
-    base: ['x', 'y', 'opacity', 'scale', 'anchor', 'colour', 'fill', 'stroke', 'text', 'textColor', 'textSize', 'textOffset', 'depth', 'visible', 'follow', 'pathProgress'],
+    base: ['x', 'y', 'opacity', 'scale', 'anchor', 'colour', 'fill', 'stroke', 'text', 'textColor', 'textSize', 'textOffset', 'depth', 'visible', 'follow', 'pathProgress', 'rotation', 'direction', 'gap', 'justify', 'align', 'wrap', 'padding', 'group', 'order', 'grow', 'shrink', 'alignSelf', 'cascadeOpacity', 'cascadeScale', 'cascadeRotation'],
     box: ['w', 'h', 'radius', 'strokeWidth', 'bold'],
     circle: ['r', 'strokeWidth'],
     label: ['text', 'color', 'size', 'bold', 'align'],
     line: ['from', 'to', 'fromAnchor', 'toAnchor', 'x1', 'y1', 'x2', 'y2', 'stroke', 'strokeWidth', 'dashed', 'arrow', 'label', 'labelColor', 'labelSize', 'opacity', 'progress', 'bend', 'colour', 'textOffset'],
     table: ['cols', 'rows', 'colWidth', 'rowHeight', 'headerFill', 'headerColor', 'strokeWidth'],
     path: ['points', 'closed', 'stroke', 'strokeWidth', 'visible', 'opacity', 'colour'],
-    group: ['children', 'direction', 'gap', 'justify', 'align', 'padding', 'rotation', 'strokeWidth', 'radius'],
   },
   easing: [
     'linear', 'easeIn', 'easeOut', 'easeInOut',
@@ -173,10 +174,10 @@ export const SCHEMA_METADATA = {
     'topleft', 'topright', 'bottomleft', 'bottomright',
     'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW',
   ],
-  align: ['start', 'center', 'end'],
-  justify: ['start', 'center', 'end', 'spread'],
+  align: ['start', 'center', 'end', 'stretch'],
+  justify: ['start', 'center', 'end', 'spaceBetween', 'spaceAround'],
   direction: ['row', 'column'],
-  keyframeProps: ['time', 'target', 'prop', 'value', 'easing'],
-  animateProps: ['duration', 'loop', 'keyframes', 'chapters'],
+  keyframeProps: ['time', 'easing', 'changes'],
+  animateProps: ['duration', 'loop', 'easing', 'keyframes', 'chapters'],
   shorthandProps: ['at', 'size'],
 } as const;
