@@ -1,47 +1,35 @@
 import type { SceneObject } from '../core/types';
 
 /**
- * Resolve the main-axis and cross-axis size of an object.
- * For row direction: main = width, cross = height.
- * For column direction: main = height, cross = width.
+ * Get the main-axis and cross-axis size of an object.
  */
 function getChildSize(
-  obj: SceneObject,
+  props: Record<string, unknown>,
+  type: string,
   isRow: boolean,
 ): { main: number; cross: number } {
-  const p = obj.props as Record<string, unknown>;
-
   let w: number;
   let h: number;
 
-  switch (obj.type) {
+  switch (type) {
     case 'circle': {
-      const r = (p.r as number) || 20;
+      const r = (props.r as number) || 20;
       w = r * 2;
       h = r * 2;
       break;
     }
     case 'table': {
-      const cols = (p.cols as string[]) || [];
-      const rows = (p.rows as string[][]) || [];
-      const cw = (p.colWidth as number) || 100;
-      const rh = (p.rowHeight as number) || 30;
+      const cols = (props.cols as string[]) || [];
+      const rows = (props.rows as string[][]) || [];
+      const cw = (props.colWidth as number) || 100;
+      const rh = (props.rowHeight as number) || 30;
       w = cols.length * cw;
       h = (rows.length + 1) * rh;
       break;
     }
-    case 'group': {
-      // For nested groups that have already been laid out,
-      // compute bounding box from children sizes.
-      // Fall back to explicit w/h or defaults.
-      w = (p.w as number) || (p._layoutW as number) || 100;
-      h = (p.h as number) || (p._layoutH as number) || 50;
-      break;
-    }
     default: {
-      // box, text, etc.
-      w = (p.w as number) || 100;
-      h = (p.h as number) || 50;
+      w = (props._layoutW as number) || (props.w as number) || 100;
+      h = (props._layoutH as number) || (props.h as number) || 50;
       break;
     }
   }
@@ -49,181 +37,287 @@ function getChildSize(
   return isRow ? { main: w, cross: h } : { main: h, cross: w };
 }
 
+interface ChildEntry {
+  id: string;
+  order: number;
+  definitionOrder: number;
+}
+
 /**
- * Topological sort: process inner groups before outer groups.
- * Returns group IDs in order (leaves first).
+ * Build membership map: containerId → sorted children.
+ * Reads `group` from animated props, falls back to base props.
  */
-function sortGroupsDepthFirst(
-  groups: Array<{ id: string; childGroupIds: string[] }>,
+function buildMembership(
+  objects: Record<string, SceneObject>,
+  allProps: Record<string, Record<string, unknown>>,
+): Map<string, ChildEntry[]> {
+  const membership = new Map<string, ChildEntry[]>();
+
+  for (const [id, obj] of Object.entries(objects)) {
+    const props = allProps[id] || obj.props;
+    const groupId = props.group as string | undefined;
+    if (!groupId) continue;
+
+    // Validate: container must exist and have direction set
+    const containerProps = allProps[groupId] || (objects[groupId]?.props as Record<string, unknown>);
+    if (!containerProps || !containerProps.direction) continue;
+
+    if (!membership.has(groupId)) {
+      membership.set(groupId, []);
+    }
+    membership.get(groupId)!.push({
+      id,
+      order: (props.order as number) ?? 0,
+      definitionOrder: obj._definitionOrder ?? 0,
+    });
+  }
+
+  // Sort children: by order, then by definition order
+  for (const children of membership.values()) {
+    children.sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.definitionOrder - b.definitionOrder;
+    });
+  }
+
+  return membership;
+}
+
+/**
+ * Topological sort: process inner containers before outer ones.
+ */
+function sortContainersDepthFirst(
+  membership: Map<string, ChildEntry[]>,
+  _allProps: Record<string, Record<string, unknown>>,
 ): string[] {
   const visited = new Set<string>();
   const result: string[] = [];
-  const groupMap = new Map(groups.map((g) => [g.id, g]));
 
   function visit(id: string) {
     if (visited.has(id)) return;
     visited.add(id);
-    const g = groupMap.get(id);
-    if (g) {
-      for (const childId of g.childGroupIds) {
-        visit(childId);
+    // Visit child containers first
+    const children = membership.get(id);
+    if (children) {
+      for (const child of children) {
+        if (membership.has(child.id)) {
+          visit(child.id);
+        }
       }
     }
     result.push(id);
   }
 
-  for (const g of groups) {
-    visit(g.id);
+  for (const containerId of membership.keys()) {
+    visit(containerId);
   }
 
   return result;
 }
 
 /**
- * Apply flexbox-like layout to groups that have `direction` set.
- * Mutates objects in place — sets children x/y and groupId.
+ * Compute flexbox layout and write world-space positions into allProps.
+ * Mutates allProps in place.
  */
-export function applyGroupLayouts(
+export function computeLayout(
   objects: Record<string, SceneObject>,
+  allProps: Record<string, Record<string, unknown>>,
 ): void {
-  // Find all layout groups (those with direction set)
-  const layoutGroups: Array<{ id: string; childGroupIds: string[] }> = [];
+  const membership = buildMembership(objects, allProps);
+  if (membership.size === 0) return;
 
-  for (const [id, obj] of Object.entries(objects)) {
-    const p = obj.props as Record<string, unknown>;
-    const children = p.children as string[] | undefined;
-    if (!children || !children.length) continue;
-    if (!p.direction) continue;
+  const order = sortContainersDepthFirst(membership, allProps);
 
-    const childGroupIds = children.filter(
-      (cid) => {
-        const cp = objects[cid]?.props as Record<string, unknown> | undefined;
-        return cp && (cp.children as string[] | undefined)?.length && cp.direction;
-      },
-    );
-    layoutGroups.push({ id, childGroupIds });
-  }
+  for (const containerId of order) {
+    const children = membership.get(containerId);
+    if (!children || children.length === 0) continue;
 
-  if (layoutGroups.length === 0) return;
+    const containerProps = allProps[containerId];
+    if (!containerProps) continue;
 
-  // Process depth-first (inner groups first)
-  const order = sortGroupsDepthFirst(layoutGroups);
-
-  for (const groupId of order) {
-    const group = objects[groupId];
-    const gp = group.props as Record<string, unknown>;
-    const direction = gp.direction as string;
-    const gap = (gp.gap as number) || 0;
-    const justify = (gp.justify as string) || 'center';
-    const align = (gp.align as string) || 'center';
-    const padding = (gp.padding as number) || 0;
+    const direction = containerProps.direction as string;
+    const gap = (containerProps.gap as number) || 0;
+    const justify = (containerProps.justify as string) || 'start';
+    const align = (containerProps.align as string) || 'start';
+    const padding = (containerProps.padding as number) || 0;
     const isRow = direction === 'row';
 
-    const childIds = ((gp.children as string[]) || []).filter(
-      (cid) => objects[cid],
-    );
+    const containerW = (containerProps._layoutW as number) || (containerProps.w as number) || 0;
+    const containerH = (containerProps._layoutH as number) || (containerProps.h as number) || 0;
+    const containerMain = isRow ? containerW : containerH;
+    const containerCross = isRow ? containerH : containerW;
+    const hasExplicitSize = !!((containerProps.w as number) || (containerProps.h as number));
+    const shouldWrap = (containerProps.wrap as boolean) ?? false;
 
-    if (childIds.length === 0) continue;
+    // Resolve child sizes
+    const childIds = children.map((c) => c.id);
+    const sizes = childIds.map((id) => {
+      const p = allProps[id] || {};
+      const type = objects[id]?.type || 'box';
+      return getChildSize(p, type, isRow);
+    });
 
-    // Resolve sizes
-    const sizes = childIds.map((cid) => getChildSize(objects[cid], isRow));
-
-    // Total main-axis span
-    const totalMain =
-      sizes.reduce((sum, s) => sum + s.main, 0) +
-      gap * (sizes.length - 1) +
-      padding * 2;
-
-    const maxCross = Math.max(...sizes.map((s) => s.cross));
-
-    // Compute main-axis positions (centered around 0)
-    const positions: Array<{ main: number; cross: number }> = [];
-
-    if (justify === 'spread' && childIds.length > 1) {
-      // Distribute children evenly across the total span
-      const totalChildMain = sizes.reduce((sum, s) => sum + s.main, 0);
-      const totalGap = totalMain - totalChildMain;
-      const gapBetween = totalGap / (sizes.length - 1);
-
-      let cursor = -totalMain / 2 + padding + sizes[0].main / 2;
-      for (let i = 0; i < sizes.length; i++) {
-        positions.push({ main: cursor, cross: 0 });
-        if (i < sizes.length - 1) {
-          cursor += sizes[i].main / 2 + gapBetween + sizes[i + 1].main / 2;
+    // Break into wrap lines if wrap is enabled
+    const lines: Array<{ ids: string[]; sizes: Array<{ main: number; cross: number }> }> = [];
+    if (shouldWrap && hasExplicitSize) {
+      const maxMain = containerMain - padding * 2;
+      let currentLine: { ids: string[]; sizes: Array<{ main: number; cross: number }> } = { ids: [], sizes: [] };
+      let currentMain = 0;
+      for (let i = 0; i < childIds.length; i++) {
+        const needed = currentLine.ids.length > 0 ? gap + sizes[i].main : sizes[i].main;
+        if (currentMain + needed > maxMain && currentLine.ids.length > 0) {
+          lines.push(currentLine);
+          currentLine = { ids: [], sizes: [] };
+          currentMain = 0;
         }
+        currentLine.ids.push(childIds[i]);
+        currentLine.sizes.push(sizes[i]);
+        currentMain += currentLine.ids.length === 1 ? sizes[i].main : gap + sizes[i].main;
       }
+      if (currentLine.ids.length > 0) lines.push(currentLine);
     } else {
-      // Pack children with gap, then offset based on justify
-      let cursor = sizes[0].main / 2;
-      for (let i = 0; i < sizes.length; i++) {
-        positions.push({ main: cursor, cross: 0 });
-        if (i < sizes.length - 1) {
-          cursor += sizes[i].main / 2 + gap + sizes[i + 1].main / 2;
+      lines.push({ ids: childIds, sizes });
+    }
+
+    // Process each line
+    let lineCrossOffset = 0;
+    let totalCrossExtent = 0;
+    const lineResults: Array<{ ids: string[]; mainPositions: number[]; crossPositions: number[]; finalMainSizes: number[]; lineCross: number; lineCrossOffset: number }> = [];
+
+    for (const line of lines) {
+      const lineIds = line.ids;
+      const lineSizes = line.sizes;
+
+      const totalChildMain = lineSizes.reduce((sum, s) => sum + s.main, 0);
+      const totalGaps = gap * (lineSizes.length - 1);
+      const contentMain = totalChildMain + totalGaps;
+      const availableMain = hasExplicitSize ? (containerMain - padding * 2) : contentMain;
+      const extraSpace = availableMain - contentMain;
+
+      // Apply grow/shrink
+      const finalMainSizes = lineSizes.map((s) => s.main);
+      if (extraSpace > 0) {
+        const totalGrow = lineIds.reduce((sum, id) => sum + ((allProps[id]?.grow as number) ?? 0), 0);
+        if (totalGrow > 0) {
+          lineIds.forEach((id, i) => {
+            const g = (allProps[id]?.grow as number) ?? 0;
+            if (g > 0) finalMainSizes[i] += (g / totalGrow) * extraSpace;
+          });
+        }
+      } else if (extraSpace < 0) {
+        const totalShrink = lineIds.reduce((sum, id, i) => sum + ((allProps[id]?.shrink as number) ?? 0) * lineSizes[i].main, 0);
+        if (totalShrink > 0) {
+          lineIds.forEach((id, i) => {
+            const s = (allProps[id]?.shrink as number) ?? 0;
+            if (s > 0) finalMainSizes[i] = Math.max(0, finalMainSizes[i] - (s * lineSizes[i].main / totalShrink) * Math.abs(extraSpace));
+          });
         }
       }
 
-      // cursor now points to center of last child
-      const blockSpan = cursor + sizes[sizes.length - 1].main / 2;
+      const finalContentMain = finalMainSizes.reduce((s, v) => s + v, 0) + totalGaps;
+      const mainPositions: number[] = [];
 
-      // Shift based on justify
-      let offset: number;
-      if (justify === 'start') {
-        offset = -blockSpan / 2 + padding;
-      } else if (justify === 'end') {
-        offset = blockSpan / 2 - padding;
-        // Shift so last child ends at offset
-        offset = offset - blockSpan;
+      if (justify === 'spaceBetween' && lineIds.length > 1) {
+        const totalItemMain = finalMainSizes.reduce((s, v) => s + v, 0);
+        const spacerSize = (availableMain - totalItemMain) / (lineIds.length - 1);
+        let cursor = -availableMain / 2 + finalMainSizes[0] / 2;
+        for (let i = 0; i < lineIds.length; i++) {
+          mainPositions.push(cursor);
+          if (i < lineIds.length - 1) cursor += finalMainSizes[i] / 2 + spacerSize + finalMainSizes[i + 1] / 2;
+        }
+      } else if (justify === 'spaceAround' && lineIds.length > 0) {
+        const totalItemMain = finalMainSizes.reduce((s, v) => s + v, 0);
+        const spacerSize = (availableMain - totalItemMain) / lineIds.length;
+        let cursor = -availableMain / 2 + spacerSize / 2 + finalMainSizes[0] / 2;
+        for (let i = 0; i < lineIds.length; i++) {
+          mainPositions.push(cursor);
+          if (i < lineIds.length - 1) cursor += finalMainSizes[i] / 2 + spacerSize + finalMainSizes[i + 1] / 2;
+        }
       } else {
-        // 'center' or 'spread' with single child
-        offset = -blockSpan / 2;
+        let cursor = finalMainSizes[0] / 2;
+        for (let i = 0; i < lineIds.length; i++) {
+          mainPositions.push(cursor);
+          if (i < lineIds.length - 1) cursor += finalMainSizes[i] / 2 + gap + finalMainSizes[i + 1] / 2;
+        }
+        let offset: number;
+        if (justify === 'start' || (justify === 'center' && !hasExplicitSize)) {
+          offset = hasExplicitSize ? -availableMain / 2 : -finalContentMain / 2;
+        } else if (justify === 'end') {
+          offset = hasExplicitSize ? availableMain / 2 - finalContentMain : -finalContentMain / 2;
+        } else {
+          // center with explicit size
+          offset = -finalContentMain / 2;
+        }
+        for (let i = 0; i < mainPositions.length; i++) mainPositions[i] += offset;
       }
 
-      for (const pos of positions) {
-        pos.main += offset;
+      const lineCross = Math.max(...lineSizes.map((s) => s.cross));
+      const maxCross = hasExplicitSize && lines.length === 1 ? (containerCross - padding * 2) : lineCross;
+
+      const crossPositions: number[] = [];
+      for (let i = 0; i < lineIds.length; i++) {
+        const childAlign = (allProps[lineIds[i]]?.alignSelf as string) || align;
+        const childCross = lineSizes[i].cross;
+        if (childAlign === 'start') {
+          crossPositions.push(-maxCross / 2 + childCross / 2);
+        } else if (childAlign === 'end') {
+          crossPositions.push(maxCross / 2 - childCross / 2);
+        } else if (childAlign === 'stretch') {
+          crossPositions.push(0);
+          const p = allProps[lineIds[i]];
+          if (p) {
+            if (isRow) p._layoutH = maxCross;
+            else p._layoutW = maxCross;
+          }
+        } else {
+          crossPositions.push(0);
+        }
       }
+
+      lineResults.push({ ids: lineIds, mainPositions, crossPositions, finalMainSizes, lineCross: maxCross, lineCrossOffset: lineCrossOffset });
+      lineCrossOffset += maxCross + (lineResults.length > 1 ? gap : 0);
+      totalCrossExtent = lineCrossOffset;
     }
 
-    // Apply cross-axis alignment
-    for (let i = 0; i < sizes.length; i++) {
-      const s = sizes[i];
-      if (align === 'start') {
-        positions[i].cross = -(maxCross / 2) + s.cross / 2;
-      } else if (align === 'end') {
-        positions[i].cross = maxCross / 2 - s.cross / 2;
-      }
-      // 'center' leaves cross at 0
+    // Auto-size
+    const totalContentMain = lines.length === 1
+      ? (lines[0].sizes.reduce((s, v) => s + v.main, 0) + gap * (lines[0].ids.length - 1))
+      : (containerMain - padding * 2);
+    const autoMain = totalContentMain + padding * 2;
+    const autoCross = totalCrossExtent + padding * 2;
+
+    if (!containerProps.w && !containerProps._layoutW) {
+      containerProps._layoutW = isRow ? autoMain : autoCross;
+    }
+    if (!containerProps.h && !containerProps._layoutH) {
+      containerProps._layoutH = isRow ? autoCross : autoMain;
     }
 
-    // Write positions to children
-    for (let i = 0; i < childIds.length; i++) {
-      const child = objects[childIds[i]];
-      const cp = child.props as Record<string, unknown>;
-      const pos = positions[i];
+    // Write world-space positions
+    const cx = (containerProps.x as number) || 0;
+    const cy = (containerProps.y as number) || 0;
+    const halfTotalCross = totalCrossExtent / 2;
 
-      if (isRow) {
-        cp.x = pos.main;
-        cp.y = pos.cross;
-      } else {
-        cp.x = pos.cross;
-        cp.y = pos.main;
-      }
+    for (const lr of lineResults) {
+      for (let i = 0; i < lr.ids.length; i++) {
+        const childProps = allProps[lr.ids[i]];
+        if (!childProps) continue;
 
-      child.groupId = groupId;
-    }
+        const mainPos = lr.mainPositions[i];
+        const crossPos = lr.crossPositions[i] + lr.lineCrossOffset + lr.lineCross / 2 - halfTotalCross;
 
-    // Store computed bounding box for nested group sizing
-    (gp as Record<string, unknown>)._layoutW = isRow ? totalMain : maxCross + padding * 2;
-    (gp as Record<string, unknown>)._layoutH = isRow ? maxCross + padding * 2 : totalMain;
-  }
+        if (isRow) {
+          childProps.x = cx + mainPos;
+          childProps.y = cy + crossPos;
+        } else {
+          childProps.x = cx + crossPos;
+          childProps.y = cy + mainPos;
+        }
 
-  // Also set groupId for non-layout containers (objects with children but no direction)
-  for (const [id, obj] of Object.entries(objects)) {
-    const p = obj.props as Record<string, unknown>;
-    const childIds = (p.children as string[]) || [];
-    if (!childIds.length) continue;
-    for (const cid of childIds) {
-      if (objects[cid]) {
-        objects[cid].groupId = id;
+        if (lr.finalMainSizes[i] !== lines[lineResults.indexOf(lr)].sizes[i].main) {
+          if (isRow) childProps._layoutW = lr.finalMainSizes[i];
+          else childProps._layoutH = lr.finalMainSizes[i];
+        }
       }
     }
   }
