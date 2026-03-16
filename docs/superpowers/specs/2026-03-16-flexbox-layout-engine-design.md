@@ -58,6 +58,7 @@ Short CSS-inspired names. No `flex` prefix.
 | `align` | `"start"` \| `"center"` \| `"end"` \| `"stretch"` | `"start"` | Cross-axis alignment |
 | `wrap` | `boolean` | `false` | Wrap children to next line when overflowing |
 | `padding` | `number` | `0` | Inner padding around children |
+| `rotation` | `number` | `0` | Rotation in degrees (currently only on GroupProps, promoted to BaseProps) |
 
 **Child properties (added to BaseProps):**
 
@@ -85,7 +86,7 @@ This is recursive for nested containers. All items render as top-level SVG eleme
 **Render order:** Determined by:
 1. Explicit `depth` property (if set)
 2. Nesting depth computed from `group` membership (deeper = higher)
-3. Type priority (paths < labels < shapes < lines)
+3. Type priority (paths < labels < containers < shapes < lines). An object counts as a container if it has `direction` set — this ensures container backgrounds render below their children and below non-container shapes at the same depth.
 
 ### 4. Parent Transform Cascade
 
@@ -95,12 +96,12 @@ When a container has `scale`, `opacity`, or `rotation`, these cascade to childre
 - **scale:** child positions scaled relative to parent origin, child scale multiplied
 - **rotation:** child positions rotated around parent origin
 
-**Opt-out:** Three boolean properties on the container, all default `true`:
-- `inheritOpacity`
-- `inheritScale`
-- `inheritRotation`
+**Opt-out:** Three boolean properties on the **container** controlling whether it cascades each transform to its children. All default `true`:
+- `cascadeOpacity`
+- `cascadeScale`
+- `cascadeRotation`
 
-Set to `false` to stop that transform from cascading. These are animatable — a container can stop/start cascading transforms mid-animation via keyframes.
+Set to `false` to stop that transform from cascading to children. These are animatable — a container can stop/start cascading transforms mid-animation via keyframes.
 
 ### 5. Auto-Sizing
 
@@ -129,11 +130,16 @@ Inner containers first, so their auto-sized dimensions are known when the parent
 
 **Main axis:**
 1. Sum children main-axis sizes + gaps
-2. If `wrap: true` and total exceeds container main-axis size, break into lines
-3. Distribute remaining space:
-   - If children have `grow > 0`, distribute extra space proportionally
-   - If children overflow and have `shrink > 0`, shrink proportionally
-   - Otherwise position according to `justify`
+2. If `wrap: true` and total exceeds container main-axis size, break into wrap lines. Each wrap line is a separate row/column of children.
+3. For each line, distribute remaining space:
+   - If children have `grow > 0`, distribute extra space proportionally to grow values
+   - If children overflow and have `shrink > 0`, reduce sizes proportionally to `shrink * childSize`
+   - Otherwise position according to `justify`:
+     - `start` — pack children to the start of the main axis
+     - `center` — center the block of children
+     - `end` — pack children to the end of the main axis
+     - `spaceBetween` — equal gaps between children, no gap at edges
+     - `spaceAround` — equal gaps around each child (half-gap at edges)
 
 **Cross axis:**
 For each child, apply `alignSelf` (or container `align`):
@@ -142,11 +148,12 @@ For each child, apply `alignSelf` (or container `align`):
 - `end` — align to cross-axis end
 - `stretch` — expand child cross-axis size to fill the line
 
-**Step 4 — Convert to world-space:**
-Add container world position to child offsets (recursive for nesting).
+When `wrap: true` produces multiple lines, each line occupies its own cross-axis band. Lines are packed to the start of the cross axis with no extra space between them (equivalent to CSS `align-content: flex-start`). Multi-line alignment control may be added in a future iteration.
 
-**Step 5 — Auto-size containers:**
-Containers without explicit `w`/`h` get sized from children extent. Computed before parent processes them.
+**Note on step ordering:** Auto-sizing and world-space conversion happen during depth-first processing. For each container (inner-first):
+1. Lay out its children on main/cross axes
+2. If no explicit `w`/`h`, compute auto-size from children extent
+3. Convert child positions to world-space by adding container's world position
 
 ### 7. Keyframe-Block Animation
 
@@ -184,7 +191,30 @@ Animation is defined as keyframe blocks — groups of changes at a point in time
 4. Animation-level default
 5. `"linear"` (system default)
 
-**Track building:** Keyframe blocks are flattened into per-property tracks (same internal structure as today). The easing cascade is resolved during this step — each track keyframe gets its resolved easing attached.
+**Track building:** Keyframe blocks are flattened into per-property tracks (same internal `Tracks` structure as today — `Record<string, TrackKeyframe[]>`). The easing cascade is resolved during this step — each track keyframe gets its resolved easing attached.
+
+The new input format replaces the current `AnimConfig` type. The old per-property keyframe format (`{ time, target, prop, value, easing }[]`) is replaced by the keyframe-block format. The internal `Tracks` type remains unchanged — only the input format and the `buildTimeline` function change.
+
+**New `AnimConfig` type:**
+```ts
+interface AnimConfig {
+  easing?: EasingName;           // animation-level default
+  duration?: number;             // total animation duration (retained from current type)
+  loop?: boolean;                // loop playback (retained from current type)
+  keyframes: KeyframeBlock[];
+}
+
+interface KeyframeBlock {
+  time: number;
+  easing?: EasingName;           // keyframe-level default
+  changes: Record<string, ObjectChanges>;
+}
+
+interface ObjectChanges {
+  easing?: EasingName;           // per-object default
+  [prop: string]: unknown;       // property values
+}
+```
 
 **Interpolation:** Unchanged. Numbers lerp, colors lerp, strings/booleans snap. The transition window for any property is from its previous keyframe to the current one.
 
@@ -210,27 +240,39 @@ The evaluator maintains a transition map: `{ itemId → { fromX, fromY, targetX,
 
 For items that move as a side-effect (siblings reflowing because a new item arrived), the blend uses the same window as the keyframe that caused the reflow.
 
-This makes the evaluator slightly stateful — it tracks active blends across frames. The state is minimal and resets cleanly on seek.
+**Initial layout (no blend):** When the evaluator first runs (t=0 or after a seek), layout positions are applied instantly with no blending. Blending only activates when a layout position changes between consecutive frames during playback.
 
-### 9. Chapters
+This makes the evaluator slightly stateful — it tracks active blends across frames. The state is minimal and resets cleanly on seek (all active blends are cleared, positions snap to layout-computed values).
 
-Deferred. Chapters will be revisited as named keyframes in a future iteration.
+### 9. Validation
 
-### 10. What Stays the Same
+- If `group` references a nonexistent object ID, the item is treated as ungrouped (positioned at its own x/y).
+- If `group` references create a cycle (A in B, B in A), behaviour is undefined. The depth-first processing will skip one of them. No explicit cycle detection is required in v1 — this is a user error.
+
+### 10. Chapters
+
+Deferred. Chapters will be revisited as named keyframes in a future iteration. The existing `Chapter` type and `getActiveChapter()` remain temporarily unchanged.
+
+### 11. Intentional Simplifications
+
+- `padding` is a single number (uniform on all sides), not per-side. This may be extended later.
+- No `align-content` for wrapped layouts — wrapped lines pack to start. May be added later.
+
+### 12. What Stays the Same
 
 - **Interpolation engine** — lerp numbers, lerp colors, snap strings/booleans
-- **All 15 easing functions**
+- **All existing easing functions** (linear, easeIn, easeOut, easeInOut, cubic/quart variants, easeInBack, easeOutBack, bounce, elastic, spring, snap, step)
 - **Line/path system** — from/to connections, bezier curves, splines, path following
 - **Anchor system** — named/float anchors for scale pivot points
 - **SVG renderers** — BoxRenderer, CircleRenderer, LabelRenderer, TableRenderer, LineRenderer, PathRenderer (GroupRenderer removed)
 - **Diagram component** — playback controls, requestAnimationFrame loop
 - **Editor component** — CodeMirror live editing
 
-### 11. Changes Summary
+### 13. Changes Summary
 
 | Area | Change |
 |------|--------|
-| Types | Remove `GroupProps`, `'group'` from ObjectType. Add layout/child/inherit props to BaseProps |
+| Types | Remove `GroupProps`, `'group'` from ObjectType. Add layout/child/cascade props, `rotation` to BaseProps. New `AnimConfig` with keyframe-block format. |
 | Layout engine | Full rewrite — flexbox algorithm, world-space, eval-time |
 | Evaluator | Add layout + position blending (stateful) + parent transform cascade |
 | Timeline builder | Accept keyframe blocks, resolve easing cascade |
