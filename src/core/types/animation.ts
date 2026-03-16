@@ -46,3 +46,16 @@ export interface TrackKeyframe {
 }
 
 export type Tracks = Record<string, TrackKeyframe[]>; // key = "objectId.propName"
+
+// ─── Effects ────────────────────────────────────────────────────
+
+export type EffectName = 'pulse' | 'flash' | 'shake' | 'glow';
+
+export const EFFECT_NAMES: ReadonlySet<string> = new Set(['pulse', 'flash', 'shake', 'glow']);
+
+export interface EffectInstance {
+  target: string;
+  effect: EffectName;
+  amplitude: number;
+  triggerTime: number;
+}

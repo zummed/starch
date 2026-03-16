@@ -1,6 +1,7 @@
-import type { SceneObject, Tracks, Chapter } from '../core/types';
+import type { SceneObject, Tracks, Chapter, EffectInstance } from '../core/types';
 import { interpolate } from './interpolate';
 import { computeLayout } from './layout';
+import { applyEffects } from './effects';
 import {
   quadPoint, autoCurveControl, splineEndpoint,
   catmullRomClosedPoint,
@@ -28,7 +29,7 @@ interface EvaluatorFn {
 /**
  * Create a stateful evaluator that tracks position blending across frames.
  */
-export function createEvaluator(): EvaluatorFn {
+export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
   const blendMap = new Map<string, BlendState>();
 
   const evaluate = (
@@ -51,6 +52,11 @@ export function createEvaluator(): EvaluatorFn {
         const val = interpolate(keyframes, time);
         if (val !== undefined) result[target][prop] = val;
       }
+    }
+
+    // Step 2b: Apply effects (additive, time-decaying)
+    if (effects.length > 0) {
+      applyEffects(effects, result, time);
     }
 
     // Step 3: Run layout

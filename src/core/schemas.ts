@@ -53,8 +53,8 @@ const BaseSchema = z.object({
 // ─── Shape Schemas ──────────────────────────────────────────────
 
 export const BoxSchema = BaseSchema.extend({
-  w: z.number().default(120),
-  h: z.number().default(40),
+  w: z.number().default(140),
+  h: z.number().default(46),
   radius: z.number().default(8),
   strokeWidth: z.number().default(1.5),
   bold: z.boolean().default(false),
@@ -180,4 +180,5 @@ export const SCHEMA_METADATA = {
   keyframeProps: ['time', 'easing', 'changes'],
   animateProps: ['duration', 'loop', 'easing', 'keyframes', 'chapters'],
   shorthandProps: ['at', 'size'],
+  effects: ['pulse', 'flash', 'shake', 'glow'],
 } as const;

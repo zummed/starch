@@ -11,7 +11,7 @@ export function BoxRenderer({ props }: BoxRendererProps) {
     x = 0,
     y = 0,
     w: rawW = 140,
-    h: rawH = 50,
+    h: rawH = 46,
     _layoutW,
     _layoutH,
     fill = '#1a1d24',

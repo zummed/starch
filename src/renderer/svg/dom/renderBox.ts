@@ -30,7 +30,7 @@ export function createBox(props: Record<string, unknown>): BoxHandles {
 
 export function updateBox(h: BoxHandles, props: Record<string, unknown>): void {
   const {
-    x = 0, y = 0, w: rawW = 140, h: rawH = 50,
+    x = 0, y = 0, w: rawW = 140, h: rawH = 46,
     _layoutW, _layoutH,
     fill = '#1a1d24', stroke = '#22d3ee', strokeWidth = 1.5,
     radius = 8, text, textColor = '#e2e5ea', textSize = 13,

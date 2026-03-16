@@ -24,7 +24,6 @@ export function interpolate(
     if (time >= keyframes[i].time && time <= keyframes[i + 1].time) {
       const rawT =
         (time - keyframes[i].time) / (keyframes[i + 1].time - keyframes[i].time);
-      // Easing on the destination keyframe controls how we arrive there
       const t = applyEasing(rawT, keyframes[i + 1].easing);
       const a = keyframes[i].value;
       const b = keyframes[i + 1].value;

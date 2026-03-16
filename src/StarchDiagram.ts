@@ -1,7 +1,8 @@
-import type { SceneObject, Chapter, AnimConfig, Tracks, StarchEvent, StarchEventHandler, DiagramHandle } from './core/types';
+import type { SceneObject, Chapter, AnimConfig, Tracks, StarchEvent, StarchEventHandler, DiagramHandle, EffectInstance } from './core/types';
 import { Scene } from './core/Scene';
 import { parseDSL } from './parser/parser';
 import { buildTimeline } from './engine/timeline';
+import { extractEffects } from './engine/effects';
 import { createEvaluator, getActiveChapter } from './engine/evaluator';
 import { computeRenderOrder } from './engine/renderOrder';
 import { createCanvas } from './renderer/svg/dom/renderCanvas';
@@ -198,7 +199,8 @@ export class StarchDiagram implements DiagramHandle {
 
   private _rebuild(): void {
     this._tracks = buildTimeline(this._animConfig, this._objects);
-    this._evaluator.reset();
+    const effects = extractEffects(this._animConfig);
+    this._evaluator = createEvaluator(effects);
     const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
     this._renderOrder = computeRenderOrder(this._objects, animatedProps);
   }

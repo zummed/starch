@@ -11,6 +11,7 @@ import type { SceneObject, DiagramHandle, Chapter, AnimConfig, StarchEvent } fro
 import { Scene } from '../core/Scene';
 import { parseDSL } from '../parser/parser';
 import { buildTimeline } from '../engine/timeline';
+import { extractEffects } from '../engine/effects';
 import { createEvaluator, getActiveChapter } from '../engine/evaluator';
 import { computeRenderOrder } from '../engine/renderOrder';
 import { SvgCanvas } from '../renderer/svg/SvgCanvas';
@@ -58,6 +59,9 @@ function useDiagramCore(props: DiagramProps) {
 
   const { objects, animConfig } = parsed;
   const tracks = useMemo(() => buildTimeline(animConfig, objects), [animConfig, objects]);
+  const effects = useMemo(() => extractEffects(animConfig), [animConfig]);
+  // Recreate evaluator when effects change
+  useMemo(() => { evaluatorRef.current = createEvaluator(effects); }, [effects]);
   const duration = animConfig.duration ?? 5;
   const chapters = animConfig.chapters;
 

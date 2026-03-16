@@ -15,23 +15,18 @@ const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
 const EXAMPLES: Record<string, string> = {
   'State Machine': `{
-  // HTTP Connection State Machine — using shorthand syntax
+  // HTTP Connection State Machine
   objects: [
     { label: "title", at: [400, 35], text: "Connection Lifecycle", size: 18, color: "#e2e5ea", bold: true },
 
     { circle: "start", at: [400, 90], r: 12, colour: "#22d3ee", fill: "#22d3ee" },
 
-    { box: "idle", at: [400, 170], size: [130, 46],
+    { box: "idle", at: [400, 170],
       colour: "#22d3ee", radius: 23, text: "Idle", anchor: "bottom" },
 
-    { box: "connecting", at: [180, 300], size: [150, 46],
-      colour: "#fbbf24", text: "Connecting", anchor: "top" },
-
-    { box: "connected", at: [400, 430], size: [150, 46],
-      colour: "#34d399", text: "Connected", anchor: "top" },
-
-    { box: "error", at: [620, 300], size: [130, 46],
-      colour: "#ef4444", text: "Error", anchor: "top" },
+    { box: "connecting", at: [180, 300], colour: "#fbbf24", text: "Connecting", anchor: "top" },
+    { box: "connected", at: [400, 430], colour: "#34d399", text: "Connected", anchor: "top" },
+    { box: "error", at: [620, 300], colour: "#ef4444", text: "Error", anchor: "top" },
 
     { line: "s0", from: "start", to: "idle", colour: "#22d3ee", label: "init" },
     { line: "s1", from: "idle", to: "connecting", colour: "#fbbf24", label: "connect()", bend: -30 },
@@ -41,67 +36,52 @@ const EXAMPLES: Record<string, string> = {
     { line: "s5", from: "connected", to: "idle", colour: "#8a8f98", label: "close()", dashed: true, bend: 30 },
   ],
   animate: {
-    duration: 8, loop: false,
-    // Target-grouped keyframes — much less repetition
-    keyframes: {
-      start: [
-        [0.0, "scale", 1.3],
-        [0.4, "scale", 1, "easeOutCubic"],
-      ],
-      s0: [
-        [0.2, "progress", 0],
-        [0.8, "progress", 1, "easeInOut"],
-      ],
-      idle: [
-        [0.8, "scale", 1.12],
-        [1.2, "scale", 1, "easeOutBack"],
-        [5.0, "scale", 1.12],
-        [5.4, "scale", 1, "easeOutBack"],
-      ],
-      s1: [
-        [1.2, "progress", 0],
-        [2.0, "progress", 1, "easeInOut"],
-        [5.39, "progress", 1],
-        [5.4, "progress", 0, "snap"],
-        [6.0, "progress", 1, "easeInOut"],
-      ],
-      connecting: [
-        [2.0, "scale", 1.12],
-        [2.0, "fill", "#2a2410"],
-        [2.5, "scale", 1, "easeOutBack"],
-        [2.5, "fill", "#191710", "easeOut"],
-        [6.0, "scale", 1.12],
-        [6.3, "scale", 1, "easeOutBack"],
-      ],
-      s2: [
-        [2.5, "progress", 0],
-        [3.3, "progress", 1, "easeInOut"],
-      ],
-      connected: [
-        [3.3, "scale", 1.12],
-        [3.3, "fill", "#1a2e22"],
-        [3.8, "scale", 1, "easeOutBack"],
-        [3.8, "fill", "#0f1916", "easeOut"],
-      ],
-      s5: [
-        [4.2, "progress", 0],
-        [5.0, "progress", 1, "easeInOut"],
-      ],
-      s3: [
-        [6.3, "progress", 0],
-        [7.0, "progress", 1, "easeInOut"],
-      ],
-      error: [
-        [7.0, "scale", 1.15],
-        [7.0, "fill", "#2c1010"],
-        [7.4, "scale", 1, "bounce"],
-        [7.4, "fill", "#1c0f0f", "easeOut"],
-      ],
-      s4: [
-        [7.4, "progress", 0],
-        [8.0, "progress", 1, "easeInOut"],
-      ],
-    },
+    duration: 9, loop: false,
+    // Effects: pulse, flash, shake, glow are additive and decay automatically
+    keyframes: [
+      { time: 0.0, changes: { start: { scale: 1.3 } } },
+      { time: 0.4, changes: { start: { scale: 1, easing: "easeOutCubic" }, s0: { progress: 0 } } },
+      { time: 1.2, changes: {
+        s0: { progress: 1, easing: "easeInOut" },
+        idle: { pulse: 0.12 },
+        s1: { progress: 0 },
+      } },
+      { time: 2.5, changes: {
+        idle: { pulse: 0.12 },
+        s1: { progress: 1, easing: "easeInOut" },
+        connecting: { pulse: 0.12 },
+        s2: { progress: 0 },
+      } },
+      { time: 3.8, changes: {
+        s2: { progress: 1, easing: "easeInOut" },
+        connecting: { pulse: 0.12 },
+        connected: { pulse: 0.12 },
+      } },
+      { time: 4.2, changes: { s5: { progress: 0 } } },
+      { time: 5.4, changes: {
+        s5: { progress: 1, easing: "easeInOut" },
+        connected: { pulse: 0.12 },
+        idle: { pulse: 0.12 },
+        s1: { progress: 0, easing: "snap" },
+      } },
+      { time: 6.8, changes: {
+        idle: { pulse: 0.12 },
+        s1: { progress: 1, easing: "easeInOut" },
+        connecting: { pulse: 0.12 },
+        s3: { progress: 0 },
+      } },
+      { time: 8.0, changes: {
+        connecting: { pulse: 0.12 },
+        s3: { progress: 1, easing: "easeInOut" },
+        error: { pulse: 0.15, shake: 3 },
+        s4: { progress: 0 },
+      } },
+      { time: 9.0, changes: {
+        s4: { progress: 1, easing: "easeInOut" },
+        error: { pulse: 0.15 },
+        idle: { pulse: 0.12 },
+      } },
+    ],
   },
 }`,
 
@@ -110,79 +90,52 @@ const EXAMPLES: Record<string, string> = {
   objects: [
     { label: "title", at: [450, 30], text: "ETL Pipeline", size: 18, color: "#e2e5ea", bold: true },
 
-    { box: "ingest", at: [100, 120], size: [130, 50], colour: "#60a5fa", text: "Ingest" },
-    { box: "validate", at: [300, 120], size: [130, 50], colour: "#60a5fa", text: "Validate" },
-    { box: "transform", at: [500, 120], size: [140, 50], colour: "#a78bfa", text: "Transform" },
-    { box: "load", at: [700, 120], size: [130, 50], colour: "#34d399", text: "Load" },
+    { box: "ingest", at: [100, 120], colour: "#60a5fa", text: "Ingest" },
+    { box: "validate", at: [300, 120], colour: "#60a5fa", text: "Validate" },
+    { box: "transform", at: [500, 120], colour: "#a78bfa", text: "Transform" },
+    { box: "load", at: [700, 120], colour: "#34d399", text: "Load" },
 
-    { table: "schema", at: [300, 280],
+    { table: "schema", at: [300, 280], opacity: 0.4,
       cols: ["Field", "Type", "Nullable"],
       rows: [["id", "u64", "no"], ["name", "String", "no"], ["score", "f64", "yes"], ["ts", "DateTime", "no"]] },
 
-    { table: "metrics", at: [650, 310],
+    { table: "metrics", at: [650, 310], opacity: 0.4,
       cols: ["Metric", "Value"],
       rows: [["rows/s", "12,450"], ["errors", "0.02%"], ["p99 lat", "23ms"]] },
 
-    { line: "l1", from: "ingest", to: "validate", colour: "#60a5fa", label: "raw bytes", labelRotation: 90 },
-    { line: "l2", from: "validate", to: "transform", colour: "#a78bfa", label: "parsed rows", labelRotation: 90 },
-    { line: "l3", from: "transform", to: "load", colour: "#34d399", label: "clean records", labelRotation: 90 },
-    { line: "l4", from: "validate", to: "schema", colour: "#3a3f49", label: "check against", dashed: true },
-    { line: "l5", from: "load", to: "metrics", colour: "#3a3f49", label: "report", dashed: true },
+    { line: "l1", from: "ingest", to: "validate", colour: "#60a5fa", label: "raw bytes", labelRotation: 90, progress: 0 },
+    { line: "l2", from: "validate", to: "transform", colour: "#a78bfa", label: "parsed rows", labelRotation: 90, progress: 0 },
+    { line: "l3", from: "transform", to: "load", colour: "#34d399", label: "clean records", labelRotation: 90, progress: 0 },
+    { line: "l4", from: "validate", to: "schema", colour: "#3a3f49", label: "check against", dashed: true, progress: 0 },
+    { line: "l5", from: "load", to: "metrics", colour: "#3a3f49", label: "report", dashed: true, progress: 0 },
   ],
   animate: {
     duration: 6, loop: false,
-    keyframes: {
-      ingest: [
-        [0.0, "scale", 1.1],
-        [0.0, "fill", "#1a2540"],
-        [0.4, "scale", 1, "easeOutBack"],
-        [0.4, "fill", "#131825", "easeOut"],
-      ],
-      l1: [
-        [0.3, "progress", 0],
-        [1.0, "progress", 1, "easeInOut"],
-      ],
-      validate: [
-        [1.0, "scale", 1.1],
-        [1.4, "scale", 1, "easeOutBack"],
-      ],
-      l4: [
-        [1.0, "progress", 0],
-        [1.8, "progress", 1, "easeInOut"],
-      ],
-      schema: [
-        [1.4, "opacity", 0.4],
-        [2.0, "opacity", 1, "easeOut"],
-      ],
-      l2: [
-        [1.5, "progress", 0],
-        [2.3, "progress", 1, "easeInOut"],
-      ],
-      transform: [
-        [2.3, "scale", 1.1],
-        [2.3, "fill", "#1c1840"],
-        [2.7, "scale", 1, "easeOutBack"],
-        [2.7, "fill", "#131825", "easeOut"],
-      ],
-      l3: [
-        [2.7, "progress", 0],
-        [3.5, "progress", 1, "easeInOut"],
-      ],
-      load: [
-        [3.5, "scale", 1.1],
-        [3.5, "fill", "#132e22"],
-        [3.9, "scale", 1, "easeOutBack"],
-        [3.9, "fill", "#131825", "easeOut"],
-      ],
-      l5: [
-        [3.5, "progress", 0],
-        [4.3, "progress", 1, "easeInOut"],
-      ],
-      metrics: [
-        [4.3, "opacity", 0.4],
-        [5.0, "opacity", 1, "easeOut"],
-      ],
-    },
+    keyframes: [
+      { time: 1.0, changes: {
+        l1: { progress: 1, easing: "easeInOut" },
+        ingest: { pulse: 0.1 },
+        validate: { pulse: 0.1 },
+      } },
+      { time: 2.0, changes: {
+        l4: { progress: 1, easing: "easeInOut" },
+        schema: { opacity: 1, easing: "easeOut" },
+      } },
+      { time: 3.0, changes: {
+        l2: { progress: 1, easing: "easeInOut" },
+        validate: { pulse: 0.1 },
+        transform: { pulse: 0.1 },
+      } },
+      { time: 4.0, changes: {
+        l3: { progress: 1, easing: "easeInOut" },
+        transform: { pulse: 0.1 },
+        load: { pulse: 0.1 },
+      } },
+      { time: 5.0, changes: {
+        l5: { progress: 1, easing: "easeInOut" },
+        metrics: { opacity: 1, easing: "easeOut" },
+      } },
+    ],
   },
 }`,
 
@@ -191,9 +144,9 @@ const EXAMPLES: Record<string, string> = {
   objects: [
     { label: "title", at: [400, 35], text: "Connection Setup", size: 18, color: "#e2e5ea", bold: true },
 
-    { box: "client", at: [150, 200], size: [120, 50], colour: "#60a5fa", text: "Client" },
-    { box: "server", at: [650, 200], size: [120, 50], colour: "#34d399", text: "Server" },
-    { box: "db", at: [650, 380], size: [120, 50], colour: "#a78bfa", text: "Database" },
+    { box: "client", at: [150, 200], colour: "#60a5fa", text: "Client" },
+    { box: "server", at: [650, 200], colour: "#34d399", text: "Server" },
+    { box: "db", at: [650, 380], colour: "#a78bfa", text: "Database" },
 
     { path: "flowPath", points: [{x:210,y:200}, {x:400,y:200}, {x:590,y:200}], visible: false, colour: "#60a5fa" },
 
@@ -208,36 +161,26 @@ const EXAMPLES: Record<string, string> = {
       { time: 3.0, title: "Handshake", description: "Server responds with SYN-ACK" },
       { time: 6.0, title: "Query", description: "Server queries the database" },
     ],
-    keyframes: {
-      client: [
-        [0.0, "scale", 1.15],
-        [0.5, "scale", 1, "easeOutBack"],
-        [5.5, "scale", 1.1],
-        [6.0, "scale", 1, "easeOutBack"],
-      ],
-      syn: [
-        [0.5, "progress", 0],
-        [2.5, "progress", 1, "easeInOut"],
-      ],
-      server: [
-        [2.5, "scale", 1.15],
-        [3.0, "scale", 1, "easeOutBack"],
-      ],
-      ack: [
-        [3.0, "progress", 0],
-        [5.5, "progress", 1, "easeInOut"],
-      ],
-      query: [
-        [6.0, "progress", 0],
-        [8.5, "progress", 1, "easeInOut"],
-      ],
-      db: [
-        [8.5, "scale", 1.15],
-        [8.5, "fill", "#1c1840"],
-        [9.5, "scale", 1, "easeOutBack"],
-        [9.5, "fill", "#131825", "easeOut"],
-      ],
-    },
+    keyframes: [
+      { time: 0.0, changes: { client: { pulse: 0.15 }, syn: { progress: 0 } } },
+      { time: 2.5, changes: {
+        syn: { progress: 1, easing: "easeInOut" },
+        client: { pulse: 0.15 },
+        server: { pulse: 0.15 },
+        ack: { progress: 0 },
+      } },
+      { time: 5.5, changes: {
+        ack: { progress: 1, easing: "easeInOut" },
+        server: { pulse: 0.15 },
+        client: { pulse: 0.1 },
+        query: { progress: 0 },
+      } },
+      { time: 8.5, changes: {
+        query: { progress: 1, easing: "easeInOut" },
+        server: { pulse: 0.15 },
+        db: { pulse: 0.15, glow: 3 },
+      } },
+    ],
   },
 }`,
 
@@ -251,9 +194,9 @@ const EXAMPLES: Record<string, string> = {
       colour: "#2a2d35", radius: 12 },
 
     // Status boxes — declare their container via group
-    { box: "s1", size: [110, 46], colour: "#22d3ee", text: "Idle", group: "row1" },
-    { box: "s2", size: [110, 46], colour: "#fbbf24", text: "Active", group: "row1" },
-    { box: "s3", size: [110, 46], colour: "#34d399", text: "Done", group: "row1" },
+    { box: "s1", colour: "#22d3ee", text: "Idle", group: "row1" },
+    { box: "s2", colour: "#fbbf24", text: "Active", group: "row1" },
+    { box: "s3", colour: "#34d399", text: "Done", group: "row1" },
 
     // Column container
     { box: "col1", at: [400, 300], direction: "column", gap: 20, padding: 16,
@@ -270,44 +213,14 @@ const EXAMPLES: Record<string, string> = {
   ],
   animate: {
     duration: 6, loop: false,
-    keyframes: {
-      s1: [
-        [0.0, "scale", 1.15],
-        [0.4, "scale", 1, "easeOutBack"],
-      ],
-      l1: [
-        [0.4, "progress", 0],
-        [1.2, "progress", 1, "easeInOut"],
-      ],
-      d1: [
-        [1.2, "scale", 1.08],
-        [1.6, "scale", 1, "easeOutBack"],
-      ],
-      s2: [
-        [2.0, "scale", 1.15],
-        [2.4, "scale", 1, "easeOutBack"],
-      ],
-      l2: [
-        [2.4, "progress", 0],
-        [3.2, "progress", 1, "easeInOut"],
-      ],
-      d2: [
-        [3.2, "scale", 1.08],
-        [3.6, "scale", 1, "easeOutBack"],
-      ],
-      s3: [
-        [4.0, "scale", 1.15],
-        [4.4, "scale", 1, "easeOutBack"],
-      ],
-      l3: [
-        [4.4, "progress", 0],
-        [5.2, "progress", 1, "easeInOut"],
-      ],
-      d3: [
-        [5.2, "scale", 1.08],
-        [5.6, "scale", 1, "easeOutBack"],
-      ],
-    },
+    keyframes: [
+      { time: 0.4, changes: { s1: { pulse: 0.15 }, l1: { progress: 0 } } },
+      { time: 1.2, changes: { l1: { progress: 1, easing: "easeInOut" }, d1: { pulse: 0.08 } } },
+      { time: 2.4, changes: { s2: { pulse: 0.15 }, l2: { progress: 0 } } },
+      { time: 3.2, changes: { l2: { progress: 1, easing: "easeInOut" }, d2: { pulse: 0.08 } } },
+      { time: 4.4, changes: { s3: { pulse: 0.15 }, l3: { progress: 0 } } },
+      { time: 5.2, changes: { l3: { progress: 1, easing: "easeInOut" }, d3: { pulse: 0.08 } } },
+    ],
   },
 }`,
 
@@ -320,7 +233,7 @@ const EXAMPLES: Record<string, string> = {
     { label: "smLabel", at: [150, 75], text: "Bot States", size: 12, color: "#4a4f59" },
     { box: "idle", at: [150, 140], colour: "#22d3ee", radius: 20, text: "Idle" },
     { box: "parsing", at: [150, 230], colour: "#fbbf24", text: "Parsing" },
-    { box: "processing", at: [150, 320], size: [140, 40], colour: "#a78bfa", text: "Processing" },
+    { box: "processing", at: [150, 320], colour: "#a78bfa", text: "Processing" },
     { box: "replying", at: [150, 410], colour: "#34d399", text: "Replying" },
 
     { line: "t1", from: "idle", to: "parsing", colour: "#fbbf24", label: "event" },
@@ -341,79 +254,45 @@ const EXAMPLES: Record<string, string> = {
   ],
   animate: {
     duration: 10, loop: false,
-    keyframes: {
-      idle: [
-        [0.0, "scale", 1.12],
-        [0.4, "scale", 1, "easeOutBack"],
-        [8.3, "scale", 1.12],
-        [8.6, "scale", 1, "easeOutBack"],
-      ],
-      msg1: [
-        [0.5, "opacity", 0],
-        [1.0, "opacity", 1, "easeOut"],
-        [1.0, "scale", 1.06],
-        [1.3, "scale", 1, "easeOutBack"],
-      ],
-      webhook: [
-        [1.3, "progress", 0],
-        [2.3, "progress", 1, "easeInOut"],
-      ],
-      t1: [
-        [2.3, "progress", 0],
-        [3.0, "progress", 1, "easeInOut"],
-      ],
-      parsing: [
-        [3.0, "scale", 1.12],
-        [3.0, "fill", "#2a2410"],
-        [3.4, "scale", 1, "easeOutBack"],
-        [3.4, "fill", "#191710", "easeOut"],
-      ],
-      t2: [
-        [3.4, "progress", 0],
-        [4.2, "progress", 1, "easeInOut"],
-      ],
-      processing: [
-        [4.2, "scale", 1.12],
-        [4.2, "fill", "#1c1840"],
-        [4.6, "scale", 1, "easeOutBack"],
-        [4.6, "fill", "#131825", "easeOut"],
-      ],
-      t3: [
-        [4.6, "progress", 0],
-        [5.4, "progress", 1, "easeInOut"],
-      ],
-      replying: [
-        [5.4, "scale", 1.12],
-        [5.4, "fill", "#1a2e22"],
-        [5.8, "scale", 1, "easeOutBack"],
-        [5.8, "fill", "#0f1916", "easeOut"],
-      ],
-      apiReply: [
-        [5.8, "progress", 0],
-        [6.8, "progress", 1, "easeInOut"],
-      ],
-      msg2: [
-        [6.8, "opacity", 0],
-        [7.2, "opacity", 1, "easeOut"],
-        [7.2, "scale", 1.06],
-        [7.5, "scale", 1, "easeOutBack"],
-      ],
-      t4: [
-        [7.5, "progress", 0],
-        [8.3, "progress", 1, "easeInOut"],
-      ],
-      msg3: [
-        [8.3, "opacity", 0],
-        [8.8, "opacity", 1, "easeOut"],
-        [8.8, "scale", 1.08],
-        [9.2, "scale", 1, "easeOutBack"],
-      ],
-    },
+    keyframes: [
+      { time: 0.0, changes: { idle: { pulse: 0.12 } } },
+      { time: 0.5, changes: { msg1: { opacity: 0 } } },
+      { time: 1.0, changes: { msg1: { opacity: 1, pulse: 0.06 }, webhook: { progress: 0 } } },
+      { time: 2.3, changes: { webhook: { progress: 1, easing: "easeInOut" }, t1: { progress: 0 } } },
+      { time: 3.0, changes: {
+        t1: { progress: 1, easing: "easeInOut" },
+        idle: { pulse: 0.12 },
+        parsing: { pulse: 0.12 },
+        t2: { progress: 0 },
+      } },
+      { time: 4.2, changes: {
+        t2: { progress: 1, easing: "easeInOut" },
+        parsing: { pulse: 0.12 },
+        processing: { pulse: 0.12 },
+        t3: { progress: 0 },
+      } },
+      { time: 5.4, changes: {
+        t3: { progress: 1, easing: "easeInOut" },
+        processing: { pulse: 0.12 },
+        replying: { pulse: 0.12 },
+        apiReply: { progress: 0 },
+      } },
+      { time: 6.8, changes: { apiReply: { progress: 1, easing: "easeInOut" }, msg2: { opacity: 0 } } },
+      { time: 7.2, changes: { msg2: { opacity: 1, pulse: 0.06 }, t4: { progress: 0 } } },
+      { time: 8.3, changes: {
+        t4: { progress: 1, easing: "easeInOut" },
+        replying: { pulse: 0.12 },
+        idle: { pulse: 0.12 },
+        msg3: { opacity: 0 },
+      } },
+      { time: 8.8, changes: { msg3: { opacity: 1, pulse: 0.08 } } },
+    ],
   },
 }`,
 
   'Path Motion': `{
   // Objects following a smooth closed path
+  // Uses per-object keyframe shorthand: { targetId: [[time, prop, value, easing?]] }
   objects: [
     { label: "title", at: [400, 45], text: "Objects in Motion", size: 18, color: "#e2e5ea", bold: true },
     { label: "sub", at: [400, 72], text: "follow + pathProgress", size: 11, color: "#4a4f59" },
@@ -464,16 +343,18 @@ const EXAMPLES: Record<string, string> = {
   ],
   animate: {
     duration: 3, loop: false,
-    keyframes: {
-      b1: [[3.0, "x", 650, "linear"]],
-      b2: [[3.0, "x", 650, "easeInOut"]],
-      b3: [[3.0, "x", 650, "easeOutCubic"]],
-      b4: [[3.0, "x", 650, "easeOutBack"]],
-      b5: [[3.0, "x", 650, "bounce"]],
-      b6: [[3.0, "x", 650, "elastic"]],
-      b7: [[3.0, "x", 650, "spring"]],
-      b8: [[3.0, "x", 650, "snap"]],
-    },
+    keyframes: [
+      { time: 3.0, changes: {
+        b1: { x: 650, easing: "linear" },
+        b2: { x: 650, easing: "easeInOut" },
+        b3: { x: 650, easing: "easeOutCubic" },
+        b4: { x: 650, easing: "easeOutBack" },
+        b5: { x: 650, easing: "bounce" },
+        b6: { x: 650, easing: "elastic" },
+        b7: { x: 650, easing: "spring" },
+        b8: { x: 650, easing: "snap" },
+      } },
+    ],
   },
 }`,
 };

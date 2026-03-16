@@ -19,7 +19,9 @@ export type { PropsForType, SceneObject } from './scene';
 export type {
   EasingName, KeyframeBlock, ObjectChanges, Chapter, AnimConfig,
   TrackKeyframe, Tracks,
+  EffectName, EffectInstance,
 } from './animation';
+export { EFFECT_NAMES } from './animation';
 
 // Events
 export type { StarchEventType, StarchEvent, StarchEventHandler, DiagramHandle } from './events';
