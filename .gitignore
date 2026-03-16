@@ -3,3 +3,4 @@ dist
 *.tsbuildinfo
 .vite
 docs/plans/
+.playwright-mcp
