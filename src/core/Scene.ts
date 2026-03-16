@@ -7,15 +7,14 @@ import type {
   TableProps,
   LineProps,
   PathProps,
-  GroupProps,
   EasingName,
+  ObjectChanges,
   Chapter,
   StarchEvent,
   StarchEventType,
   StarchEventHandler,
 } from './types';
 import { parseShape } from './schemas';
-import { applyGroupLayouts } from '../engine/layout';
 
 class AnimationBuilder {
   private config: AnimConfig;
@@ -24,19 +23,15 @@ class AnimationBuilder {
     this.config = config;
   }
 
-  at(
+  keyframe(
     time: number,
-    target: string,
-    prop: string,
-    value: number | string | boolean,
+    changes: Record<string, ObjectChanges>,
     easing?: EasingName,
   ): this {
     this.config.keyframes.push({
       time,
-      target,
-      prop,
-      value,
-      easing: easing || 'linear',
+      easing,
+      changes,
     });
     return this;
   }
@@ -49,6 +44,7 @@ class AnimationBuilder {
 
 export class Scene {
   private _objects: Record<string, SceneObject> = {};
+  private _nextOrder = 0;
   private _animConfig: AnimConfig = {
     duration: 5,
     loop: true,
@@ -60,68 +56,48 @@ export class Scene {
   // ── Object creation ─────────────────────────────
 
   box(id: string, props: Partial<BoxProps> & { w?: number; h?: number }): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('box', props as Record<string, unknown>);
-    this._objects[id] = { type: 'box', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'box', props);
   }
 
   circle(id: string, props: Partial<CircleProps> & { r?: number }): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('circle', props as Record<string, unknown>);
-    this._objects[id] = { type: 'circle', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'circle', props);
   }
 
   label(id: string, props: Partial<LabelProps> & { text: string }): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('label', props as Record<string, unknown>);
-    this._objects[id] = { type: 'label', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'label', props);
   }
 
   table(id: string, props: Partial<TableProps> & { cols: string[] }): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('table', props as Record<string, unknown>);
-    this._objects[id] = { type: 'table', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'table', props);
   }
 
   line(id: string, props: Partial<LineProps>): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('line', props as Record<string, unknown>);
-    this._objects[id] = { type: 'line', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'line', props);
   }
 
   path(id: string, props: Partial<PathProps> & { points: Array<{ x: number; y: number }> }): this {
-    const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('path', props as Record<string, unknown>);
-    this._objects[id] = { type: 'path', id, props: parsed as never, _inputKeys: inputKeys };
-    return this;
+    return this._addObject(id, 'path', props);
   }
 
-  group(id: string, props: Partial<GroupProps> & { children?: string[] }): this {
+  private _addObject(id: string, type: string, props: Record<string, unknown>): this {
     const inputKeys = new Set(Object.keys(props));
-    const parsed = parseShape('group', props as Record<string, unknown>);
-    this._objects[id] = { type: 'group', id, props: parsed as never, _inputKeys: inputKeys };
-    // Mark children as belonging to this group
-    const children = (parsed as Record<string, unknown>).children as string[] | undefined;
-    if (children) {
-      for (const childId of children) {
-        if (this._objects[childId]) {
-          this._objects[childId].groupId = id;
-        }
-      }
-    }
+    const parsed = parseShape(type as 'box', props);
+    this._objects[id] = {
+      type: type as 'box',
+      id,
+      props: parsed as never,
+      _inputKeys: inputKeys,
+      _definitionOrder: this._nextOrder++,
+    };
     return this;
   }
 
   // ── Animation ───────────────────────────────────
 
-  animate(opts: { duration: number; loop?: boolean }): AnimationBuilder {
+  animate(opts: { duration: number; loop?: boolean; easing?: EasingName }): AnimationBuilder {
     this._animConfig.duration = opts.duration;
     this._animConfig.loop = opts.loop ?? true;
+    this._animConfig.easing = opts.easing;
     return new AnimationBuilder(this._animConfig);
   }
 
@@ -147,7 +123,6 @@ export class Scene {
   // ── Accessors ───────────────────────────────────
 
   getObjects(): Record<string, SceneObject> {
-    applyGroupLayouts(this._objects);
     return this._objects;
   }
 
