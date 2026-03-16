@@ -6,7 +6,6 @@ import type {
   EasingName,
 } from '../core/types';
 import { parseShape, VALID_TYPES } from '../core/schemas';
-import { applyGroupLayouts } from '../engine/layout';
 import { expandShorthands } from './shorthands';
 
 export interface ParseResult {
@@ -17,16 +16,15 @@ export interface ParseResult {
 interface RawObject {
   type: string;
   id: string;
-  children?: RawObject[];
   [key: string]: unknown;
 }
 
-interface RawKeyframe {
+interface RawKeyframeBlock {
   time: number;
-  target: string;
-  prop: string;
-  value: number | string | boolean;
   easing?: string;
+  changes?: Record<string, Record<string, unknown>>;
+  // Also allow flat format for convenience: any other keys are treated as target IDs
+  [key: string]: unknown;
 }
 
 interface RawChapter {
@@ -41,21 +39,19 @@ interface RawDiagram {
   animate?: {
     duration?: number;
     loop?: boolean;
-    keyframes?: RawKeyframe[];
+    easing?: string;
+    keyframes?: RawKeyframeBlock[];
     chapters?: RawChapter[];
   };
 }
 
-/**
- * Recursively parse an object and its children, flattening into
- * the objects record. Returns the list of child IDs for the parent.
- */
+let _definitionCounter = 0;
+
 function parseObject(
   raw: RawObject,
   objects: Record<string, SceneObject>,
-  parentId?: string,
 ): void {
-  const { type, id, children: rawChildren, ...rest } = raw;
+  const { type, id, ...rest } = raw;
 
   if (!type || !id) {
     throw new Error(`Object missing required "type" or "id" field`);
@@ -67,49 +63,81 @@ function parseObject(
     throw new Error(`Duplicate object ID: "${id}"`);
   }
 
-  // Collect inline child IDs — children can be string IDs or inline objects
-  const childIds: string[] = [];
-  if (rawChildren && Array.isArray(rawChildren)) {
-    for (const child of rawChildren) {
-      if (typeof child === 'string') {
-        // String ID reference to an existing object
-        childIds.push(child);
-      } else if (child && typeof child === 'object' && child.id) {
-        // Inline nested object
-        childIds.push(child.id);
-        parseObject(child as RawObject, objects, id);
-      }
-    }
-  }
+  const inputKeys = new Set(Object.keys(rest));
+  const parsed = parseShape(type as ObjectType, rest);
 
-  // Build props — if there are children, add them to props
-  const props: Record<string, unknown> = { ...rest };
-  if (childIds.length > 0) {
-    props.children = childIds;
-    // Default to column layout if direction not specified for non-group types
-    if (type !== 'group' && !props.direction) {
-      props.direction = 'column';
-    }
-  }
-
-  // Track which keys the user explicitly provided (before Zod adds defaults)
-  const inputKeys = new Set(Object.keys(props));
-
-  // Run through Zod schema for defaults + colour resolution
-  const parsed = parseShape(type as ObjectType, props);
-
-  const obj: SceneObject = {
+  objects[id] = {
     type: type as ObjectType,
     id,
     props: parsed as never,
     _inputKeys: inputKeys,
+    _definitionOrder: _definitionCounter++,
   };
+}
 
-  if (parentId) {
-    obj.groupId = parentId;
+function parseKeyframeBlock(raw: RawKeyframeBlock): { time: number; easing?: EasingName; changes: Record<string, Record<string, unknown>> } {
+  const { time, easing, changes: rawChanges, ...rest } = raw;
+
+  // If `changes` is provided, use it directly
+  // Otherwise, remaining keys are target IDs (flat format)
+  const changes: Record<string, Record<string, unknown>> = {};
+
+  if (rawChanges && typeof rawChanges === 'object') {
+    for (const [targetId, props] of Object.entries(rawChanges)) {
+      changes[targetId] = props;
+    }
   }
 
-  objects[id] = obj;
+  // Flat format: any key that isn't time/easing/changes is a target ID
+  for (const [key, value] of Object.entries(rest)) {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      changes[key] = value as Record<string, unknown>;
+    }
+  }
+
+  return {
+    time,
+    easing: easing as EasingName | undefined,
+    changes,
+  };
+}
+
+/**
+ * Shared helper to build AnimConfig from raw animate block.
+ * Used by both parseDSL and parseJSON to avoid duplication.
+ */
+function buildAnimConfigFromRaw(rawAnimate?: RawDiagram['animate']): AnimConfig {
+  const animConfig: AnimConfig = {
+    duration: rawAnimate?.duration ?? 5,
+    loop: rawAnimate?.loop ?? true,
+    easing: (rawAnimate?.easing as EasingName) || undefined,
+    keyframes: [],
+    chapters: [],
+  };
+
+  if (rawAnimate?.keyframes) {
+    for (const kf of rawAnimate.keyframes) {
+      const parsed = parseKeyframeBlock(kf);
+      animConfig.keyframes.push({
+        time: parsed.time,
+        easing: parsed.easing,
+        changes: parsed.changes as Record<string, { easing?: EasingName; [k: string]: unknown }>,
+      });
+    }
+  }
+
+  if (rawAnimate?.chapters) {
+    for (const ch of rawAnimate.chapters) {
+      animConfig.chapters.push({
+        id: ch.id || ch.title.toLowerCase().replace(/\s+/g, '-'),
+        time: ch.time,
+        title: ch.title,
+        description: ch.description,
+      });
+    }
+  }
+
+  return animConfig;
 }
 
 /**
@@ -124,48 +152,16 @@ export function parseDSL(src: string): ParseResult {
     throw new Error(`JSON5 parse error: ${(e as Error).message}`);
   }
 
+  _definitionCounter = 0;
   const objects: Record<string, SceneObject> = {};
 
-  // Parse objects
   if (raw.objects && Array.isArray(raw.objects)) {
     for (const rawObj of raw.objects) {
       parseObject(rawObj, objects);
     }
   }
 
-  // Parse animation config
-  const animConfig: AnimConfig = {
-    duration: raw.animate?.duration ?? 5,
-    loop: raw.animate?.loop ?? true,
-    keyframes: [],
-    chapters: [],
-  };
-
-  if (raw.animate?.keyframes) {
-    for (const kf of raw.animate.keyframes) {
-      animConfig.keyframes.push({
-        time: kf.time,
-        target: kf.target,
-        prop: kf.prop,
-        value: kf.value,
-        easing: (kf.easing || 'linear') as EasingName,
-      });
-    }
-  }
-
-  if (raw.animate?.chapters) {
-    for (const ch of raw.animate.chapters) {
-      animConfig.chapters.push({
-        id: ch.id || ch.title.toLowerCase().replace(/\s+/g, '-'),
-        time: ch.time,
-        title: ch.title,
-        description: ch.description,
-      });
-    }
-  }
-
-  // Apply flexbox-like group layouts
-  applyGroupLayouts(objects);
+  const animConfig = buildAnimConfigFromRaw(raw.animate);
 
   return { objects, animConfig };
 }
@@ -175,6 +171,7 @@ export function parseDSL(src: string): ParseResult {
  */
 export function parseJSON(input: RawDiagram): ParseResult {
   const raw = expandShorthands(input) as RawDiagram;
+  _definitionCounter = 0;
   const objects: Record<string, SceneObject> = {};
 
   if (raw.objects && Array.isArray(raw.objects)) {
@@ -183,36 +180,7 @@ export function parseJSON(input: RawDiagram): ParseResult {
     }
   }
 
-  const animConfig: AnimConfig = {
-    duration: raw.animate?.duration ?? 5,
-    loop: raw.animate?.loop ?? true,
-    keyframes: [],
-    chapters: [],
-  };
+  const animConfig = buildAnimConfigFromRaw(raw.animate);
 
-  if (raw.animate?.keyframes) {
-    for (const kf of raw.animate.keyframes) {
-      animConfig.keyframes.push({
-        time: kf.time,
-        target: kf.target,
-        prop: kf.prop,
-        value: kf.value,
-        easing: (kf.easing || 'linear') as EasingName,
-      });
-    }
-  }
-
-  if (raw.animate?.chapters) {
-    for (const ch of raw.animate.chapters) {
-      animConfig.chapters.push({
-        id: ch.id || ch.title.toLowerCase().replace(/\s+/g, '-'),
-        time: ch.time,
-        title: ch.title,
-        description: ch.description,
-      });
-    }
-  }
-
-  applyGroupLayouts(objects);
   return { objects, animConfig };
 }
