@@ -25,15 +25,6 @@ export function getObjectBounds(
   let px = (p.x as number) || 0;
   let py = (p.y as number) || 0;
 
-  // Walk up groupId chain to get world-space position
-  let gid = obj.groupId;
-  while (gid && objects[gid]) {
-    const gp = allProps[gid] || (objects[gid].props as Record<string, unknown>);
-    px += (gp.x as number) || 0;
-    py += (gp.y as number) || 0;
-    gid = objects[gid].groupId;
-  }
-
   if (type === 'circle') {
     const r = (p.r as number) || 20;
     const { cx, cy } = scaledCenter(px, py, scale, anchor, r, r);
@@ -143,15 +134,6 @@ export function edgePointAtAnchor(
 
   let px = (p.x as number) || 0;
   let py = (p.y as number) || 0;
-
-  // Walk up groupId chain to get world-space position
-  let gid = obj.groupId;
-  while (gid && objects[gid]) {
-    const gp = allProps[gid] || (objects[gid].props as Record<string, unknown>);
-    px += (gp.x as number) || 0;
-    py += (gp.y as number) || 0;
-    gid = objects[gid].groupId;
-  }
 
   const scale = (p.scale as number) || 1;
   const anchor = p.anchor as AnchorPoint | undefined;

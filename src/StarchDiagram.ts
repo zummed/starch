@@ -1,8 +1,8 @@
-import type { SceneObject, Chapter, Keyframe, Tracks, StarchEvent, StarchEventHandler, DiagramHandle } from './core/types';
+import type { SceneObject, Chapter, AnimConfig, Tracks, StarchEvent, StarchEventHandler, DiagramHandle } from './core/types';
 import { Scene } from './core/Scene';
 import { parseDSL } from './parser/parser';
 import { buildTimeline } from './engine/timeline';
-import { evaluateAnimatedProps, getActiveChapter } from './engine/evaluator';
+import { createEvaluator, getActiveChapter } from './engine/evaluator';
 import { computeRenderOrder } from './engine/renderOrder';
 import { createCanvas } from './renderer/svg/dom/renderCanvas';
 import { RenderDispatcher } from './renderer/svg/dom/renderObject';
@@ -24,9 +24,10 @@ export class StarchDiagram implements DiagramHandle {
   private _dispatcher: RenderDispatcher;
 
   private _objects: Record<string, SceneObject> = {};
-  private _animConfig = { duration: 5, loop: true, keyframes: [] as Keyframe[], chapters: [] as Chapter[] };
+  private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [], chapters: [] };
   private _tracks: Tracks = {};
   private _renderOrder: Array<[string, SceneObject]> = [];
+  private _evaluator = createEvaluator();
 
   private _time = 0;
   private _playing = false;
@@ -72,7 +73,7 @@ export class StarchDiagram implements DiagramHandle {
   // ── Read-only state ──
 
   get time(): number { return this._time; }
-  get duration(): number { return this._animConfig.duration; }
+  get duration(): number { return this._animConfig.duration ?? 5; }
   get playing(): boolean { return this._playing; }
   get speed(): number { return this._speed; }
   get chapters(): Chapter[] { return this._animConfig.chapters; }
@@ -96,7 +97,8 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   seek(time: number): void {
-    this._time = Math.max(0, Math.min(time, this._animConfig.duration));
+    this._time = Math.max(0, Math.min(time, this._animConfig.duration ?? 5));
+    this._evaluator.reset();
     this._lastChapter = getActiveChapter(this._animConfig.chapters, this._time);
     this._render();
   }
@@ -196,7 +198,9 @@ export class StarchDiagram implements DiagramHandle {
 
   private _rebuild(): void {
     this._tracks = buildTimeline(this._animConfig, this._objects);
-    this._renderOrder = computeRenderOrder(this._objects);
+    this._evaluator.reset();
+    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
+    this._renderOrder = computeRenderOrder(this._objects, animatedProps);
   }
 
   private _scheduleFrame(): void {
@@ -209,12 +213,13 @@ export class StarchDiagram implements DiagramHandle {
     const dt = ((now - this._lastFrame) / 1000) * this._speed;
     this._lastFrame = now;
 
+    const dur = this._animConfig.duration ?? 5;
     let next = this._time + dt;
-    if (next >= this._animConfig.duration) {
-      if (this._animConfig.loop) {
-        next = next % this._animConfig.duration;
+    if (next >= dur) {
+      if (this._animConfig.loop ?? true) {
+        next = next % dur;
       } else {
-        next = this._animConfig.duration;
+        next = dur;
         this._playing = false;
       }
     }
@@ -265,7 +270,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   private _render(): void {
-    const animatedProps = evaluateAnimatedProps(this._objects, this._tracks, this._time);
+    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
     this._dispatcher.update(this._renderOrder, animatedProps, this._objects);
   }
 }

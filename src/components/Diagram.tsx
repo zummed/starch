@@ -7,11 +7,11 @@ import {
   useImperativeHandle,
   forwardRef,
 } from 'react';
-import type { SceneObject, DiagramHandle, Chapter, Keyframe, StarchEvent } from '../core/types';
+import type { SceneObject, DiagramHandle, Chapter, AnimConfig, StarchEvent } from '../core/types';
 import { Scene } from '../core/Scene';
 import { parseDSL } from '../parser/parser';
 import { buildTimeline } from '../engine/timeline';
-import { evaluateAnimatedProps, getActiveChapter } from '../engine/evaluator';
+import { createEvaluator, getActiveChapter } from '../engine/evaluator';
 import { computeRenderOrder } from '../engine/renderOrder';
 import { SvgCanvas } from '../renderer/svg/SvgCanvas';
 import { createRenderObject } from '../renderer/renderObject';
@@ -30,8 +30,10 @@ export interface DiagramProps {
 function useDiagramCore(props: DiagramProps) {
   const fallback = useRef({
     objects: {} as Record<string, SceneObject>,
-    animConfig: { duration: 5, loop: true, keyframes: [] as Keyframe[], chapters: [] as Chapter[] },
+    animConfig: { duration: 5, loop: true, keyframes: [], chapters: [] } as AnimConfig,
   });
+
+  const evaluatorRef = useRef(createEvaluator());
 
   const parsed = useMemo(() => {
     try {
@@ -56,7 +58,7 @@ function useDiagramCore(props: DiagramProps) {
 
   const { objects, animConfig } = parsed;
   const tracks = useMemo(() => buildTimeline(animConfig, objects), [animConfig, objects]);
-  const duration = animConfig.duration;
+  const duration = animConfig.duration ?? 5;
   const chapters = animConfig.chapters;
 
   const [time, setTimeState] = useState(0);
@@ -107,7 +109,7 @@ function useDiagramCore(props: DiagramProps) {
       setTimeState((prev) => {
         let next = prev + dt;
         if (next >= duration) {
-          if (animConfig.loop) {
+          if (animConfig.loop ?? true) {
             next = next % duration;
           } else {
             next = duration;
@@ -126,6 +128,7 @@ function useDiagramCore(props: DiagramProps) {
 
   const seek = useCallback(
     (t: number) => {
+      evaluatorRef.current.reset();
       setTimeState(t);
       lastChapterRef.current = getActiveChapter(chapters, t);
     },
@@ -162,11 +165,14 @@ function useDiagramCore(props: DiagramProps) {
   );
 
   const animatedProps = useMemo(
-    () => evaluateAnimatedProps(objects, tracks, time),
+    () => evaluatorRef.current(objects, tracks, time),
     [objects, tracks, time],
   );
 
-  const renderOrder = useMemo(() => computeRenderOrder(objects), [objects]);
+  const renderOrder = useMemo(
+    () => computeRenderOrder(objects, animatedProps),
+    [objects, animatedProps],
+  );
 
   return {
     time,

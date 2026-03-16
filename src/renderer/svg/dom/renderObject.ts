@@ -5,7 +5,8 @@ import { createLabel, updateLabel, type LabelHandles } from './renderLabel';
 import { createTable, updateTable, type TableHandles } from './renderTable';
 import { createLine, updateLine, type LineHandles } from './renderLine';
 import { createPath, updatePath, type PathHandles } from './renderPath';
-import { createGroup, updateGroup, type GroupHandles, type RenderObjectFn } from './renderGroup';
+
+export type RenderObjectFn = (id: string, obj: SceneObject) => SVGElement | null;
 
 type AnyHandles =
   | { type: 'box'; handles: BoxHandles }
@@ -13,8 +14,7 @@ type AnyHandles =
   | { type: 'label'; handles: LabelHandles }
   | { type: 'table'; handles: TableHandles }
   | { type: 'line'; handles: LineHandles }
-  | { type: 'path'; handles: PathHandles }
-  | { type: 'group'; handles: GroupHandles };
+  | { type: 'path'; handles: PathHandles };
 
 function getRootElement(entry: AnyHandles): SVGElement {
   return entry.handles.root;
@@ -40,22 +40,6 @@ export class RenderDispatcher {
   ): void {
     const seen = new Set<string>();
 
-    // Recursive render function for groups
-    const renderObject: RenderObjectFn = (id, obj) => {
-      const p = (animatedProps[id] || obj.props) as Record<string, unknown>;
-
-      const isVisible = (p.visible as boolean) ?? true;
-      if (!isVisible && !this.debug) return null;
-
-      // Check if object with children should render as group
-      const children = p.children as string[] | undefined;
-      if (children && children.length > 0 && obj.type !== 'group') {
-        return this.renderAsGroup(id, p, objects, renderObject);
-      }
-
-      return this.renderSingle(id, obj.type, p, objects, animatedProps, renderObject);
-    };
-
     for (const [id, obj] of renderOrder) {
       seen.add(id);
       const p = (animatedProps[id] || obj.props) as Record<string, unknown>;
@@ -71,21 +55,17 @@ export class RenderDispatcher {
         continue;
       }
 
-      const children = p.children as string[] | undefined;
-      const effectiveType = (children && children.length > 0 && obj.type !== 'group')
-        ? 'group' : obj.type;
-
       const cached = this.cache.get(id);
 
-      if (cached && cached.type === effectiveType) {
-        this.updateCached(cached, p, objects, animatedProps, renderObject);
+      if (cached && cached.type === obj.type) {
+        this.updateCached(cached, p, objects, animatedProps);
       } else {
         // Remove old element if type changed
         if (cached) {
           getRootElement(cached).remove();
           this.cache.delete(id);
         }
-        const entry = this.createEntry(id, effectiveType, p, objects, animatedProps, renderObject);
+        const entry = this.createEntry(obj.type, p, objects, animatedProps);
         if (entry) {
           this.cache.set(id, entry);
           this.container.appendChild(getRootElement(entry));
@@ -127,56 +107,11 @@ export class RenderDispatcher {
     this.cache.clear();
   }
 
-  private renderAsGroup(
-    id: string,
-    props: Record<string, unknown>,
-    objects: Record<string, SceneObject>,
-    renderObject: RenderObjectFn,
-  ): SVGElement | null {
-    const cached = this.cache.get(id);
-    if (cached && cached.type === 'group') {
-      updateGroup(cached.handles, props, objects, renderObject);
-      return cached.handles.root;
-    }
-    if (cached) {
-      getRootElement(cached).remove();
-    }
-    const handles = createGroup(props, objects, renderObject);
-    this.cache.set(id, { type: 'group', handles });
-    return handles.root;
-  }
-
-  private renderSingle(
-    id: string,
-    type: string,
-    props: Record<string, unknown>,
-    objects: Record<string, SceneObject>,
-    allProps: Record<string, Record<string, unknown>>,
-    renderObject: RenderObjectFn,
-  ): SVGElement | null {
-    const cached = this.cache.get(id);
-    if (cached && cached.type === type) {
-      this.updateCached(cached, props, objects, allProps, renderObject);
-      return getRootElement(cached);
-    }
-    if (cached) {
-      getRootElement(cached).remove();
-    }
-    const entry = this.createEntry(id, type, props, objects, allProps, renderObject);
-    if (entry) {
-      this.cache.set(id, entry);
-      return getRootElement(entry);
-    }
-    return null;
-  }
-
   private createEntry(
-    _id: string,
     type: string,
     props: Record<string, unknown>,
     objects: Record<string, SceneObject>,
     allProps: Record<string, Record<string, unknown>>,
-    renderObject: RenderObjectFn,
   ): AnyHandles | null {
     switch (type) {
       case 'box':
@@ -191,8 +126,6 @@ export class RenderDispatcher {
         return { type: 'line', handles: createLine(props, objects, allProps, this.debug) };
       case 'path':
         return { type: 'path', handles: createPath(props, this.debug) };
-      case 'group':
-        return { type: 'group', handles: createGroup(props, objects, renderObject) };
       default:
         return null;
     }
@@ -203,7 +136,6 @@ export class RenderDispatcher {
     props: Record<string, unknown>,
     objects: Record<string, SceneObject>,
     allProps: Record<string, Record<string, unknown>>,
-    renderObject: RenderObjectFn,
   ): void {
     switch (entry.type) {
       case 'box':
@@ -223,9 +155,6 @@ export class RenderDispatcher {
         break;
       case 'path':
         updatePath(entry.handles, props, this.debug);
-        break;
-      case 'group':
-        updateGroup(entry.handles, props, objects, renderObject);
         break;
     }
   }

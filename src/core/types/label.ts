@@ -1,6 +1,6 @@
 import type { BaseProps } from './base';
 
-export interface LabelProps extends BaseProps {
+export interface LabelProps extends Omit<BaseProps, 'align'> {
   text: string;
   color?: string;
   size?: number;

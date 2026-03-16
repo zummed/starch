@@ -9,7 +9,6 @@ import { LabelRenderer } from './renderer/svg/LabelRenderer';
 import { TableRenderer } from './renderer/svg/TableRenderer';
 import { LineRenderer } from './renderer/svg/LineRenderer';
 import { PathRenderer } from './renderer/svg/PathRenderer';
-import { GroupRenderer } from './renderer/svg/GroupRenderer';
 import type { SceneObject, StarchEvent } from './core/types';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
@@ -520,20 +519,6 @@ export default function App() {
       const isVisible = (p.visible as boolean) ?? true;
       if (!isVisible && !debugMode) return null;
 
-      // Any object with children is rendered as a container
-      const children = p.children as string[] | undefined;
-      if (children && children.length > 0 && obj.type !== 'group') {
-        return (
-          <GroupRenderer
-            key={id}
-            props={p}
-            objects={diagram.objects}
-            allProps={diagram.animatedProps}
-            renderObject={renderObject}
-          />
-        );
-      }
-
       switch (obj.type) {
         case 'box':
           return <BoxRenderer key={id} props={p} />;
@@ -556,16 +541,6 @@ export default function App() {
           );
         case 'path':
           return <PathRenderer key={id} props={p} debug={debugMode} />;
-        case 'group':
-          return (
-            <GroupRenderer
-              key={id}
-              props={p}
-              objects={diagram.objects}
-              allProps={diagram.animatedProps}
-              renderObject={renderObject}
-            />
-          );
         default:
           return null;
       }
