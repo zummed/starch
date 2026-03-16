@@ -6,7 +6,6 @@ import { LabelRenderer } from './svg/LabelRenderer';
 import { TableRenderer } from './svg/TableRenderer';
 import { LineRenderer } from './svg/LineRenderer';
 import { PathRenderer } from './svg/PathRenderer';
-import { GroupRenderer } from './svg/GroupRenderer';
 
 type RenderFn = (id: string, obj: SceneObject) => React.ReactNode;
 
@@ -20,19 +19,6 @@ export function createRenderObject(
 
     const isVisible = (p.visible as boolean) ?? true;
     if (!isVisible && !debug) return null;
-
-    const children = p.children as string[] | undefined;
-    if (children && children.length > 0 && obj.type !== 'group') {
-      return (
-        <GroupRenderer
-          key={id}
-          props={p}
-          objects={objects}
-          allProps={animatedProps}
-          renderObject={renderObject}
-        />
-      );
-    }
 
     switch (obj.type) {
       case 'box':
@@ -56,16 +42,6 @@ export function createRenderObject(
         );
       case 'path':
         return <PathRenderer key={id} props={p} debug={debug} />;
-      case 'group':
-        return (
-          <GroupRenderer
-            key={id}
-            props={p}
-            objects={objects}
-            allProps={animatedProps}
-            renderObject={renderObject}
-          />
-        );
       default:
         return null;
     }
