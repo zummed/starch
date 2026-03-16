@@ -22,7 +22,9 @@
     "build:embed": "vite build --config vite.embed.config.ts",
     "build:all": "npm run build && npm run build:embed",
     "preview": "vite preview",
-    "prepublishOnly": "npm run build:all"
+    "prepublishOnly": "npm run build:all",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -38,7 +40,8 @@
     "react-dom": "^19.0.0",
     "typescript": "~5.7.0",
     "vite": "^6.0.0",
-    "vite-plugin-dts": "^4.3.0"
+    "vite-plugin-dts": "^4.3.0",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "json5": "^2.2.3",
