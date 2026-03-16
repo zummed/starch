@@ -88,16 +88,19 @@ function expandObject(raw: unknown): unknown {
 }
 
 /**
- * Expand keyframes from shorthand formats to canonical form.
+ * Expand keyframes from shorthand formats to canonical keyframe-block form.
  *
- * Canonical: [{ time, target, prop, value, easing? }]
+ * Canonical: [{ time, changes: { targetId: { prop: value, easing? } }, easing? }]
  * Format A (flat tuples): [[time, target, prop, value, easing?]]
  * Format B (target-grouped): { targetId: [[time, prop, value, easing?]] }
+ * Legacy canonical: [{ time, target, prop, value, easing? }]
  */
 function expandKeyframes(keyframes: unknown): unknown[] {
+  // Collect all entries as { time, target, prop, value, easing? }
+  const entries: Array<{ time: number; target: string; prop: string; value: unknown; easing?: string }> = [];
+
   // Format B: target-grouped object
   if (keyframes && typeof keyframes === 'object' && !Array.isArray(keyframes)) {
-    const result: unknown[] = [];
     for (const [targetId, tuples] of Object.entries(keyframes as Record<string, unknown>)) {
       if (!Array.isArray(tuples)) {
         throw new Error(`Keyframes for target "${targetId}" must be an array.`);
@@ -107,39 +110,64 @@ function expandKeyframes(keyframes: unknown): unknown[] {
           throw new Error(`Each keyframe for target "${targetId}" must be a tuple array.`);
         }
         const [time, prop, value, easing] = tuple as [number, string, unknown, string?];
-        result.push({
-          time,
-          target: targetId,
-          prop,
-          value,
-          ...(easing !== undefined ? { easing } : {}),
-        });
+        entries.push({ time, target: targetId, prop, value, ...(easing !== undefined ? { easing } : {}) });
       }
     }
-    return result;
+  } else if (Array.isArray(keyframes) && keyframes.length > 0) {
+    const first = keyframes[0];
+
+    if (Array.isArray(first)) {
+      // Format A: flat tuples
+      for (const tuple of keyframes as unknown[][]) {
+        const [time, target, prop, value, easing] = tuple as [number, string, string, unknown, string?];
+        entries.push({ time, target, prop, value, ...(easing !== undefined ? { easing } : {}) });
+      }
+    } else if (first && typeof first === 'object') {
+      const f = first as Record<string, unknown>;
+      if ('changes' in f) {
+        // Already canonical keyframe-block format, pass through
+        return keyframes;
+      }
+      if ('target' in f && 'prop' in f) {
+        // Legacy canonical: { time, target, prop, value, easing? }
+        for (const kf of keyframes as Array<Record<string, unknown>>) {
+          entries.push({
+            time: kf.time as number,
+            target: kf.target as string,
+            prop: kf.prop as string,
+            value: kf.value,
+            ...(kf.easing !== undefined ? { easing: kf.easing as string } : {}),
+          });
+        }
+      } else {
+        // Unknown object format, pass through
+        return keyframes;
+      }
+    }
+  } else {
+    return [];
   }
 
-  // Must be an array at this point
-  if (!Array.isArray(keyframes)) return [];
-  if (keyframes.length === 0) return [];
-
-  // Detect format by first element
-  const first = keyframes[0];
-
-  // Format A: flat tuples (first element is an array)
-  if (Array.isArray(first)) {
-    return (keyframes as unknown[][]).map((tuple) => {
-      const [time, target, prop, value, easing] = tuple as [number, string, string, unknown, string?];
-      return {
-        time,
-        target,
-        prop,
-        value,
-        ...(easing !== undefined ? { easing } : {}),
-      };
-    });
+  // Group entries by time into keyframe blocks
+  const blockMap = new Map<number, Record<string, Record<string, unknown>>>();
+  for (const entry of entries) {
+    if (!blockMap.has(entry.time)) {
+      blockMap.set(entry.time, {});
+    }
+    const changes = blockMap.get(entry.time)!;
+    if (!changes[entry.target]) {
+      changes[entry.target] = {};
+    }
+    changes[entry.target][entry.prop] = entry.value;
+    if (entry.easing) {
+      changes[entry.target].easing = entry.easing;
+    }
   }
 
-  // Canonical: already objects, pass through
-  return keyframes;
+  // Convert to sorted keyframe blocks
+  const times = [...blockMap.keys()].sort((a, b) => a - b);
+  return times.map((time) => ({
+    time,
+    changes: blockMap.get(time)!,
+  }));
 }

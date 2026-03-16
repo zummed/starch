@@ -242,25 +242,27 @@ const EXAMPLES: Record<string, string> = {
 }`,
 
   'Container Layout': `{
-  // Container Layout Demo
+  // Container Layout Demo — using flexbox-style group property
   objects: [
     { label: "title", at: [400, 35], text: "Container Layout", size: 18, color: "#e2e5ea", bold: true },
 
-    // A row of status boxes
-    { box: "s1", size: [110, 46], colour: "#22d3ee", text: "Idle" },
-    { box: "s2", size: [110, 46], colour: "#fbbf24", text: "Active" },
-    { box: "s3", size: [110, 46], colour: "#34d399", text: "Done" },
+    // Row container (a box that acts as a flex container)
+    { box: "row1", at: [400, 120], direction: "row", gap: 30, padding: 16,
+      colour: "#2a2d35", radius: 12 },
 
-    { group: "row1", at: [400, 120], direction: "row", gap: 30, padding: 16,
-      colour: "#2a2d35", radius: 12, children: ["s1", "s2", "s3"] },
+    // Status boxes — declare their container via group
+    { box: "s1", size: [110, 46], colour: "#22d3ee", text: "Idle", group: "row1" },
+    { box: "s2", size: [110, 46], colour: "#fbbf24", text: "Active", group: "row1" },
+    { box: "s3", size: [110, 46], colour: "#34d399", text: "Done", group: "row1" },
 
-    // A column of detail boxes
-    { box: "d1", size: [200, 40], colour: "#60a5fa", radius: 6, text: "Step 1: Initialize" },
-    { box: "d2", size: [200, 40], colour: "#a78bfa", radius: 6, text: "Step 2: Process" },
-    { box: "d3", size: [200, 40], colour: "#f472b6", radius: 6, text: "Step 3: Complete" },
+    // Column container
+    { box: "col1", at: [400, 300], direction: "column", gap: 20, padding: 16,
+      colour: "#2a2d35", radius: 12 },
 
-    { group: "col1", at: [400, 300], direction: "column", gap: 20, padding: 16,
-      colour: "#2a2d35", radius: 12, children: ["d1", "d2", "d3"] },
+    // Detail boxes
+    { box: "d1", size: [200, 40], colour: "#60a5fa", radius: 6, text: "Step 1: Initialize", group: "col1" },
+    { box: "d2", size: [200, 40], colour: "#a78bfa", radius: 6, text: "Step 2: Process", group: "col1" },
+    { box: "d3", size: [200, 40], colour: "#f472b6", radius: 6, text: "Step 3: Complete", group: "col1" },
 
     { line: "l1", from: "s1", to: "d1", colour: "#3a3f49", dashed: true },
     { line: "l2", from: "s2", to: "d2", colour: "#3a3f49", dashed: true },
