@@ -26,10 +26,14 @@ export function BoxRenderer({ props }: BoxRendererProps) {
     bold = false,
     anchor = 'center',
     textOffset,
+    image,
+    imageFit = 'contain',
+    imagePadding = 4,
   } = props as Record<string, number | string | boolean | number[] | undefined>;
 
   const w = (_layoutW as number) || (rawW as number);
   const h = (_layoutH as number) || (rawH as number);
+  const imgPad = imagePadding as number;
 
   const { outerTranslate, innerTransform } = scaleAroundAnchor(
     x as number, y as number, scale as number, anchor as AnchorPoint,
@@ -49,6 +53,19 @@ export function BoxRenderer({ props }: BoxRendererProps) {
           stroke={stroke as string}
           strokeWidth={strokeWidth as number}
         />
+        {image && (
+          <image
+            href={image as string}
+            x={-(w as number) / 2 + imgPad}
+            y={-(h as number) / 2 + imgPad}
+            width={(w as number) - imgPad * 2}
+            height={(h as number) - imgPad * 2}
+            preserveAspectRatio={
+              imageFit === 'cover' ? 'xMidYMid slice' :
+              imageFit === 'fill' ? 'none' : 'xMidYMid meet'
+            }
+          />
+        )}
         {text && (
           <text
             x={0 + ((textOffset as unknown as [number, number])?.[0] || 0)}

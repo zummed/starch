@@ -58,17 +58,26 @@ export const BoxSchema = BaseSchema.extend({
   radius: z.number().default(8),
   strokeWidth: z.number().default(1.5),
   bold: z.boolean().default(false),
+  image: z.string().optional(),
+  imageFit: z.enum(['contain', 'cover', 'fill']).default('contain'),
+  imagePadding: z.number().default(4),
 }).passthrough();
 
 export const CircleSchema = BaseSchema.extend({
   r: z.number().default(30),
   strokeWidth: z.number().default(1.5),
+  image: z.string().optional(),
+  imageFit: z.enum(['contain', 'cover', 'fill']).default('contain'),
+  imagePadding: z.number().default(4),
 }).passthrough();
 
 export const LabelSchema = BaseSchema.extend({
-  text: z.string(),
+  text: z.string().default(''),
   color: z.string().optional(),
   size: z.number().default(14),
+  image: z.string().optional(),
+  imageFit: z.enum(['contain', 'cover', 'fill']).default('contain'),
+  imagePadding: z.number().default(2),
   bold: z.boolean().default(false),
   align: z.enum(['start', 'middle', 'end']).default('middle'),
 }).passthrough();
@@ -155,9 +164,9 @@ export const SCHEMA_METADATA = {
   types: [...VALID_TYPES],
   props: {
     base: ['x', 'y', 'opacity', 'scale', 'anchor', 'colour', 'fill', 'stroke', 'text', 'textColor', 'textSize', 'textOffset', 'depth', 'visible', 'follow', 'pathProgress', 'rotation', 'direction', 'gap', 'justify', 'align', 'wrap', 'padding', 'group', 'order', 'grow', 'shrink', 'alignSelf', 'cascadeOpacity', 'cascadeScale', 'cascadeRotation'],
-    box: ['w', 'h', 'radius', 'strokeWidth', 'bold'],
-    circle: ['r', 'strokeWidth'],
-    label: ['text', 'color', 'size', 'bold', 'align'],
+    box: ['w', 'h', 'radius', 'strokeWidth', 'bold', 'image', 'imageFit', 'imagePadding'],
+    circle: ['r', 'strokeWidth', 'image', 'imageFit', 'imagePadding'],
+    label: ['text', 'color', 'size', 'bold', 'align', 'image', 'imageFit', 'imagePadding'],
     line: ['from', 'to', 'fromAnchor', 'toAnchor', 'x1', 'y1', 'x2', 'y2', 'stroke', 'strokeWidth', 'dashed', 'arrow', 'label', 'labelColor', 'labelSize', 'opacity', 'progress', 'bend', 'colour', 'textOffset'],
     table: ['cols', 'rows', 'colWidth', 'rowHeight', 'headerFill', 'headerColor', 'strokeWidth'],
     path: ['points', 'closed', 'stroke', 'strokeWidth', 'visible', 'opacity', 'colour'],

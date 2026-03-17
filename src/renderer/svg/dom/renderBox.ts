@@ -7,13 +7,30 @@ export interface BoxHandles {
   root: SVGGElement;
   innerG: SVGGElement;
   rect: SVGRectElement;
+  image: SVGImageElement;
   text: SVGTextElement;
+}
+
+function resolveHref(href: string): string {
+  if (href.startsWith('#')) {
+    const el = document.getElementById(href.slice(1));
+    if (el) {
+      const svg = el instanceof HTMLTemplateElement ? el.content.firstElementChild : el;
+      if (svg) {
+        const serialized = new XMLSerializer().serializeToString(svg);
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serialized);
+      }
+    }
+  }
+  return href;
 }
 
 export function createBox(props: Record<string, unknown>): BoxHandles {
   const root = createSvgEl('g');
   const innerG = createSvgEl('g');
   const rect = createSvgEl('rect');
+  const image = createSvgEl('image') as unknown as SVGImageElement;
+  image.style.display = 'none';
   const text = createSvgEl('text');
   text.setAttribute('text-anchor', 'middle');
   text.setAttribute('dominant-baseline', 'middle');
@@ -21,11 +38,13 @@ export function createBox(props: Record<string, unknown>): BoxHandles {
   text.style.display = 'none';
 
   innerG.appendChild(rect);
+  innerG.appendChild(image);
   innerG.appendChild(text);
   root.appendChild(innerG);
 
-  updateBox({ root, innerG, rect, text }, props);
-  return { root, innerG, rect, text };
+  const handles = { root, innerG, rect, image, text };
+  updateBox(handles, props);
+  return handles;
 }
 
 export function updateBox(h: BoxHandles, props: Record<string, unknown>): void {
@@ -35,10 +54,12 @@ export function updateBox(h: BoxHandles, props: Record<string, unknown>): void {
     fill = '#1a1d24', stroke = '#22d3ee', strokeWidth = 1.5,
     radius = 8, text, textColor = '#e2e5ea', textSize = 13,
     opacity = 1, scale = 1, bold = false, anchor = 'center', textOffset,
+    image, imageFit = 'contain', imagePadding = 4,
   } = props as Record<string, number | string | boolean | number[] | undefined>;
 
   const w = (_layoutW as number) || (rawW as number);
   const height = (_layoutH as number) || (rawH as number);
+  const imgPad = imagePadding as number;
 
   const { outerTranslate, innerTransform } = scaleAroundAnchor(
     x as number, y as number, scale as number, anchor as AnchorPoint,
@@ -59,6 +80,22 @@ export function updateBox(h: BoxHandles, props: Record<string, unknown>): void {
     stroke: stroke as string,
     'stroke-width': strokeWidth as number,
   });
+
+  if (image) {
+    h.image.style.display = '';
+    const fit = imageFit === 'cover' ? 'xMidYMid slice' :
+                imageFit === 'fill' ? 'none' : 'xMidYMid meet';
+    setAttrs(h.image, {
+      x: -(w as number) / 2 + imgPad,
+      y: -(height as number) / 2 + imgPad,
+      width: (w as number) - imgPad * 2,
+      height: (height as number) - imgPad * 2,
+      preserveAspectRatio: fit,
+    });
+    h.image.setAttribute('href', resolveHref(image as string));
+  } else {
+    h.image.style.display = 'none';
+  }
 
   if (text) {
     h.text.style.display = '';

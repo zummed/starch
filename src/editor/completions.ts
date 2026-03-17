@@ -23,8 +23,8 @@ interface CursorContext {
  * Determine what kind of position the cursor is in by scanning backwards.
  */
 function detectContext(doc: string, pos: number): CursorContext {
-  // Get text before cursor
-  const before = doc.slice(Math.max(0, pos - 500), pos);
+  // Get text before cursor (use full document — DSL is small)
+  const before = doc.slice(0, pos);
 
   // Check if we're in a value position (after a colon)
   const lastColon = before.lastIndexOf(':');

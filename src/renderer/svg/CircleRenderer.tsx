@@ -21,6 +21,9 @@ export function CircleRenderer({ props }: CircleRendererProps) {
     scale = 1,
     anchor = 'center',
     textOffset,
+    image,
+    imageFit = 'contain',
+    imagePadding = 4,
   } = props as Record<string, number | string | boolean | number[] | undefined>;
 
   const { outerTranslate, innerTransform } = scaleAroundAnchor(
@@ -39,6 +42,22 @@ export function CircleRenderer({ props }: CircleRendererProps) {
           stroke={stroke as string}
           strokeWidth={strokeWidth as number}
         />
+        {image && (() => {
+          const imgHalf = ((r as number) - (imagePadding as number)) * 0.707;
+          return (
+            <image
+              href={image as string}
+              x={-imgHalf}
+              y={-imgHalf}
+              width={imgHalf * 2}
+              height={imgHalf * 2}
+              preserveAspectRatio={
+                imageFit === 'cover' ? 'xMidYMid slice' :
+                imageFit === 'fill' ? 'none' : 'xMidYMid meet'
+              }
+            />
+          );
+        })()}
         {text && (
           <text
             x={0 + ((textOffset as unknown as [number, number])?.[0] || 0)}

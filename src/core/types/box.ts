@@ -6,4 +6,7 @@ export interface BoxProps extends BaseProps {
   strokeWidth?: number;
   radius?: number;
   bold?: boolean;
+  image?: string;
+  imageFit?: 'contain' | 'cover' | 'fill';
+  imagePadding?: number;
 }

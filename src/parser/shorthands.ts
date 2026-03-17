@@ -10,9 +10,24 @@ export function expandShorthands(raw: unknown): unknown {
 
   const obj = raw as Record<string, unknown>;
 
+  // Extract image registry and resolve references in objects
+  const imageRegistry = (obj.images && typeof obj.images === 'object')
+    ? obj.images as Record<string, string>
+    : {};
+  delete obj.images;
+
   // Expand objects array
   if (Array.isArray(obj.objects)) {
-    obj.objects = obj.objects.map((item: unknown) => expandObject(item));
+    obj.objects = obj.objects.map((item: unknown) => {
+      const expanded = expandObject(item);
+      if (expanded && typeof expanded === 'object' && !Array.isArray(expanded)) {
+        const o = expanded as Record<string, unknown>;
+        if (typeof o.image === 'string' && imageRegistry[o.image]) {
+          o.image = imageRegistry[o.image];
+        }
+      }
+      return expanded;
+    });
   }
 
   // Expand animate.keyframes
