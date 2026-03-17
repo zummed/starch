@@ -178,7 +178,7 @@ export const SCHEMA_METADATA = {
   justify: ['start', 'center', 'end', 'spaceBetween', 'spaceAround'],
   direction: ['row', 'column'],
   keyframeProps: ['time', 'easing', 'changes'],
-  animateProps: ['duration', 'loop', 'easing', 'keyframes', 'chapters'],
+  animateProps: ['duration', 'loop', 'autoKey', 'easing', 'keyframes', 'chapters'],
   shorthandProps: ['at', 'size'],
   effects: ['pulse', 'flash', 'shake', 'glow'],
 } as const;

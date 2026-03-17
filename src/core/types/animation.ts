@@ -32,6 +32,7 @@ export interface KeyframeBlock {
 export interface AnimConfig {
   duration?: number;
   loop?: boolean;
+  autoKey?: boolean;
   easing?: EasingName;
   keyframes: KeyframeBlock[];
   chapters: Chapter[];

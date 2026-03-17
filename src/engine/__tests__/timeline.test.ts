@@ -74,4 +74,76 @@ describe('buildTimeline', () => {
     expect(tracks['box1.easing']).toBeUndefined();
     expect(tracks['box1.x']).toBeDefined();
   });
+
+  it('auto-key inserts holds at block boundaries', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: { box2: { y: 200 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const objects: Record<string, SceneObject> = {
+      box1: makeObj('box1', { x: 0 }),
+      box2: makeObj('box2', { y: 0 }),
+    };
+    const tracks = buildTimeline(config, objects);
+    // box1.x: base at t=0, explicit at t=1 and t=3 → auto-key inserts hold at t=2
+    const times = tracks['box1.x'].map(kf => kf.time);
+    expect(times).toContain(2);
+    // Hold value at t=2 should be 100 (last value before t=2)
+    const holdKf = tracks['box1.x'].find(kf => kf.time === 2);
+    expect(holdKf?.value).toBe(100);
+  });
+
+  it('auto-key preserves explicit keyframes', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: { box1: { x: 200 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const tracks = buildTimeline(config);
+    // All three explicit keyframes present, no duplicates
+    expect(tracks['box1.x']).toHaveLength(3);
+    expect(tracks['box1.x'].map(kf => kf.value)).toEqual([100, 200, 300]);
+  });
+
+  it('auto-key can be disabled', () => {
+    const config: AnimConfig = {
+      autoKey: false,
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: { box2: { y: 200 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const tracks = buildTimeline(config);
+    // No hold inserted at t=2 for box1.x
+    const times = tracks['box1.x'].map(kf => kf.time);
+    expect(times).toEqual([1, 3]);
+  });
+
+  it('auto-key only fills within track range', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: { box2: { y: 200 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+        { time: 4, changes: { box2: { y: 400 } } },
+      ],
+      chapters: [],
+    };
+    const tracks = buildTimeline(config);
+    // box1.x range is [1, 3] — should NOT get holds at t=4
+    const box1Times = tracks['box1.x'].map(kf => kf.time);
+    expect(box1Times).not.toContain(4);
+    // box2.y range is [2, 4] — should NOT get hold at t=1
+    const box2Times = tracks['box2.y'].map(kf => kf.time);
+    expect(box2Times).not.toContain(1);
+  });
 });

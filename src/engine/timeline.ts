@@ -65,5 +65,38 @@ export function buildTimeline(
     }
   }
 
+  // Auto-key: fill gaps at block boundaries so transitions only span adjacent blocks.
+  // When a property track spans multiple blocks without keyframes in between,
+  // insert holds at each intermediate block time with the last known value.
+  const autoKey = animConfig.autoKey ?? true;
+  if (autoKey && objects) {
+    const bt = animConfig.keyframes.map(b => b.time).sort((a, b) => a - b);
+    for (const key of Object.keys(tracks)) {
+      const track = tracks[key];
+      if (track.length < 2) continue;
+
+      const firstTime = track[0].time;
+      const lastTime = track[track.length - 1].time;
+      const existingTimes = new Set(track.map(kf => kf.time));
+
+      const inserts: typeof track = [];
+      for (const t of bt) {
+        if (t <= firstTime || t >= lastTime) continue;
+        if (existingTimes.has(t)) continue;
+        let holdValue = track[0].value;
+        for (const kf of track) {
+          if (kf.time <= t) holdValue = kf.value;
+          else break;
+        }
+        inserts.push({ time: t, value: holdValue, easing: 'linear' as EasingName });
+      }
+
+      if (inserts.length > 0) {
+        track.push(...inserts);
+        track.sort((a, b) => a.time - b.time);
+      }
+    }
+  }
+
   return tracks;
 }
