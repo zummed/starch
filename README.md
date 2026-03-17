@@ -6,7 +6,7 @@ Animated diagram library for documenting application internals. Define objects a
 
 ## Try It — Interactive Playground
 
-The fastest way to start is the built-in playground. It gives you a live editor alongside the rendered diagram with playback controls, so you can experiment with the DSL in real time.
+The fastest way to start is the built-in playground with a categorised sample browser, tabbed editor, and live preview.
 
 ```bash
 git clone https://github.com/zummed/starch.git
@@ -15,14 +15,17 @@ npm install
 npm run dev
 ```
 
-This opens a split-pane view with a CodeMirror editor on the left, the animated SVG canvas on the right, and a timeline with play/pause/seek/speed controls at the bottom. Several built-in examples (state machine, data pipeline, container layout, path motion) are available from a dropdown to get started.
-
-The `Editor` and `Timeline` components used in the playground are exported from the library, so you can build your own editor experiences with them.
+The playground features:
+- **Sample browser** with 28 focused examples across 8 categories
+- **Tabbed editor** with syntax highlighting, autocomplete, inline error diagnostics, and save/load
+- **Canvas controls** — pan (drag), zoom (scroll wheel), Fit All, Lock View, Debug mode
+- **Export** to HTML, React, MkDocs, or raw DSL
+- **Persistent tabs** — work survives page reloads via localStorage
 
 ## Install
 
 ```bash
-npm install starch
+npm install @bitsnbobs/starch
 ```
 
 Requires React 18 or 19 as a peer dependency.
@@ -32,7 +35,7 @@ Requires React 18 or 19 as a peer dependency.
 ### React
 
 ```tsx
-import { Diagram } from 'starch';
+import { Diagram } from '@bitsnbobs/starch';
 
 const dsl = `{
   objects: [
@@ -59,12 +62,10 @@ function App() {
 
 ### Any Webpage (No React Required)
 
-Include the standalone embed bundle and use the `<starch-diagram>` custom element:
-
 ```html
-<script src="https://unpkg.com/starch/dist/starch-embed.iife.js"></script>
+<script src="https://unpkg.com/@bitsnbobs/starch/dist/starch-embed.iife.js"></script>
 
-<starch-diagram autoplay speed="1">
+<starch-diagram autoplay>
 {
   objects: [
     { box: "server", at: [200, 100], colour: "#34d399", text: "Server" },
@@ -85,89 +86,189 @@ Include the standalone embed bundle and use the `<starch-diagram>` custom elemen
 </starch-diagram>
 ```
 
-The embed bundle is self-contained (~100KB gzip) with React bundled in.
+The web component includes subtle play/pause and restart controls on hover.
 
 ## DSL
 
-Diagrams are defined in a JSON5-based format with these object types:
+Diagrams are defined in a JSON5-based format. Both `colour` and `color` spellings are accepted throughout.
 
-- **box** — rectangle with optional text, rounded corners, fill (default 140x46)
+### Top-Level Properties
+
+```js
+{
+  name: "My Diagram",
+  description: "Optional description",
+  background: "#0e1117",       // or "transparent"
+  viewport: "16:9",            // aspect ratio — "4:3", "1:1", "800x450", { width, height }
+  styles: { ... },             // reusable style definitions
+  images: { ... },             // image URL registry
+  objects: [ ... ],
+  animate: { ... },
+}
+```
+
+### Object Types
+
+- **box** — rectangle with text, rounded corners, images (default 140x46)
 - **circle** — circle with radius
 - **label** — standalone text
 - **table** — rows and columns
-- **line** — connects two objects with optional label, bend, and dashing
+- **line** — connects two objects with label, bend, dashing
 - **path** — arbitrary point sequence with spline curves
+- **textblock** — multi-line text with per-line animation
+- **code** — syntax-highlighted code block (shorthand for textblock with monospace)
+- **camera** — viewport control (zoom, pan, follow, fit)
 
-Any box can act as a **flex container** by setting `direction: "row"` or `direction: "column"`. Children declare membership via the `group` property. Containers auto-size to fit their contents.
+### Layout Containers
 
+Any box becomes a **flex container** when children group to it. Default direction is column.
+
+```js
+{ box: "container", at: [400, 200], colour: "#2a2d35", radius: 12 },
+{ box: "child1", colour: "#22d3ee", text: "One", group: "container" },
+{ box: "child2", colour: "#34d399", text: "Two", group: "container" },
 ```
-{ box: "row1", at: [400, 120], direction: "row", gap: 30, padding: 16, colour: "#2a2d35" },
-{ box: "s1", colour: "#22d3ee", text: "Idle", group: "row1" },
-{ box: "s2", colour: "#fbbf24", text: "Active", group: "row1" },
-```
 
-Container properties: `direction`, `gap`, `padding`, `justify` (start/center/end/spaceBetween/spaceAround), `align` (start/center/end/stretch), `wrap`. Child properties: `group`, `order`, `grow`, `shrink`, `alignSelf`.
+Container properties: `direction` (row/column, default column), `gap` (default 12), `padding` (default 12), `paddingTop`/`Right`/`Bottom`/`Left`, `justify`, `align`, `wrap`.
+
+Child properties: `group`, `order`, `grow`, `shrink`, `alignSelf`.
+
+### Reusable Styles
+
+```js
+{
+  styles: {
+    card: { colour: "#22d3ee", radius: 12 },
+    alert: { style: "card", colour: "#ef4444" },  // composes card
+  },
+  objects: [
+    { box: "a", style: "card", text: "Card" },
+    { box: "b", style: "alert", text: "Alert" },
+    { box: "c", style: "card", colour: "#34d399", text: "Override" },  // object props win
+  ],
+}
+```
 
 ### Animation
 
-Keyframes use a time-first block format where simultaneous changes are grouped together:
+Keyframes use a time-first block format where simultaneous changes are grouped:
 
-```
+```js
 animate: {
-  duration: 6, loop: false,
+  duration: 6, loop: false, easing: "easeInOut",
   keyframes: [
     { time: 1.0, changes: {
-      l1: { progress: 1, easing: "easeInOut" },
-      ingest: { pulse: 0.1 },
-      validate: { pulse: 0.1 },
+      arrow: { progress: 1, easing: "easeInOut" },
+      source: { pulse: 0.1 },
+      target: { pulse: 0.1 },
     }},
-    { time: 2.0, changes: {
-      l2: { progress: 1, easing: "easeInOut" },
+    { plus: 1.0, delay: 0.5, changes: {  // 1s after previous, 0.5s pause before
+      arrow2: { progress: 1 },
     }},
   ]
 }
 ```
 
-Properties that the user explicitly sets on the object definition (e.g., `progress: 0`) are automatically used as the starting value, with the transition happening between adjacent keyframe blocks.
+- **`plus: N`** — time relative to previous keyframe
+- **`delay: N`** — pause before this keyframe starts
+- **`autoKey: true`** (default) — properties hold at block boundaries
 
-A per-object shorthand is also supported for simple cases:
+Supported easings: `linear`, `easeIn`, `easeOut`, `easeInOut`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack`, `easeInBack`, `bounce`, `elastic`, `spring`, `snap`, `step`, `cut`.
 
-```
+Per-object shorthand for simple cases:
+
+```js
 keyframes: {
-  myBox: [[0, "pathProgress", 0], [8, "pathProgress", 1, "linear"]],
+  runner: [[0, "pathProgress", 0], [8, "pathProgress", 1, "linear"]],
 }
 ```
 
-Supported easings: `linear`, `easeIn`, `easeOut`, `easeInOut`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack`, `easeInBack`, `bounce`, `elastic`, `spring`, `snap`, `step`.
-
 ### Effects
 
-Effects are additive, fire-and-forget visual modifiers declared in keyframes. They trigger at the keyframe time and decay automatically — no need to animate back to the base value.
+Additive, fire-and-forget visual modifiers that decay automatically:
 
 | Effect | What it does | Example |
 |--------|-------------|---------|
-| `pulse` | Temporary scale bump | `{ pulse: 0.12 }` — 12% scale increase |
-| `flash` | Temporary opacity spike | `{ flash: 0.3 }` — opacity +0.3 |
-| `shake` | Temporary random offset | `{ shake: 5 }` — up to 5px displacement |
-| `glow` | Temporary strokeWidth increase | `{ glow: 3 }` — strokeWidth +3 |
+| `pulse` | Temporary scale bump | `{ pulse: 0.12 }` |
+| `flash` | Brief opacity dim | `{ flash: 0.3 }` |
+| `shake` | Rapid left-right oscillation | `{ shake: 5 }` |
+| `glow` | Temporary strokeWidth increase | `{ glow: 3 }` |
 
+### Text Blocks & Code
+
+```js
+// Multi-line text
+{ textblock: "para", at: [400, 200], lines: [
+    "First line",
+    { text: "Highlighted", color: "#22d3ee", bold: true },
+    "Third line",
+  ],
+}
+
+// Syntax-highlighted code
+{ code: "snippet", at: [400, 200], syntax: "javascript", lines: [
+    "function greet() {",
+    "  return 'Hello';",
+    "}",
+  ],
+}
 ```
+
+Per-line animation via dot notation:
+```js
 { time: 2.0, changes: {
-  arrow: { progress: 1, easing: "easeInOut" },
-  source: { pulse: 0.12 },
-  target: { pulse: 0.12 },
+  "snippet.line1": { color: "#22d3ee", opacity: 0.5 },
+  "snippet.line2": { text: "  return 'World';" },
 }}
 ```
 
-### Auto-Key
+Bundled syntax languages: JavaScript, TypeScript, Python, JSON, YAML, SQL, Bash, CSS, HTML/XML, Go, Rust, Java, C/C++, Markdown.
 
-By default (`autoKey: true`), properties are held at each keyframe block boundary. This means transitions only happen between adjacent blocks — you don't get unexpected slow interpolations spanning the entire animation. Disable with `autoKey: false` for intentional long-window interpolations.
+### Camera
+
+```js
+{ camera: "cam", target: [400, 250], zoom: 1 },
+
+// Animate in keyframes
+{ time: 2.0, changes: { cam: { target: "boxId", zoom: 2 } } },
+{ time: 4.0, changes: { cam: { fit: "all" } } },
+{ time: 5.0, changes: { cam: { fit: ["a", "b"], easing: "cut" } } },
+```
+
+- **`target`**: `[x,y]` coordinates or object ID (follows the object)
+- **`zoom`**: zoom level (2 = 2x closer)
+- **`fit`**: `"all"` or `["id1", "id2"]` — auto-zoom to fit objects
+- All properties animate smoothly with easing. Use `easing: "cut"` for instant jumps.
+
+### Images
+
+```js
+{
+  images: { logo: "/icons/logo.svg" },
+  objects: [
+    { box: "a", image: "logo" },
+    { box: "b", image: "https://example.com/icon.svg" },
+    { circle: "c", image: "data:image/svg+xml;base64,..." },
+  ],
+}
+```
+
+Properties: `image`, `imageFit` (contain/cover/fill), `imagePadding`.
+
+### Text Alignment in Boxes
+
+```js
+{ box: "a", text: "Top Left", textAlign: "start", textVAlign: "top" }
+```
+
+- `textAlign`: `"start"`, `"middle"` (default), `"end"`
+- `textVAlign`: `"top"`, `"middle"` (default), `"bottom"`
 
 ### Chapters
 
-Named time markers for navigation and pause points:
+Named time markers that pause playback:
 
-```
+```js
 chapters: [
   { time: 0, title: "Start", description: "Client initiates connection" },
   { time: 3, title: "Handshake", description: "Server responds" },
@@ -189,119 +290,51 @@ chapters: [
 />
 ```
 
-Accepts a `ref` exposing `DiagramHandle`:
-
-```tsx
-const ref = useRef<DiagramHandle>(null);
-
-ref.current.play();
-ref.current.pause();
-ref.current.seek(2.5);
-ref.current.nextChapter();
-ref.current.prevChapter();
-ref.current.goToChapter('step-2');
-```
-
 ### `useDiagram` Hook
-
-For custom layouts and full state access:
 
 ```tsx
 const diagram = useDiagram({ dsl, autoplay: true });
 
-// State
-diagram.time        // current time
-diagram.duration    // total duration
-diagram.playing     // playback state
-diagram.speed       // playback speed
-diagram.chapters    // chapter definitions
-diagram.activeChapter // currently active chapter
+diagram.time, diagram.duration, diagram.playing, diagram.speed
+diagram.chapters, diagram.activeChapter
+diagram.name, diagram.background, diagram.viewport, diagram.cameraViewBox
+diagram.objects, diagram.animatedProps, diagram.renderOrder
 
-// Methods
-diagram.play()
-diagram.pause()
-diagram.seek(time)
-diagram.nextChapter()
-diagram.prevChapter()
-diagram.goToChapter(id)
-
-// Rendering data
-diagram.objects       // parsed scene objects
-diagram.animatedProps // current animated properties per object
-diagram.renderOrder   // depth-sorted render order
-```
-
-### `Scene` (Programmatic API)
-
-```tsx
-import { Scene, Diagram } from 'starch';
-
-const scene = new Scene();
-scene.box('server', { x: 200, y: 100, w: 120, h: 50, text: 'Server', stroke: '#34d399' });
-scene.line('conn', { from: 'client', to: 'server', stroke: '#fbbf24' });
-
-const anim = scene.animate({ duration: 5 });
-anim.at(0, 'conn', 'progress', 0);
-anim.at(2, 'conn', 'progress', 1, 'easeInOut');
-anim.chapter(0, 'start', 'Start');
-
-<Diagram scene={scene} autoplay />
+diagram.play(), diagram.pause(), diagram.seek(time)
+diagram.nextChapter(), diagram.prevChapter(), diagram.goToChapter(id)
 ```
 
 ### `<starch-diagram>` Custom Element
 
-Attributes: `autoplay`, `speed`, `debug`, `src`
-
 ```html
-<!-- Inline DSL -->
-<starch-diagram autoplay>
-  ...DSL here...
-</starch-diagram>
-
-<!-- External DSL file -->
+<starch-diagram autoplay>...DSL here...</starch-diagram>
 <starch-diagram src="/diagrams/my-diagram.starch" autoplay></starch-diagram>
 ```
 
-JavaScript interaction:
+Includes play/pause and restart controls on hover. JavaScript API:
 
 ```js
 const el = document.querySelector('starch-diagram');
-
-// Control
-el.play();
-el.pause();
-el.seek(2.5);
-el.goToChapter('step-2');
-
-// Read state
-el.time;          // current time
-el.duration;      // total duration
-el.playing;       // boolean
-el.chapters;      // array
-
-// Events
-el.addEventListener('starch:chapterenter', (e) => {
-  console.log('Entered chapter:', e.detail.chapter);
-});
-el.addEventListener('starch:chapterexit', (e) => { ... });
-el.addEventListener('starch:event', (e) => { ... });
+el.play(); el.pause(); el.seek(2.5); el.goToChapter('step-2');
+el.time; el.duration; el.playing; el.chapters;
+el.addEventListener('starch:chapterenter', (e) => { ... });
 ```
 
 ## MkDocs Integration
 
-For MkDocs sites, starch can render fenced code blocks as live diagrams.
+### Option 1: Plugin (recommended)
 
-1. Add the scripts to your `mkdocs.yml`:
-
-```yaml
-extra_javascript:
-  - https://unpkg.com/starch/dist/starch-embed.iife.js
-  - js/starch-init.js
+```bash
+pip install mkdocs-starch
 ```
 
-2. Copy `docs/mkdocs-snippet.js` to your MkDocs `docs/js/starch-init.js`.
+```yaml
+# mkdocs.yml
+plugins:
+  - starch
+```
 
-3. Use fenced code blocks in your markdown:
+Then use fenced code blocks:
 
 ````markdown
 ```starch
@@ -314,7 +347,25 @@ extra_javascript:
 ```
 ````
 
-The snippet finds `language-starch` code blocks and replaces them with live `<starch-diagram>` elements.
+### Option 2: JavaScript snippet
+
+For environments where you can't install Python plugins:
+
+```yaml
+# mkdocs.yml
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: starch
+          class: starch
+          format: !!python/name:pymdownx.superfences.fence_div_format
+
+extra_javascript:
+  - https://unpkg.com/@bitsnbobs/starch/dist/starch-embed.iife.js
+  - js/starch-init.js
+```
+
+Copy `docs/mkdocs-snippet.js` to `docs/js/starch-init.js`.
 
 ## Development
 
@@ -323,6 +374,7 @@ npm run dev          # Start dev server with playground
 npm run build        # Build React library
 npm run build:embed  # Build standalone embed
 npm run build:all    # Build both
+npx vitest run       # Run tests
 ```
 
 ## License
