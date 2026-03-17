@@ -89,7 +89,10 @@ describe('createEvaluator', () => {
     const t0 = evaluate(objects, tracks, 0);
     const nearA = t0.item.x as number;
 
-    const tMid = evaluate(objects, tracks, 1);
+    // Group snaps at t=1 (midpoint of [0,2]); blend runs from t=1 to t=2
+    // At t=1.0 blend just started, at t=1.5 it's partway through
+    evaluate(objects, tracks, 1); // trigger the blend
+    const tMid = evaluate(objects, tracks, 1.5);
     const midX = tMid.item.x as number;
     expect(midX).toBeGreaterThan(nearA);
     expect(midX).toBeLessThan(400);

@@ -1,5 +1,6 @@
-import type { SceneObject, Tracks, Chapter, EffectInstance } from '../core/types';
+import type { SceneObject, Tracks, Chapter, EffectInstance, EasingName } from '../core/types';
 import { interpolate } from './interpolate';
+import { applyEasing } from './easing';
 import { computeLayout } from './layout';
 import { applyEffects } from './effects';
 import {
@@ -80,31 +81,36 @@ export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
           const currentX = existing.fromX + (existing.targetX - existing.fromX) * progress;
           const currentY = existing.fromY + (existing.targetY - existing.fromY) * progress;
 
-          // Find the keyframe window that caused this change
+          // Blend starts NOW (when position change is detected) and ends
+          // at the group keyframe's target time, or after 0.5s by default.
           const groupTrack = tracks[`${id}.group`];
-          let blendStart = time;
-          let blendEnd = time + 0.5; // default 0.5s blend
-          let blendEasing = 'linear';
+          let blendEnd = time + 0.5;
+          let blendEasing = 'easeInOut';
           if (groupTrack) {
-            // Find the surrounding keyframe pair
             for (let i = 0; i < groupTrack.length - 1; i++) {
               if (groupTrack[i].time <= time && groupTrack[i + 1].time >= time - 0.01) {
-                blendStart = groupTrack[i].time;
                 blendEnd = groupTrack[i + 1].time;
                 blendEasing = groupTrack[i + 1].easing;
                 break;
               }
             }
           }
-          blendMap.set(id, { fromX: currentX, fromY: currentY, targetX: layoutX, targetY: layoutY, startTime: blendStart, endTime: Math.max(blendEnd, blendStart + 0.01), easing: blendEasing });
+          blendMap.set(id, { fromX: currentX, fromY: currentY, targetX: layoutX, targetY: layoutY, startTime: time, endTime: Math.max(blendEnd, time + 0.01), easing: blendEasing });
         }
-        // Apply blend
+        // Apply blend (with easing)
         const blend = blendMap.get(id)!;
         const dur = blend.endTime - blend.startTime;
-        const t = dur > 0 ? Math.min(1, (time - blend.startTime) / dur) : 1;
+        const rawT = dur > 0 ? Math.min(1, (time - blend.startTime) / dur) : 1;
+        const t = applyEasing(rawT, blend.easing as EasingName);
         props.x = blend.fromX + (blend.targetX - blend.fromX) * t;
         props.y = blend.fromY + (blend.targetY - blend.fromY) * t;
-        if (t >= 1) blendMap.delete(id);
+        // Keep entry but update target so we detect future changes
+        if (rawT >= 1) {
+          existing.fromX = existing.targetX;
+          existing.fromY = existing.targetY;
+          existing.startTime = time;
+          existing.endTime = time;
+        }
       } else {
         // First frame for this item — record position, no blend
         blendMap.set(id, { fromX: layoutX, fromY: layoutY, targetX: layoutX, targetY: layoutY, startTime: time, endTime: time, easing: 'linear' });
