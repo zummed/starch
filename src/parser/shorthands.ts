@@ -87,6 +87,66 @@ export function expandShorthands(raw: unknown): unknown {
     });
   }
 
+  // Resolve position references: at: "objectId" or at: ["objectId", dx, dy]
+  if (Array.isArray(obj.objects)) {
+    // Build position map from all objects that have numeric x/y
+    const posMap = new Map<string, [number, number]>();
+    for (const item of obj.objects as Array<Record<string, unknown>>) {
+      if (item && typeof item === 'object' && typeof item.id === 'string') {
+        const x = item.x as number;
+        const y = item.y as number;
+        if (typeof x === 'number' && typeof y === 'number') {
+          posMap.set(item.id, [x, y]);
+        }
+      }
+    }
+
+    // Resolve references (multiple passes for chained refs)
+    for (let pass = 0; pass < 3; pass++) {
+      let resolved = false;
+      for (const item of obj.objects as Array<Record<string, unknown>>) {
+        if (!item || typeof item !== 'object') continue;
+
+        // at: "refId" → [refX, refY]
+        if (typeof item.at === 'string') {
+          const pos = posMap.get(item.at);
+          if (pos) {
+            item.at = [...pos];
+            resolved = true;
+          }
+        }
+        // at: ["refId", dx, dy] → [refX + dx, refY + dy]
+        if (Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'string') {
+          const [ref, dx = 0, dy = 0] = item.at as [string, number?, number?];
+          const pos = posMap.get(ref);
+          if (pos) {
+            item.at = [pos[0] + (dx || 0), pos[1] + (dy || 0)];
+            resolved = true;
+          }
+        }
+
+        // Update posMap after resolution (for chained references)
+        if (typeof item.id === 'string' && Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'number') {
+          const [x, y] = item.at as [number, number];
+          posMap.set(item.id, [x, y]);
+        }
+      }
+      if (!resolved) break;
+    }
+
+    // Re-expand at shorthand for newly resolved references
+    for (const item of obj.objects as Array<Record<string, unknown>>) {
+      if (item && Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'number') {
+        const [x, y] = item.at as [number, number];
+        if (item.x === undefined && item.y === undefined) {
+          item.x = x;
+          item.y = y;
+          delete item.at;
+        }
+      }
+    }
+  }
+
   // Expand animate.keyframes
   if (obj.animate && typeof obj.animate === 'object') {
     const anim = obj.animate as Record<string, unknown>;
