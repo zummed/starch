@@ -393,3 +393,213 @@ export function splineEndpoint(
 
   return { x: pt.x, y: pt.y, tx: tan.tx, ty: tan.ty };
 }
+
+// ── Polyline with rounded corners ──
+
+interface PolySegment {
+  type: 'line' | 'arc';
+  x1: number; y1: number;
+  x2: number; y2: number;
+  // For arc: control point
+  cx?: number; cy?: number;
+  length: number;
+}
+
+function dist(x1: number, y1: number, x2: number, y2: number): number {
+  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+
+/**
+ * Build polyline segments with rounded corners.
+ */
+function buildPolySegments(
+  points: Array<{ x: number; y: number }>,
+  radius: number,
+): PolySegment[] {
+  if (points.length < 2) return [];
+  if (points.length === 2 || radius <= 0) {
+    // No corners to round
+    const segs: PolySegment[] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p = points[i], q = points[i + 1];
+      segs.push({ type: 'line', x1: p.x, y1: p.y, x2: q.x, y2: q.y, length: dist(p.x, p.y, q.x, q.y) });
+    }
+    return segs;
+  }
+
+  const segs: PolySegment[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p = points[i], q = points[i + 1];
+
+    // Before this segment's end, check for rounding
+    let endX = q.x, endY = q.y;
+    if (i < points.length - 2) {
+      // There's a corner at q
+      const r = points[i + 2];
+      const dPQ = dist(p.x, p.y, q.x, q.y);
+      const dQR = dist(q.x, q.y, r.x, r.y);
+      const maxR = Math.min(dPQ / 2, dQR / 2, radius);
+
+      if (maxR > 0.5) {
+        // Shorten this segment to stop at the arc start
+        const nPQ = { x: (q.x - p.x) / dPQ, y: (q.y - p.y) / dPQ };
+        const nQR = { x: (r.x - q.x) / dQR, y: (r.y - q.y) / dQR };
+        const arcStart = { x: q.x - nPQ.x * maxR, y: q.y - nPQ.y * maxR };
+        const arcEnd = { x: q.x + nQR.x * maxR, y: q.y + nQR.y * maxR };
+
+        // Compute actual start of this line segment
+        let startX = p.x, startY = p.y;
+        if (i > 0) {
+          // Previous corner already shortened the start
+          const prev = points[i - 1];
+          const dPrev = dist(prev.x, prev.y, p.x, p.y);
+          const maxRPrev = Math.min(dPrev / 2, dPQ / 2, radius);
+          if (maxRPrev > 0.5) {
+            const nPrevP = { x: (p.x - prev.x) / dPrev, y: (p.y - prev.y) / dPrev };
+            startX = p.x + nPrevP.x * 0; // already handled
+            startY = p.y + nPrevP.y * 0;
+          }
+        }
+
+        endX = arcStart.x;
+        endY = arcStart.y;
+
+        // Line segment to arc start
+        const lineLen = dist(startX, startY, endX, endY);
+        if (lineLen > 0.1) {
+          segs.push({ type: 'line', x1: startX, y1: startY, x2: endX, y2: endY, length: lineLen });
+        }
+
+        // Arc segment (quadratic bezier through corner)
+        const arcLen = dist(arcStart.x, arcStart.y, arcEnd.x, arcEnd.y); // approximation
+        segs.push({
+          type: 'arc',
+          x1: arcStart.x, y1: arcStart.y,
+          x2: arcEnd.x, y2: arcEnd.y,
+          cx: q.x, cy: q.y,
+          length: arcLen,
+        });
+        continue;
+      }
+    }
+
+    // Compute actual start (may be shortened by previous corner's arc)
+    let startX = p.x, startY = p.y;
+    if (i > 0) {
+      const prevSeg = segs[segs.length - 1];
+      if (prevSeg && prevSeg.type === 'arc') {
+        startX = prevSeg.x2;
+        startY = prevSeg.y2;
+      }
+    }
+
+    const lineLen = dist(startX, startY, endX, endY);
+    if (lineLen > 0.1) {
+      segs.push({ type: 'line', x1: startX, y1: startY, x2: endX, y2: endY, length: lineLen });
+    }
+  }
+
+  return segs;
+}
+
+/**
+ * Generate SVG path for a polyline with rounded corners, clipped by progress.
+ */
+export function polylinePathD(
+  points: Array<{ x: number; y: number }>,
+  radius: number,
+  progress: number,
+): string {
+  const segs = buildPolySegments(points, radius);
+  if (segs.length === 0) return '';
+
+  const totalLen = segs.reduce((s, seg) => s + seg.length, 0);
+  const drawLen = totalLen * Math.max(0, Math.min(1, progress));
+
+  let d = `M ${segs[0].x1} ${segs[0].y1}`;
+  let cumLen = 0;
+
+  for (const seg of segs) {
+    if (cumLen >= drawLen) break;
+    const remaining = drawLen - cumLen;
+
+    if (remaining >= seg.length) {
+      // Draw full segment
+      if (seg.type === 'line') {
+        d += ` L ${seg.x2} ${seg.y2}`;
+      } else {
+        d += ` Q ${seg.cx} ${seg.cy} ${seg.x2} ${seg.y2}`;
+      }
+      cumLen += seg.length;
+    } else {
+      // Partial segment
+      const t = remaining / seg.length;
+      if (seg.type === 'line') {
+        const x = seg.x1 + (seg.x2 - seg.x1) * t;
+        const y = seg.y1 + (seg.y2 - seg.y1) * t;
+        d += ` L ${x} ${y}`;
+      } else {
+        // Partial quadratic bezier — use De Casteljau
+        const ax = seg.x1 + (seg.cx! - seg.x1) * t;
+        const ay = seg.y1 + (seg.cy! - seg.y1) * t;
+        const bx = seg.cx! + (seg.x2 - seg.cx!) * t;
+        const by = seg.cy! + (seg.y2 - seg.cy!) * t;
+        const px = ax + (bx - ax) * t;
+        const py = ay + (by - ay) * t;
+        d += ` Q ${ax} ${ay} ${px} ${py}`;
+      }
+      break;
+    }
+  }
+
+  return d;
+}
+
+/**
+ * Get position and tangent at progress along a polyline with rounded corners.
+ */
+export function polylineEndpoint(
+  points: Array<{ x: number; y: number }>,
+  radius: number,
+  progress: number,
+): { x: number; y: number; tx: number; ty: number } {
+  const segs = buildPolySegments(points, radius);
+  if (segs.length === 0) return { x: 0, y: 0, tx: 1, ty: 0 };
+
+  const totalLen = segs.reduce((s, seg) => s + seg.length, 0);
+  const drawLen = totalLen * Math.max(0, Math.min(1, progress));
+
+  let cumLen = 0;
+  for (const seg of segs) {
+    if (cumLen + seg.length >= drawLen || seg === segs[segs.length - 1]) {
+      const remaining = drawLen - cumLen;
+      const t = seg.length > 0 ? Math.min(1, remaining / seg.length) : 1;
+
+      if (seg.type === 'line') {
+        const x = seg.x1 + (seg.x2 - seg.x1) * t;
+        const y = seg.y1 + (seg.y2 - seg.y1) * t;
+        const len = dist(seg.x1, seg.y1, seg.x2, seg.y2);
+        const tx = len > 0 ? (seg.x2 - seg.x1) / len : 1;
+        const ty = len > 0 ? (seg.y2 - seg.y1) / len : 0;
+        return { x, y, tx, ty };
+      } else {
+        // Quadratic bezier tangent
+        const ax = seg.x1 + (seg.cx! - seg.x1) * t;
+        const ay = seg.y1 + (seg.cy! - seg.y1) * t;
+        const bx = seg.cx! + (seg.x2 - seg.cx!) * t;
+        const by = seg.cy! + (seg.y2 - seg.cy!) * t;
+        const px = ax + (bx - ax) * t;
+        const py = ay + (by - ay) * t;
+        // Tangent direction
+        const tdx = bx - ax;
+        const tdy = by - ay;
+        const tlen = Math.sqrt(tdx * tdx + tdy * tdy);
+        return { x: px, y: py, tx: tlen > 0 ? tdx / tlen : 1, ty: tlen > 0 ? tdy / tlen : 0 };
+      }
+    }
+    cumLen += seg.length;
+  }
+
+  const last = points[points.length - 1];
+  return { x: last.x, y: last.y, tx: 1, ty: 0 };
+}

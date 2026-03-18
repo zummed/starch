@@ -1,15 +1,20 @@
 import type { AnchorPoint } from './base';
 
+// Universal coordinate reference: object ID, [x,y], or ["objectId", dx, dy]
+export type PointRef = string | [number, number] | [string, number, number];
+
 export interface LineProps {
-  from?: string;
-  to?: string;
-  fromAnchor?: AnchorPoint; // specific anchor on source object
-  toAnchor?: AnchorPoint;   // specific anchor on target object
+  from?: PointRef;
+  to?: PointRef;
+  fromAnchor?: AnchorPoint;
+  toAnchor?: AnchorPoint;
   x1?: number;
   y1?: number;
   x2?: number;
   y2?: number;
-  colour?: string;     // shortcut → stroke (+ fill for label bg if needed)
+  route?: PointRef[];       // waypoints between from and to
+  smooth?: boolean;          // true = Catmull-Rom (default), false = polyline
+  colour?: string;
   stroke?: string;
   strokeWidth?: number;
   dashed?: boolean;
@@ -17,9 +22,10 @@ export interface LineProps {
   label?: string;
   labelColor?: string;
   labelSize?: number;
-  labelRotation?: number; // degrees, default 0 (horizontal)
+  labelRotation?: number;
   opacity?: number;
-  progress?: number; // 0–1, partial line drawing
-  bend?: number | Array<{ x: number; y: number }>; // auto-curve offset or explicit waypoints
-  closed?: boolean;  // close the spline loop (bend must be an array of points)
+  progress?: number;
+  bend?: number;             // simple curve offset (number only, array removed)
+  radius?: number;           // corner radius for polyline mode
+  closed?: boolean;
 }
