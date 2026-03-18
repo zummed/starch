@@ -8,6 +8,7 @@ export interface Sample {
 
 export const CATEGORIES = [
   { id: 'shapes', title: 'Shapes' },
+  { id: 'images', title: 'Images' },
   { id: 'connections', title: 'Connections' },
   { id: 'layout', title: 'Layout' },
   { id: 'effects', title: 'Effects' },
@@ -120,6 +121,110 @@ export const SAMPLES: Sample[] = [
     duration: 2, loop: false, easing: "easeInOut",
     keyframes: [
       { time: 1.0, changes: { metrics: { opacity: 1 } } },
+    ],
+  },
+}`,
+  },
+
+  // ═════════════════════════════════════════════════════════════
+  // IMAGES
+  // ═════════════════════════════════════════════════════════════
+
+  {
+    id: 'images-on-shapes',
+    title: 'Images on Shapes',
+    category: 'images',
+    description: 'Display images inside boxes, circles, and labels using an image registry.',
+    dsl: `{
+  images: {
+    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
+    heart: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21C12 21 3 13.5 3 8.5C3 5.4 5.4 3 8.5 3c1.7 0 3.4 1 4.5 2.5C14.1 4 15.8 3 17.5 3 20.6 3 23 5.4 23 8.5 23 13.5 12 21 12 21z' fill='%23f472b6'/%3E%3C/svg%3E",
+    bolt: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='13,2 3,14 12,14 11,22 21,10 12,10' fill='%2322d3ee'/%3E%3C/svg%3E",
+  },
+  objects: [
+    { label: "title", at: [400, 40], text: "Images on Shapes", size: 16, color: "#e2e5ea", bold: true },
+    { box: "b1", at: [200, 160], size: [120, 80], colour: "#2a2d35", image: "star", radius: 12 },
+    { label: "bl", at: [200, 220], text: "Box + image", size: 11, color: "#6b7280" },
+    { circle: "c1", at: [400, 160], r: 45, colour: "#2a2d35", image: "heart" },
+    { label: "cl", at: [400, 220], text: "Circle + image", size: 11, color: "#6b7280" },
+    { label: "l1", at: [600, 160], text: "Bolt label", size: 16, color: "#e2e5ea", image: "bolt" },
+    { label: "ll", at: [600, 220], text: "Label + image", size: 11, color: "#6b7280" },
+    { label: "reg", at: [400, 290], text: "All three reference the top-level images registry by key", size: 11, color: "#4a4f59" },
+  ],
+  animate: {
+    duration: 3, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 1.5, changes: { b1: { pulse: 0.1 }, c1: { pulse: 0.1 } } },
+    ],
+  },
+}`,
+  },
+
+  {
+    id: 'image-fit',
+    title: 'Image Fit Modes',
+    category: 'images',
+    description: 'Compare contain, cover, and fill modes with imagePadding.',
+    dsl: `{
+  images: {
+    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
+  },
+  objects: [
+    { label: "title", at: [400, 40], text: "imageFit Modes", size: 16, color: "#e2e5ea", bold: true },
+    { box: "contain", at: [150, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "contain", radius: 8 },
+    { label: "lc", at: [150, 240], text: "contain (default)", size: 11, color: "#6b7280" },
+    { box: "cover", at: [400, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "cover", radius: 8 },
+    { label: "lv", at: [400, 240], text: "cover", size: 11, color: "#6b7280" },
+    { box: "fill", at: [650, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "fill", radius: 8 },
+    { label: "lf", at: [650, 240], text: "fill", size: 11, color: "#6b7280" },
+    { box: "padded", at: [275, 340], size: [160, 100], colour: "#2a2d35", image: "star", imagePadding: 20, radius: 8 },
+    { label: "lp", at: [275, 410], text: "imagePadding: 20", size: 11, color: "#6b7280" },
+    { box: "nopad", at: [525, 340], size: [160, 100], colour: "#2a2d35", image: "star", imagePadding: 0, radius: 8 },
+    { label: "ln", at: [525, 410], text: "imagePadding: 0", size: 11, color: "#6b7280" },
+  ],
+  animate: {
+    duration: 4, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 2.0, changes: {
+        contain: { w: 100 },
+        cover: { w: 100 },
+        fill: { w: 100 },
+      } },
+    ],
+  },
+}`,
+  },
+
+  {
+    id: 'image-sources',
+    title: 'Image Sources',
+    category: 'images',
+    description: 'Three ways to specify an image: registry key, URL, or inline data URI.',
+    dsl: `{
+  images: {
+    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
+  },
+  objects: [
+    { label: "title", at: [400, 40], text: "Image Sources", size: 16, color: "#e2e5ea", bold: true },
+    // Method 1: registry key
+    { box: "reg", at: [150, 170], size: [160, 100], colour: "#2a2d35", image: "star", radius: 8 },
+    { label: "rl1", at: [150, 240], text: "Registry key", size: 12, color: "#22d3ee" },
+    { label: "rl2", at: [150, 260], text: "image: \\"star\\"", size: 10, color: "#6b7280" },
+    // Method 2: direct URL (e.g. /icons/logo.svg or https://...)
+    { box: "url", at: [400, 170], size: [160, 100], colour: "#2a2d35", image: "https://upload.wikimedia.org/wikipedia/commons/4/47/React.svg", radius: 8 },
+    { label: "ul1", at: [400, 240], text: "Direct URL", size: 12, color: "#34d399" },
+    { label: "ul2", at: [400, 260], text: "image: \\"https://...\\"", size: 10, color: "#6b7280" },
+    // Method 3: inline data URI
+    { box: "uri", at: [650, 170], size: [160, 100], colour: "#2a2d35", radius: 8,
+      image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='13,2 3,14 12,14 11,22 21,10 12,10' fill='%2322d3ee'/%3E%3C/svg%3E" },
+    { label: "dl1", at: [650, 240], text: "Inline data URI", size: 12, color: "#a78bfa" },
+    { label: "dl2", at: [650, 260], text: "image: \\"data:image/svg+xml,...\\"", size: 10, color: "#6b7280" },
+    { label: "hint", at: [400, 330], text: "The registry avoids repeating long URIs — define once, reference by key", size: 11, color: "#4a4f59" },
+  ],
+  animate: {
+    duration: 3, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 1.5, changes: { reg: { pulse: 0.1 }, url: { pulse: 0.1 }, uri: { pulse: 0.1 } } },
     ],
   },
 }`,
