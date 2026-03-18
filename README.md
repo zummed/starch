@@ -6,7 +6,9 @@ Animated diagram library for documenting application internals. Define objects a
 
 ## Try It — Interactive Playground
 
-The fastest way to start is the built-in playground with a categorised sample browser, tabbed editor, and live preview.
+**[Open the Playground](https://zummed.github.io/starch/)** — no install required. Browse samples, edit DSL live, and export diagrams.
+
+To run the playground locally:
 
 ```bash
 git clone https://github.com/zummed/starch.git
@@ -14,13 +16,6 @@ cd starch
 npm install
 npm run dev
 ```
-
-The playground features:
-- **Sample browser** with 28 focused examples across 8 categories
-- **Tabbed editor** with syntax highlighting, autocomplete, inline error diagnostics, and save/load
-- **Canvas controls** — pan (drag), zoom (scroll wheel), Fit All, Lock View, Debug mode
-- **Export** to HTML, React, MkDocs, or raw DSL
-- **Persistent tabs** — work survives page reloads via localStorage
 
 ## Install
 
@@ -321,35 +316,6 @@ el.addEventListener('starch:chapterenter', (e) => { ... });
 ```
 
 ## MkDocs Integration
-
-### Option 1: Plugin (recommended)
-
-```bash
-pip install mkdocs-starch
-```
-
-```yaml
-# mkdocs.yml
-plugins:
-  - starch
-```
-
-Then use fenced code blocks:
-
-````markdown
-```starch
-{
-  objects: [
-    { box: "api", at: [200, 100], colour: "#34d399", text: "API" }
-  ],
-  animate: { duration: 3 }
-}
-```
-````
-
-### Option 2: JavaScript snippet
-
-For environments where you can't install Python plugins:
 
 ```yaml
 # mkdocs.yml
