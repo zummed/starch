@@ -23,7 +23,6 @@ export function createRenderObject(
 
     switch (obj.type) {
       case 'camera':
-      case 'point':
         return null;
       case 'box':
         return <BoxRenderer key={id} props={p} />;

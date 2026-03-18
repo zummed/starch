@@ -218,15 +218,6 @@ export default function App() {
       switch (obj.type) {
         case 'camera':
           return null;
-        case 'point':
-          if (!debugMode) return null;
-          return (
-            <g key={id} transform={`translate(${(p.x as number) || 0}, ${(p.y as number) || 0})`} opacity={0.5}>
-              <line x1={-6} y1={0} x2={6} y2={0} stroke="#ef4444" strokeWidth={1} />
-              <line x1={0} y1={-6} x2={0} y2={6} stroke="#ef4444" strokeWidth={1} />
-              <text x={8} y={-4} fill="#ef4444" fontSize={9} fontFamily={FONT}>{id}</text>
-            </g>
-          );
         case 'box':
           return <BoxRenderer key={id} props={p} />;
         case 'circle':

@@ -1,6 +1,6 @@
 // ─── Object Types ───────────────────────────────────────────────
 
-export type ObjectType = 'box' | 'circle' | 'label' | 'table' | 'line' | 'path' | 'camera' | 'textblock' | 'point';
+export type ObjectType = 'box' | 'circle' | 'label' | 'table' | 'line' | 'path' | 'camera' | 'textblock';
 
 // Named anchor presets (cardinal + ordinal + legacy names)
 export type NamedAnchor =
