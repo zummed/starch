@@ -9,7 +9,7 @@ export type { BoxProps } from './box';
 export type { CircleProps } from './circle';
 export type { LabelProps } from './label';
 export type { TableProps } from './table';
-export type { LineProps } from './line';
+export type { LineProps, PointRef } from './line';
 export type { PathProps } from './path';
 
 // Scene object

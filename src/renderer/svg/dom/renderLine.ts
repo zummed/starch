@@ -1,11 +1,13 @@
 import { createSvgEl, setAttrs } from './svgHelpers';
-import type { SceneObject, AnchorPoint } from '../../../core/types';
+import type { SceneObject, AnchorPoint, PointRef } from '../../../core/types';
 import { getObjectBounds, edgePoint, edgePointAtAnchor } from '../../EdgeGeometry';
+import { resolvePointRef } from '../../resolvePointRef';
 import { FONT } from '../constants';
 import {
   anchorDirection, autoAnchors,
   cubicPoint, cubicTangent, cubicPathD,
   splinePathD, splineEndpoint, closedSplinePathD,
+  polylinePathD, polylineEndpoint,
 } from '../../../engine/bezier';
 
 const DEBUG_STROKE = '#ef4444';
@@ -14,6 +16,7 @@ export interface LineHandles {
   root: SVGGElement;
   pathOrLine: SVGPathElement | SVGLineElement;
   arrow: SVGPolygonElement;
+  arrowStart: SVGPolygonElement;
   labelG: SVGGElement;
   labelBg: SVGRectElement;
   labelText: SVGTextElement;
@@ -39,6 +42,10 @@ export function createLine(
   arrow.style.display = 'none';
   root.appendChild(arrow);
 
+  const arrowStartEl = createSvgEl('polygon');
+  arrowStartEl.style.display = 'none';
+  root.appendChild(arrowStartEl);
+
   const labelG = createSvgEl('g');
   const labelBg = createSvgEl('rect', { rx: 4, fill: '#0e1117', opacity: 0.85 });
   const labelText = createSvgEl('text', {
@@ -52,7 +59,7 @@ export function createLine(
   root.appendChild(labelG);
 
   const handles: LineHandles = {
-    root, pathOrLine: pathEl, arrow, labelG, labelBg, labelText, _usePath: true,
+    root, pathOrLine: pathEl, arrow, arrowStart: arrowStartEl as unknown as SVGPolygonElement, labelG, labelBg, labelText, _usePath: true,
   };
   updateLine(handles, props, objects, allProps, debug);
   return handles;
@@ -70,22 +77,26 @@ export function updateLine(
     x1: explicitX1, y1: explicitY1, x2: explicitX2, y2: explicitY2,
     stroke = '#4a4f59', strokeWidth = 1.5, dashed = false,
     label, labelColor = '#8a8f98', labelSize = 11, labelRotation = 0,
-    opacity = 1, progress = 1, arrow = true, textOffset,
-    bend, closed = false, visible = true,
+    opacity = 1, progress = 1, arrow = true, arrowStart = false, textOffset,
+    bend, route, smooth = true, radius = 0,
+    closed = false, visible = true,
   } = props as Record<string, unknown>;
 
   const isDebugOnly = !visible && debug;
 
-  const bendVal = bend as number | Array<{ x: number; y: number }> | undefined;
-  const isClosedSpline = Boolean(closed) && Array.isArray(bendVal);
-  const isSpline = Array.isArray(bendVal) && !isClosedSpline;
-  const isCurve = !isSpline && !isClosedSpline && typeof bendVal === 'number' && bendVal !== 0;
+  const bendVal = typeof bend === 'number' ? bend : undefined;
+  const routeRefs = (route as PointRef[] | undefined) ?? [];
+  const hasRoute = routeRefs.length > 0;
+  const isCurve = !hasRoute && typeof bendVal === 'number' && bendVal !== 0;
 
   // Resolve effective anchors
   let effFrom = fromAnchor as AnchorPoint | undefined;
   let effTo = toAnchor as AnchorPoint | undefined;
 
-  if (isCurve && from && to && objects[from as string] && objects[to as string]) {
+  const fromIsObjId = typeof from === 'string' && objects[from as string];
+  const toIsObjId = typeof to === 'string' && objects[to as string];
+
+  if (isCurve && fromIsObjId && toIsObjId) {
     const fromB = getObjectBounds(from as string, objects, allProps);
     const toB = getObjectBounds(to as string, objects, allProps);
     if (!effFrom || !effTo) {
@@ -97,28 +108,48 @@ export function updateLine(
     }
   }
 
-  // Compute endpoints
+  // Resolve route waypoints
+  const routePoints = routeRefs
+    .map(r => resolvePointRef(r, allProps))
+    .filter((p): p is { x: number; y: number } => p !== null);
+
+  // Compute endpoints (supports PointRef)
   let sx: number, sy: number, ex: number, ey: number;
 
-  if (from && to && objects[from as string] && objects[to as string]) {
+  if (fromIsObjId) {
     const fromB = getObjectBounds(from as string, objects, allProps);
-    const toB = getObjectBounds(to as string, objects, allProps);
-
     const fromPt = effFrom ? edgePointAtAnchor(from as string, effFrom, objects, allProps) : null;
-    const toPt = effTo ? edgePointAtAnchor(to as string, effTo, objects, allProps) : null;
-
-    const refFrom = fromPt || { x: fromB.x, y: fromB.y };
-    const refTo = toPt || { x: toB.x, y: toB.y };
-    const angle = Math.atan2(refTo.y - refFrom.y, refTo.x - refFrom.x);
-
     if (fromPt) { sx = fromPt.x; sy = fromPt.y; }
-    else { const s = edgePoint(fromB, angle); sx = s.x; sy = s.y; }
-
-    if (toPt) { ex = toPt.x; ey = toPt.y; }
-    else { const e = edgePoint(toB, angle + Math.PI); ex = e.x; ey = e.y; }
+    else {
+      const target = routePoints[0] || (toIsObjId
+        ? { x: getObjectBounds(to as string, objects, allProps).x, y: getObjectBounds(to as string, objects, allProps).y }
+        : resolvePointRef(to as PointRef, allProps) || { x: (explicitX2 as number) || 100, y: (explicitY2 as number) || 100 });
+      const angle = Math.atan2(target.y - fromB.y, target.x - fromB.x);
+      const s = edgePoint(fromB, angle); sx = s.x; sy = s.y;
+    }
+  } else if (from) {
+    const p = resolvePointRef(from as PointRef, allProps);
+    sx = p?.x ?? ((explicitX1 as number) || 0);
+    sy = p?.y ?? ((explicitY1 as number) || 0);
   } else {
     sx = (explicitX1 as number) || 0;
     sy = (explicitY1 as number) || 0;
+  }
+
+  if (toIsObjId) {
+    const toB = getObjectBounds(to as string, objects, allProps);
+    const toPt = effTo ? edgePointAtAnchor(to as string, effTo, objects, allProps) : null;
+    if (toPt) { ex = toPt.x; ey = toPt.y; }
+    else {
+      const source = routePoints.length > 0 ? routePoints[routePoints.length - 1] : { x: sx, y: sy };
+      const angle = Math.atan2(source.y - toB.y, source.x - toB.x);
+      const e = edgePoint(toB, angle); ex = e.x; ey = e.y;
+    }
+  } else if (to) {
+    const p = resolvePointRef(to as PointRef, allProps);
+    ex = p?.x ?? ((explicitX2 as number) || 100);
+    ey = p?.y ?? ((explicitY2 as number) || 100);
+  } else {
     ex = (explicitX2 as number) || 100;
     ey = (explicitY2 as number) || 100;
   }
@@ -135,17 +166,26 @@ export function updateLine(
   let aex: number, aey: number, nx: number, ny: number, mx: number, my: number;
   let pathD: string | null = null;
 
+  const isClosedSpline = Boolean(closed) && hasRoute;
+
   if (isClosedSpline) {
-    const pts = bendVal as Array<{ x: number; y: number }>;
-    pathD = closedSplinePathD(pts, prog);
+    pathD = closedSplinePathD(routePoints, prog);
     aex = 0; aey = 0; nx = 0; ny = 0; mx = 0; my = 0;
-  } else if (isSpline) {
-    const allPts = [{ x: sx, y: sy }, ...bendVal, { x: ex, y: ey }];
-    pathD = splinePathD(allPts, prog);
-    const ep = splineEndpoint(allPts, prog);
-    aex = ep.x; aey = ep.y; nx = ep.tx; ny = ep.ty;
-    const mid = splineEndpoint(allPts, 0.5);
-    mx = mid.x + tOff[0]; my = mid.y + tOff[1];
+  } else if (hasRoute) {
+    const allPts = [{ x: sx, y: sy }, ...routePoints, { x: ex, y: ey }];
+    if (smooth) {
+      pathD = splinePathD(allPts, prog);
+      const ep = splineEndpoint(allPts, prog);
+      aex = ep.x; aey = ep.y; nx = ep.tx; ny = ep.ty;
+      const mid = splineEndpoint(allPts, 0.5);
+      mx = mid.x + tOff[0]; my = mid.y + tOff[1];
+    } else {
+      pathD = polylinePathD(allPts, radius as number, prog);
+      const ep = polylineEndpoint(allPts, radius as number, prog);
+      aex = ep.x; aey = ep.y; nx = ep.tx; ny = ep.ty;
+      const mid = polylineEndpoint(allPts, radius as number, 0.5);
+      mx = mid.x + tOff[0]; my = mid.y + tOff[1];
+    }
   } else if (hasAnchorDirs) {
     const chordDx = ex - sx;
     const chordDy = ey - sy;
@@ -216,6 +256,20 @@ export function updateLine(
   const drawOpacity = isDebugOnly ? 0.5 : opacity as number;
   const drawDash = isDebugOnly ? '4 4' : (dashed ? '6 4' : 'none');
 
+  // Start tangent (for start arrowhead) — points from start outward
+  const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
+  const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
+
+  // Shorten line at both ends to avoid stroke poking past arrowheads
+  const hasEndArrow = !isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1;
+  const hasStartArrow = !isDebugOnly && Boolean(arrowStart) && !isClosedSpline;
+  const shortenEnd = hasEndArrow ? arrowSize * 0.7 : 0;
+  const shortenStart = hasStartArrow ? arrowSize * 0.7 : 0;
+  const lineEndX = aex - nx * shortenEnd;
+  const lineEndY = aey - ny * shortenEnd;
+  const lineStartX = sx + snx * shortenStart;
+  const lineStartY = sy + sny * shortenStart;
+
   h.root.setAttribute('opacity', String(drawOpacity));
 
   // Update path or line
@@ -235,21 +289,31 @@ export function updateLine(
     pathEl.style.display = 'none';
     lineEl.style.display = '';
     setAttrs(lineEl, {
-      x1: sx, y1: sy, x2: aex, y2: aey,
+      x1: lineStartX, y1: lineStartY, x2: lineEndX, y2: lineEndY,
       stroke: drawStroke,
       'stroke-width': strokeWidth as number,
       'stroke-dasharray': drawDash,
     });
   }
 
-  // Arrow
-  if (!isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1) {
+  // End arrow
+  if (hasEndArrow) {
     h.arrow.style.display = '';
     h.arrow.setAttribute('points',
       `${aex},${aey} ${aex - nx * arrowSize - ny * 4},${aey - ny * arrowSize + nx * 4} ${aex - nx * arrowSize + ny * 4},${aey - ny * arrowSize - nx * 4}`);
     h.arrow.setAttribute('fill', stroke as string);
   } else {
     h.arrow.style.display = 'none';
+  }
+
+  // Start arrow
+  if (hasStartArrow) {
+    h.arrowStart.style.display = '';
+    h.arrowStart.setAttribute('points',
+      `${sx},${sy} ${sx + snx * arrowSize - sny * 4},${sy + sny * arrowSize + snx * 4} ${sx + snx * arrowSize + sny * 4},${sy + sny * arrowSize - snx * 4}`);
+    h.arrowStart.setAttribute('fill', stroke as string);
+  } else {
+    h.arrowStart.style.display = 'none';
   }
 
   // Label

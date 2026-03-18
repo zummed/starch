@@ -86,29 +86,37 @@ export const LabelSchema = BaseSchema.extend({
   align: z.enum(['start', 'middle', 'end']).default('middle'),
 }).passthrough();
 
+// PointRef: object ID, [x, y], or ["objectId", dx, dy]
+const PointRefSchema = z.union([
+  z.string(),
+  z.tuple([z.number(), z.number()]),
+  z.tuple([z.string(), z.number(), z.number()]),
+]);
+
 export const LineSchema = z.object({
-  from: z.string().optional(),
-  to: z.string().optional(),
+  from: PointRefSchema.optional(),
+  to: PointRefSchema.optional(),
   fromAnchor: AnchorSchema.optional(),
   toAnchor: AnchorSchema.optional(),
   x1: z.number().optional(),
   y1: z.number().optional(),
   x2: z.number().optional(),
   y2: z.number().optional(),
+  route: z.array(PointRefSchema).optional(),
+  smooth: z.boolean().default(true),
   stroke: z.string().optional(),
   strokeWidth: z.number().default(1.5),
   dashed: z.boolean().default(false),
   arrow: z.boolean().default(true),
+  arrowStart: z.boolean().default(false),
   label: z.string().optional(),
   labelColor: z.string().optional(),
   labelSize: z.number().default(11),
   labelRotation: z.number().default(0),
   opacity: z.number().min(0).max(1).default(1),
   progress: z.number().min(0).max(1).default(1),
-  bend: z.union([
-    z.number(),
-    z.array(z.object({ x: z.number(), y: z.number() })),
-  ]).optional(),
+  bend: z.number().optional(),
+  radius: z.number().default(0),
   closed: z.boolean().default(false),
   colour: z.string().optional(),
   textOffset: z.tuple([z.number(), z.number()]).optional(),
@@ -135,7 +143,7 @@ export const PathSchema = z.object({
 }).passthrough();
 
 export const CameraSchema = z.object({
-  target: z.union([z.tuple([z.number(), z.number()]), z.string()]).default([400, 250]),
+  target: PointRefSchema.default([400, 250]),
   zoom: z.number().default(1),
   fit: z.union([z.literal('all'), z.array(z.string())]).optional(),
 }).passthrough();
@@ -154,6 +162,12 @@ export const TextblockSchema = BaseSchema.extend({
   radius: z.number().default(8),
 }).passthrough();
 
+export const PointSchema = z.object({
+  x: z.number().default(0),
+  y: z.number().default(0),
+  visible: z.boolean().default(false),
+}).passthrough();
+
 // ─── Schema Registry ────────────────────────────────────────────
 
 const SCHEMAS: Record<string, z.ZodType> = {
@@ -165,6 +179,7 @@ const SCHEMAS: Record<string, z.ZodType> = {
   path: PathSchema,
   camera: CameraSchema,
   textblock: TextblockSchema,
+  point: PointSchema,
 };
 
 /**
@@ -183,7 +198,7 @@ export function parseShape(
 }
 
 export const VALID_TYPES = new Set<string>([
-  'box', 'circle', 'label', 'table', 'line', 'path', 'camera', 'textblock', 'code',
+  'box', 'circle', 'label', 'table', 'line', 'path', 'camera', 'textblock', 'code', 'point',
 ]);
 
 export const SCHEMA_METADATA = {
@@ -193,7 +208,7 @@ export const SCHEMA_METADATA = {
     box: ['w', 'h', 'radius', 'strokeWidth', 'bold', 'textAlign', 'textVAlign', 'image', 'imageFit', 'imagePadding'],
     circle: ['r', 'strokeWidth', 'image', 'imageFit', 'imagePadding'],
     label: ['text', 'color', 'size', 'bold', 'align', 'image', 'imageFit', 'imagePadding'],
-    line: ['from', 'to', 'fromAnchor', 'toAnchor', 'x1', 'y1', 'x2', 'y2', 'stroke', 'strokeWidth', 'dashed', 'arrow', 'label', 'labelColor', 'labelSize', 'opacity', 'progress', 'bend', 'colour', 'textOffset'],
+    line: ['from', 'to', 'fromAnchor', 'toAnchor', 'x1', 'y1', 'x2', 'y2', 'route', 'smooth', 'radius', 'stroke', 'strokeWidth', 'dashed', 'arrow', 'arrowStart', 'label', 'labelColor', 'labelSize', 'opacity', 'progress', 'bend', 'colour', 'textOffset'],
     table: ['cols', 'rows', 'colWidth', 'rowHeight', 'headerFill', 'headerColor', 'strokeWidth'],
     path: ['points', 'closed', 'stroke', 'strokeWidth', 'visible', 'opacity', 'colour'],
     camera: ['target', 'zoom', 'fit'],

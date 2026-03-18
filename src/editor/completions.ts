@@ -58,7 +58,7 @@ function detectContext(doc: string, pos: number): CursorContext {
     if (propName === 'from' || propName === 'to' || propName === 'target' || propName === 'follow')
       return { context: 'id-value' };
     if (propName === 'group') return { context: 'group-value' };
-    if (propName === 'bold' || propName === 'dashed' || propName === 'arrow' || propName === 'closed'
+    if (propName === 'bold' || propName === 'dashed' || propName === 'arrow' || propName === 'arrowStart' || propName === 'closed'
       || propName === 'visible' || propName === 'loop' || propName === 'wrap'
       || propName === 'smooth' || propName === 'autoKey' || propName === 'mono'
       || propName === 'cascadeOpacity' || propName === 'cascadeScale' || propName === 'cascadeRotation')

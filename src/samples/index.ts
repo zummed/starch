@@ -321,7 +321,7 @@ export const SAMPLES: Sample[] = [
     dsl: `{
   objects: [
     { line: "track", closed: true, visible: false, arrow: false, dashed: true, colour: "#2a2d35",
-      bend: [{x:600,y:220}, {x:400,y:340}, {x:200,y:220}, {x:400,y:100}] },
+      route: [[600,220], [400,340], [200,220], [400,100]], closed: true },
     { box: "runner", follow: "track", size: [80, 36], colour: "#60a5fa", text: "Follow", radius: 6 },
     { circle: "dot", follow: "track", r: 12, colour: "#f472b6" },
   ],
@@ -332,6 +332,65 @@ export const SAMPLES: Sample[] = [
       runner: [[0, "pathProgress", 0], [6, "pathProgress", 1]],
       dot: [[0, "pathProgress", 0.5], [6, "pathProgress", 1.5]],
     },
+  },
+}`,
+  },
+
+  {
+    id: 'routed-lines',
+    title: 'Routed Lines',
+    category: 'connections',
+    description: 'Lines routed through waypoints — smooth vs straight with rounded corners.',
+    dsl: `{
+  objects: [
+    { box: "a", at: [100, 100], colour: "#22d3ee", text: "Start" },
+    { box: "b", at: [700, 400], colour: "#34d399", text: "End" },
+    { point: "p1", at: [100, 400] },
+    { point: "p2", at: [700, 100] },
+
+    // Smooth route (Catmull-Rom spline)
+    { line: "smooth", from: "a", route: ["p1"], to: "b",
+      colour: "#a78bfa", label: "smooth", progress: 0 },
+
+    // Straight route with rounded corners
+    { line: "straight", from: "a", route: ["p2"], to: "b",
+      colour: "#fbbf24", label: "radius: 20", smooth: false, radius: 20, progress: 0 },
+  ],
+  animate: {
+    duration: 3, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 1.5, changes: { smooth: { progress: 1 }, straight: { progress: 1 } } },
+    ],
+  },
+}`,
+  },
+
+  {
+    id: 'coordinate-endpoints',
+    title: 'Mixed Endpoints',
+    category: 'connections',
+    description: 'Lines using object IDs, coordinates, and offsets as endpoints.',
+    dsl: `{
+  objects: [
+    { box: "server", at: [400, 200], colour: "#22d3ee", text: "Server" },
+    { point: "origin", at: [100, 200] },
+
+    // From coordinates to object
+    { line: "l1", from: [100, 100], to: "server", colour: "#fbbf24", label: "from [x,y]", progress: 0 },
+
+    // From point with offset to object
+    { line: "l2", from: ["origin", 0, 50], to: "server", colour: "#a78bfa", label: "from point+offset", progress: 0 },
+
+    // From object to coordinates
+    { line: "l3", from: "server", to: [700, 350], colour: "#34d399", label: "to [x,y]", progress: 0 },
+  ],
+  animate: {
+    duration: 4, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 1.0, changes: { l1: { progress: 1 } } },
+      { plus: 1.0, changes: { l2: { progress: 1 } } },
+      { plus: 1.0, changes: { l3: { progress: 1 } } },
+    ],
   },
 }`,
   },
@@ -744,7 +803,7 @@ export const SAMPLES: Sample[] = [
   objects: [
     { camera: "cam", target: "runner", zoom: 2.5 },
     { line: "track", closed: true, visible: false, arrow: false, colour: "#2a2d35",
-      bend: [{x:600,y:200}, {x:400,y:350}, {x:200,y:200}, {x:400,y:100}] },
+      route: [[600,200], [400,350], [200,200], [400,100]], closed: true },
     { box: "runner", follow: "track", size: [80, 36], colour: "#f472b6", text: "Go!", radius: 6 },
     { box: "a", at: [200, 200], colour: "#22d3ee", text: "A" },
     { box: "b", at: [600, 200], colour: "#34d399", text: "B" },
