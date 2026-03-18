@@ -87,8 +87,12 @@ class StarchDiagramElement extends HTMLElement {
     if (src) {
       this._fetchAndMount(src, container as HTMLElement);
     } else {
-      const dsl = this.textContent?.trim() || '';
-      this._mount(container as HTMLElement, dsl);
+      // Defer reading textContent: connectedCallback fires when the opening
+      // tag is parsed, before the HTML parser has added child text nodes.
+      requestAnimationFrame(() => {
+        const dsl = this.textContent?.trim() || '';
+        this._mount(container as HTMLElement, dsl);
+      });
     }
   }
 
