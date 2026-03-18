@@ -154,6 +154,12 @@ export const TextblockSchema = BaseSchema.extend({
   radius: z.number().default(8),
 }).passthrough();
 
+export const PointSchema = z.object({
+  x: z.number().default(0),
+  y: z.number().default(0),
+  visible: z.boolean().default(false),
+}).passthrough();
+
 // ─── Schema Registry ────────────────────────────────────────────
 
 const SCHEMAS: Record<string, z.ZodType> = {
@@ -165,6 +171,7 @@ const SCHEMAS: Record<string, z.ZodType> = {
   path: PathSchema,
   camera: CameraSchema,
   textblock: TextblockSchema,
+  point: PointSchema,
 };
 
 /**
@@ -183,7 +190,7 @@ export function parseShape(
 }
 
 export const VALID_TYPES = new Set<string>([
-  'box', 'circle', 'label', 'table', 'line', 'path', 'camera', 'textblock', 'code',
+  'box', 'circle', 'label', 'table', 'line', 'path', 'camera', 'textblock', 'code', 'point',
 ]);
 
 export const SCHEMA_METADATA = {
