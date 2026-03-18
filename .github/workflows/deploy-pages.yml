@@ -1,0 +1,64 @@
+name: Deploy Playground to GitHub Pages
+
+on:
+  push:
+    branches: ['**']
+  delete:
+    branches: ['**']
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build playground
+        run: npm run build:app
+
+      - name: Deploy to root (main branch)
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist-app
+          keep_files: true
+
+      - name: Deploy branch preview
+        if: github.ref != 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist-app
+          destination_dir: branch/${{ github.ref_name }}
+          keep_files: true
+
+  cleanup:
+    if: github.event_name == 'delete'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Remove branch preview directory
+        run: |
+          BRANCH_DIR="branch/${{ github.event.ref }}"
+          if [ -d "$BRANCH_DIR" ]; then
+            git rm -rf "$BRANCH_DIR"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Clean up preview for deleted branch ${{ github.event.ref }}"
+            git push
+          fi
