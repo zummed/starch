@@ -320,8 +320,25 @@ function resolveFollowPosition(
 
   if (target.type === 'line') {
     const bend = tp.bend;
+    const route = tp.route as Array<unknown> | undefined;
     const isClosed = tp.closed as boolean;
 
+    // Closed route loop
+    if (isClosed && route && route.length > 0) {
+      const pts = route.map(r => {
+        if (Array.isArray(r) && typeof (r as unknown[])[0] === 'number') return { x: (r as number[])[0], y: (r as number[])[1] };
+        if (typeof r === 'string' && allProps[r]) return { x: allProps[r].x as number, y: allProps[r].y as number };
+        if (Array.isArray(r) && typeof (r as unknown[])[0] === 'string') {
+          const id = (r as [string, number, number])[0];
+          const p = allProps[id];
+          if (p) return { x: (p.x as number) + (r as [string, number, number])[1], y: (p.y as number) + (r as [string, number, number])[2] };
+        }
+        return null;
+      }).filter((p): p is { x: number; y: number } => p !== null);
+      if (pts.length >= 3) return catmullRomClosedPoint(pts, t);
+    }
+
+    // Legacy: closed bend array (backward compat)
     if (isClosed && Array.isArray(bend)) {
       return catmullRomClosedPoint(bend as Array<{ x: number; y: number }>, t);
     }
