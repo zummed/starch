@@ -7,13 +7,22 @@ on:
     branches: ['**']
 
 permissions:
-  contents: write
+  actions: write
+  contents: read
   pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,39 +36,96 @@ jobs:
       - name: Build playground
         run: npm run build:app
 
-      - name: Deploy to root (main branch)
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v4
+      # Restore the accumulated site from cache
+      - name: Restore site cache
+        uses: actions/cache/restore@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist-app
-          keep_files: true
+          path: _site
+          key: pages-site
 
-      - name: Deploy branch preview
-        if: github.ref != 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Merge build into site
+        run: |
+          mkdir -p _site
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Main branch: update root, preserve branch previews
+            if [ -d _site/branch ]; then
+              cp -r _site/branch /tmp/_branch_backup
+            fi
+            rm -rf _site/*
+            cp -r dist-app/* _site/
+            if [ -d /tmp/_branch_backup ]; then
+              cp -r /tmp/_branch_backup _site/branch
+            fi
+          else
+            # Feature branch: only update this branch's subdirectory
+            BRANCH_NAME="${{ github.ref_name }}"
+            rm -rf "_site/branch/${BRANCH_NAME}"
+            mkdir -p "_site/branch/${BRANCH_NAME}"
+            cp -r dist-app/* "_site/branch/${BRANCH_NAME}/"
+          fi
+
+      # Save updated site to cache (delete old cache first since keys are immutable)
+      - name: Clear old site cache
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh cache delete pages-site --repo ${{ github.repository }} || true
+
+      - name: Save site cache
+        uses: actions/cache/save@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist-app
-          destination_dir: branch/${{ github.ref_name }}
-          keep_files: true
+          path: _site
+          key: pages-site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   cleanup:
     if: github.event_name == 'delete'
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          fetch-depth: 0
 
-      - name: Remove branch preview directory
+      - name: Restore site cache
+        uses: actions/cache/restore@v4
+        with:
+          path: _site
+          key: pages-site
+
+      - name: Remove branch preview
         run: |
-          BRANCH_DIR="branch/${{ github.event.ref }}"
-          if [ -d "$BRANCH_DIR" ]; then
-            git rm -rf "$BRANCH_DIR"
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -m "Clean up preview for deleted branch ${{ github.event.ref }}"
-            git push
+          if [ ! -d _site ]; then
+            echo "No cached site found, nothing to clean up"
+            exit 0
           fi
+          BRANCH_DIR="branch/${{ github.event.ref }}"
+          rm -rf "_site/${BRANCH_DIR}"
+
+      - name: Clear old site cache
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh cache delete pages-site --repo ${{ github.repository }} || true
+
+      - name: Save site cache
+        uses: actions/cache/save@v4
+        with:
+          path: _site
+          key: pages-site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
