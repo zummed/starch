@@ -16,6 +16,7 @@ export interface LineHandles {
   root: SVGGElement;
   pathOrLine: SVGPathElement | SVGLineElement;
   arrow: SVGPolygonElement;
+  arrowStart: SVGPolygonElement;
   labelG: SVGGElement;
   labelBg: SVGRectElement;
   labelText: SVGTextElement;
@@ -41,6 +42,10 @@ export function createLine(
   arrow.style.display = 'none';
   root.appendChild(arrow);
 
+  const arrowStartEl = createSvgEl('polygon');
+  arrowStartEl.style.display = 'none';
+  root.appendChild(arrowStartEl);
+
   const labelG = createSvgEl('g');
   const labelBg = createSvgEl('rect', { rx: 4, fill: '#0e1117', opacity: 0.85 });
   const labelText = createSvgEl('text', {
@@ -54,7 +59,7 @@ export function createLine(
   root.appendChild(labelG);
 
   const handles: LineHandles = {
-    root, pathOrLine: pathEl, arrow, labelG, labelBg, labelText, _usePath: true,
+    root, pathOrLine: pathEl, arrow, arrowStart: arrowStartEl as unknown as SVGPolygonElement, labelG, labelBg, labelText, _usePath: true,
   };
   updateLine(handles, props, objects, allProps, debug);
   return handles;
@@ -72,7 +77,7 @@ export function updateLine(
     x1: explicitX1, y1: explicitY1, x2: explicitX2, y2: explicitY2,
     stroke = '#4a4f59', strokeWidth = 1.5, dashed = false,
     label, labelColor = '#8a8f98', labelSize = 11, labelRotation = 0,
-    opacity = 1, progress = 1, arrow = true, textOffset,
+    opacity = 1, progress = 1, arrow = true, arrowStart = false, textOffset,
     bend, route, smooth = true, radius = 0,
     closed = false, visible = true,
   } = props as Record<string, unknown>;
@@ -277,7 +282,7 @@ export function updateLine(
     });
   }
 
-  // Arrow
+  // End arrow
   if (!isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1) {
     h.arrow.style.display = '';
     h.arrow.setAttribute('points',
@@ -285,6 +290,18 @@ export function updateLine(
     h.arrow.setAttribute('fill', stroke as string);
   } else {
     h.arrow.style.display = 'none';
+  }
+
+  // Start arrow
+  if (!isDebugOnly && Boolean(arrowStart) && !isClosedSpline) {
+    const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
+    const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
+    h.arrowStart.style.display = '';
+    h.arrowStart.setAttribute('points',
+      `${sx},${sy} ${sx + snx * arrowSize - sny * 4},${sy + sny * arrowSize + snx * 4} ${sx + snx * arrowSize + sny * 4},${sy + sny * arrowSize - snx * 4}`);
+    h.arrowStart.setAttribute('fill', stroke as string);
+  } else {
+    h.arrowStart.style.display = 'none';
   }
 
   // Label

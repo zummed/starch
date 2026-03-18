@@ -46,6 +46,7 @@ export function LineRenderer({ props, objects, allProps, debug = false }: LineRe
     radius = 0,
     closed = false,
     visible = true,
+    arrowStart = false,
   } = props as Record<string, unknown>;
 
   const isDebugOnly = !visible && debug;
@@ -238,9 +239,14 @@ export function LineRenderer({ props, objects, allProps, debug = false }: LineRe
   const drawOpacity = isDebugOnly ? 0.5 : opacity as number;
   const drawDash = isDebugOnly ? '4 4' : (dashed ? '6 4' : 'none');
 
+  // Start tangent (for start arrowhead) — points from start outward
+  const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
+  const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
+
   // Shorten line end when dashed + arrow to avoid dashes poking past arrowhead
-  const hasArrow = !isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1;
-  const shortenEnd = dashed && hasArrow ? arrowSize : 0;
+  const hasEndArrow = !isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1;
+  const hasStartArrow = !isDebugOnly && Boolean(arrowStart) && !isClosedSpline;
+  const shortenEnd = dashed && hasEndArrow ? arrowSize : 0;
   const lineEndX = aex - nx * shortenEnd;
   const lineEndY = aey - ny * shortenEnd;
 
@@ -265,9 +271,15 @@ export function LineRenderer({ props, objects, allProps, debug = false }: LineRe
           strokeDasharray={drawDash}
         />
       )}
-      {!isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1 && (
+      {hasEndArrow && (
         <polygon
           points={`${aex},${aey} ${aex - nx * arrowSize - ny * 4},${aey - ny * arrowSize + nx * 4} ${aex - nx * arrowSize + ny * 4},${aey - ny * arrowSize - nx * 4}`}
+          fill={stroke as string}
+        />
+      )}
+      {hasStartArrow && (
+        <polygon
+          points={`${sx},${sy} ${sx + snx * arrowSize - sny * 4},${sy + sny * arrowSize + snx * 4} ${sx + snx * arrowSize + sny * 4},${sy + sny * arrowSize - snx * 4}`}
           fill={stroke as string}
         />
       )}

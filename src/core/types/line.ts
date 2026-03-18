@@ -19,6 +19,7 @@ export interface LineProps {
   strokeWidth?: number;
   dashed?: boolean;
   arrow?: boolean;
+  arrowStart?: boolean;
   label?: string;
   labelColor?: string;
   labelSize?: number;
