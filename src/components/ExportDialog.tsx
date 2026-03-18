@@ -1,7 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { EXPORT_TARGETS } from '../editor/exporters';
+import { EXPORT_TARGETS, fetchEmbedJs, exportSelfContainedHTML } from '../editor/exporters';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
+
+function downloadBlob(content: string, filename: string, type = 'text/html') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 interface ExportDialogProps {
   dsl: string;
@@ -11,6 +21,7 @@ interface ExportDialogProps {
 export function ExportDialog({ dsl, onClose }: ExportDialogProps) {
   const [activeTarget, setActiveTarget] = useState<string>(EXPORT_TARGETS[0].id);
   const [copied, setCopied] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const target = EXPORT_TARGETS.find(t => t.id === activeTarget) || EXPORT_TARGETS[0];
@@ -22,6 +33,23 @@ export function ExportDialog({ dsl, onClose }: ExportDialogProps) {
       setTimeout(() => setCopied(false), 1500);
     });
   }, [code]);
+
+  const handleDownload = useCallback(() => {
+    downloadBlob(code, 'starch-diagram.html');
+  }, [code]);
+
+  const handleDownloadOffline = useCallback(async () => {
+    setFetching(true);
+    try {
+      const embedJs = await fetchEmbedJs();
+      const html = exportSelfContainedHTML(dsl, embedJs);
+      downloadBlob(html, 'starch-diagram.html');
+    } catch {
+      alert('Failed to fetch embed script. Check your internet connection.');
+    } finally {
+      setFetching(false);
+    }
+  }, [dsl]);
 
   // Close on Escape
   useEffect(() => {
@@ -41,6 +69,17 @@ export function ExportDialog({ dsl, onClose }: ExportDialogProps) {
     const id = setTimeout(() => window.addEventListener('mousedown', handler), 50);
     return () => { clearTimeout(id); window.removeEventListener('mousedown', handler); };
   }, [onClose]);
+
+  const btnStyle = {
+    padding: '6px 16px',
+    fontSize: 11,
+    fontFamily: FONT,
+    borderRadius: 6,
+    border: '1px solid #a78bfa',
+    background: 'rgba(167, 139, 250, 0.06)',
+    color: '#a78bfa',
+    cursor: 'pointer',
+  } as const;
 
   return (
     <div style={{
@@ -137,17 +176,26 @@ export function ExportDialog({ dsl, onClose }: ExportDialogProps) {
           justifyContent: 'flex-end',
           gap: 8,
         }}>
+          {activeTarget === 'html' && (
+            <>
+              <button onClick={handleDownload} style={btnStyle}>
+                Download .html
+              </button>
+              <button
+                onClick={handleDownloadOffline}
+                disabled={fetching}
+                style={{ ...btnStyle, opacity: fetching ? 0.5 : 1 }}
+              >
+                {fetching ? 'Fetching...' : 'Download .html (offline)'}
+              </button>
+            </>
+          )}
           <button
             onClick={handleCopy}
             style={{
-              padding: '6px 16px',
-              fontSize: 11,
-              fontFamily: FONT,
-              borderRadius: 6,
-              border: '1px solid #a78bfa',
-              background: copied ? 'rgba(52, 211, 153, 0.1)' : 'rgba(167, 139, 250, 0.06)',
-              color: copied ? '#34d399' : '#a78bfa',
-              cursor: 'pointer',
+              ...btnStyle,
+              background: copied ? 'rgba(52, 211, 153, 0.1)' : btnStyle.background,
+              color: copied ? '#34d399' : btnStyle.color,
             }}
           >
             {copied ? 'Copied!' : 'Copy to Clipboard'}

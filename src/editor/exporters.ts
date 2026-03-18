@@ -49,6 +49,37 @@ export function exportDSL(dsl: string): string {
   return dsl;
 }
 
+let cachedEmbedJs: string | null = null;
+
+export async function fetchEmbedJs(): Promise<string> {
+  if (cachedEmbedJs) return cachedEmbedJs;
+  const resp = await fetch(CDN);
+  if (!resp.ok) throw new Error(`Failed to fetch embed script: ${resp.status}`);
+  cachedEmbedJs = await resp.text();
+  return cachedEmbedJs;
+}
+
+export function exportSelfContainedHTML(dsl: string, embedJs: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Starch Diagram</title>
+  <script>${embedJs}<\/script>
+  <style>
+    body { margin: 0; background: #0e1117; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    starch-diagram { width: 800px; height: 500px; }
+  </style>
+</head>
+<body>
+  <starch-diagram autoplay>
+${dsl}
+  </starch-diagram>
+</body>
+</html>`;
+}
+
 export const EXPORT_TARGETS = [
   { id: 'html', label: 'HTML', generate: exportHTML },
   { id: 'react', label: 'React', generate: exportReact },
