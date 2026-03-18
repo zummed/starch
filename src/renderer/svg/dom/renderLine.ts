@@ -256,6 +256,20 @@ export function updateLine(
   const drawOpacity = isDebugOnly ? 0.5 : opacity as number;
   const drawDash = isDebugOnly ? '4 4' : (dashed ? '6 4' : 'none');
 
+  // Start tangent (for start arrowhead) — points from start outward
+  const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
+  const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
+
+  // Shorten line at both ends to avoid stroke poking past arrowheads
+  const hasEndArrow = !isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1;
+  const hasStartArrow = !isDebugOnly && Boolean(arrowStart) && !isClosedSpline;
+  const shortenEnd = hasEndArrow ? arrowSize * 0.7 : 0;
+  const shortenStart = hasStartArrow ? arrowSize * 0.7 : 0;
+  const lineEndX = aex - nx * shortenEnd;
+  const lineEndY = aey - ny * shortenEnd;
+  const lineStartX = sx + snx * shortenStart;
+  const lineStartY = sy + sny * shortenStart;
+
   h.root.setAttribute('opacity', String(drawOpacity));
 
   // Update path or line
@@ -275,7 +289,7 @@ export function updateLine(
     pathEl.style.display = 'none';
     lineEl.style.display = '';
     setAttrs(lineEl, {
-      x1: sx, y1: sy, x2: aex, y2: aey,
+      x1: lineStartX, y1: lineStartY, x2: lineEndX, y2: lineEndY,
       stroke: drawStroke,
       'stroke-width': strokeWidth as number,
       'stroke-dasharray': drawDash,
@@ -283,7 +297,7 @@ export function updateLine(
   }
 
   // End arrow
-  if (!isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1) {
+  if (hasEndArrow) {
     h.arrow.style.display = '';
     h.arrow.setAttribute('points',
       `${aex},${aey} ${aex - nx * arrowSize - ny * 4},${aey - ny * arrowSize + nx * 4} ${aex - nx * arrowSize + ny * 4},${aey - ny * arrowSize - nx * 4}`);
@@ -293,9 +307,7 @@ export function updateLine(
   }
 
   // Start arrow
-  if (!isDebugOnly && Boolean(arrowStart) && !isClosedSpline) {
-    const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
-    const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
+  if (hasStartArrow) {
     h.arrowStart.style.display = '';
     h.arrowStart.setAttribute('points',
       `${sx},${sy} ${sx + snx * arrowSize - sny * 4},${sy + sny * arrowSize + snx * 4} ${sx + snx * arrowSize + sny * 4},${sy + sny * arrowSize - snx * 4}`);

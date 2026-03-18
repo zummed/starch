@@ -243,12 +243,15 @@ export function LineRenderer({ props, objects, allProps, debug = false }: LineRe
   const snx = sx !== ex || sy !== ey ? (ex - sx) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 1;
   const sny = sx !== ex || sy !== ey ? (ey - sy) / (Math.sqrt((ex-sx)**2 + (ey-sy)**2) || 1) : 0;
 
-  // Shorten line end when dashed + arrow to avoid dashes poking past arrowhead
+  // Shorten line at both ends to avoid stroke poking past arrowheads
   const hasEndArrow = !isDebugOnly && Boolean(arrow) && !isClosedSpline && prog > 0.1;
   const hasStartArrow = !isDebugOnly && Boolean(arrowStart) && !isClosedSpline;
-  const shortenEnd = dashed && hasEndArrow ? arrowSize : 0;
+  const shortenEnd = hasEndArrow ? arrowSize * 0.7 : 0;
+  const shortenStart = hasStartArrow ? arrowSize * 0.7 : 0;
   const lineEndX = aex - nx * shortenEnd;
   const lineEndY = aey - ny * shortenEnd;
+  const lineStartX = sx + snx * shortenStart;
+  const lineStartY = sy + sny * shortenStart;
 
   return (
     <g opacity={drawOpacity}>
@@ -262,8 +265,8 @@ export function LineRenderer({ props, objects, allProps, debug = false }: LineRe
         />
       ) : (
         <line
-          x1={sx}
-          y1={sy}
+          x1={lineStartX}
+          y1={lineStartY}
           x2={lineEndX}
           y2={lineEndY}
           stroke={drawStroke}
