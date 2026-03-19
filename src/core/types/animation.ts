@@ -26,6 +26,7 @@ export interface ObjectChanges {
 export interface KeyframeBlock {
   time: number;
   easing?: EasingName;
+  autoKey?: boolean;
   changes: Record<string, ObjectChanges>;
 }
 

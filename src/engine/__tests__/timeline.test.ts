@@ -128,6 +128,66 @@ describe('buildTimeline', () => {
     expect(times).toEqual([1, 3]);
   });
 
+  it('per-block autoKey: false excludes block from timing', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, autoKey: false, changes: { box1: { opacity: 0.5 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const objects: Record<string, SceneObject> = {
+      box1: makeObj('box1', { x: 0 }),
+    };
+    const tracks = buildTimeline(config, objects);
+    // box1.x should NOT get a hold at t=2 — the block opted out
+    const xTimes = tracks['box1.x'].map(kf => kf.time);
+    expect(xTimes).toEqual([0, 1, 3]);
+    // box1.opacity still gets its keyframe at t=2
+    expect(tracks['box1.opacity']).toBeDefined();
+    const opTimes = tracks['box1.opacity'].map(kf => kf.time);
+    expect(opTimes).toContain(2);
+  });
+
+  it('effects-only blocks are implicitly excluded from timing', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: { box1: { shake: 5 } } },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const objects: Record<string, SceneObject> = {
+      box1: makeObj('box1', { x: 0 }),
+    };
+    const tracks = buildTimeline(config, objects);
+    // Effects are excluded from tracks, and the block shouldn't create holds
+    const xTimes = tracks['box1.x'].map(kf => kf.time);
+    expect(xTimes).toEqual([0, 1, 3]);
+  });
+
+  it('empty blocks are kept as timing markers', () => {
+    const config: AnimConfig = {
+      keyframes: [
+        { time: 1, changes: { box1: { x: 100 } } },
+        { time: 2, changes: {} },
+        { time: 3, changes: { box1: { x: 300 } } },
+      ],
+      chapters: [],
+    };
+    const objects: Record<string, SceneObject> = {
+      box1: makeObj('box1', { x: 0 }),
+    };
+    const tracks = buildTimeline(config, objects);
+    // Empty block at t=2 should create a hold for box1.x
+    const xTimes = tracks['box1.x'].map(kf => kf.time);
+    expect(xTimes).toContain(2);
+    const holdKf = tracks['box1.x'].find(kf => kf.time === 2);
+    expect(holdKf?.value).toBe(100);
+  });
+
   it('auto-key only fills within track range', () => {
     const config: AnimConfig = {
       keyframes: [

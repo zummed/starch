@@ -33,11 +33,27 @@ export function buildTimeline(
     tracks[key].sort((a, b) => a.time - b.time);
   }
 
+  // Block times for base-prepend and auto-key.
+  // Excluded from timing influence:
+  //   - blocks with autoKey: false (explicit opt-out)
+  //   - effects-only blocks (implicit — fire-and-forget shouldn't shift timing)
+  // Empty blocks (changes: {}) are kept — they're intentional timing markers.
+  const blockTimes = animConfig.keyframes
+    .filter(b => {
+      if (b.autoKey === false) return false;
+      const targets = Object.values(b.changes);
+      if (targets.length === 0) return true; // empty block = timing marker
+      return targets.some(changes =>
+        Object.keys(changes).some(p => p !== 'easing' && !EFFECT_NAMES.has(p))
+      );
+    })
+    .map(b => b.time)
+    .sort((a, b) => a - b);
+
   // Prepend base values so tracks have a starting point.
   // Use the previous keyframe block's time (not t=0) so transitions
   // happen in the window between adjacent blocks.
   if (objects) {
-    const blockTimes = animConfig.keyframes.map(b => b.time).sort((a, b) => a - b);
 
     const findPrevBlockTime = (before: number, earliest: number): number => {
       let prev = earliest;
@@ -95,7 +111,7 @@ export function buildTimeline(
   // insert holds at each intermediate block time with the last known value.
   const autoKey = animConfig.autoKey ?? true;
   if (autoKey && objects) {
-    const bt = animConfig.keyframes.map(b => b.time).sort((a, b) => a - b);
+    const bt = blockTimes;
     for (const key of Object.keys(tracks)) {
       const track = tracks[key];
       if (track.length < 2) continue;

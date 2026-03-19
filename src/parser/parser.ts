@@ -31,6 +31,7 @@ interface RawObject {
 interface RawKeyframeBlock {
   time: number;
   easing?: string;
+  autoKey?: boolean;
   changes?: Record<string, Record<string, unknown>>;
   // Also allow flat format for convenience: any other keys are treated as target IDs
   [key: string]: unknown;
@@ -88,8 +89,8 @@ function parseObject(
   };
 }
 
-function parseKeyframeBlock(raw: RawKeyframeBlock): { time: number; easing?: EasingName; changes: Record<string, Record<string, unknown>> } {
-  const { time, easing, changes: rawChanges, ...rest } = raw;
+function parseKeyframeBlock(raw: RawKeyframeBlock): { time: number; easing?: EasingName; autoKey?: boolean; changes: Record<string, Record<string, unknown>> } {
+  const { time, easing, autoKey, changes: rawChanges, ...rest } = raw;
 
   // If `changes` is provided, use it directly
   // Otherwise, remaining keys are target IDs (flat format)
@@ -111,6 +112,7 @@ function parseKeyframeBlock(raw: RawKeyframeBlock): { time: number; easing?: Eas
   return {
     time,
     easing: easing as EasingName | undefined,
+    ...(autoKey !== undefined && { autoKey }),
     changes,
   };
 }
@@ -180,6 +182,7 @@ function buildAnimConfigFromRaw(rawAnimate?: RawDiagram['animate']): AnimConfig 
       animConfig.keyframes.push({
         time: parsed.time,
         easing: parsed.easing,
+        ...(parsed.autoKey !== undefined && { autoKey: parsed.autoKey }),
         changes: parsed.changes as Record<string, { easing?: EasingName; [k: string]: unknown }>,
       });
     }
