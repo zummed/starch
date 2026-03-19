@@ -1006,8 +1006,6 @@ export const SAMPLES: Sample[] = [
   animate: {
     duration: 6, loop: false, easing: "easeInOut",
     keyframes: [
-      // Start the swap
-      { time: 1, changes: { a: { x: 650 }, b: { x: 150 } } },
       // Mid-swap: shake + colour pop — autoKey: false so the swap isn't disrupted
       { time: 3, autoKey: false, changes: {
         a: { shake: 6, fill: "#a78bfa" },
