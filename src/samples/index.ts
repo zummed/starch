@@ -992,6 +992,35 @@ export const SAMPLES: Sample[] = [
   },
 
   {
+    id: 'per-block-autokey',
+    title: 'Per-Block autoKey',
+    category: 'animation',
+    description: 'autoKey: false on a block lets you insert effects mid-transition without disrupting timing.',
+    dsl: `{
+  objects: [
+    { label: "title", at: [400, 40], text: "Per-Block autoKey: false", size: 14, color: "#e2e5ea", bold: true },
+    { box: "a", at: [150, 150], colour: "#22d3ee", text: "A", w: 80, h: 80 },
+    { box: "b", at: [650, 150], colour: "#fbbf24", text: "B", w: 80, h: 80 },
+    { label: "hint", at: [400, 400], text: "A and B swap smoothly over 4s — shake and colour change at the midpoint don't interrupt", size: 11, color: "#4a4f59" },
+  ],
+  animate: {
+    duration: 6, loop: false, easing: "easeInOut",
+    keyframes: [
+      // Start the swap
+      { time: 1, changes: { a: { x: 650 }, b: { x: 150 } } },
+      // Mid-swap: shake + colour pop — autoKey: false so the swap isn't disrupted
+      { time: 3, autoKey: false, changes: {
+        a: { shake: 6, fill: "#a78bfa" },
+        b: { shake: 6, fill: "#34d399" },
+      }},
+      // End of swap
+      { time: 5, changes: { a: { x: 650 }, b: { x: 150 } } },
+    ],
+  },
+}`,
+  },
+
+  {
     id: 'relative-times',
     title: 'Timing: plus & delay',
     category: 'animation',
