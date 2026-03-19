@@ -5,3 +5,4 @@ dist-app
 .vite
 docs/plans/
 .playwright-mcp
+.superpowers

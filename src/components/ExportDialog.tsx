@@ -178,15 +178,15 @@ export function ExportDialog({ dsl, onClose }: ExportDialogProps) {
         }}>
           {activeTarget === 'html' && (
             <>
-              <button onClick={handleDownload} style={btnStyle}>
-                Download .html
-              </button>
               <button
                 onClick={handleDownloadOffline}
                 disabled={fetching}
                 style={{ ...btnStyle, opacity: fetching ? 0.5 : 1 }}
               >
-                {fetching ? 'Fetching...' : 'Download .html (offline)'}
+                {fetching ? 'Bundling...' : 'Download .html'}
+              </button>
+              <button onClick={handleDownload} style={{ ...btnStyle, opacity: 0.6 }}>
+                Download .html (CDN)
               </button>
             </>
           )}

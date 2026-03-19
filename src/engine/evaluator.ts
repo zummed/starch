@@ -359,6 +359,25 @@ function resolveFollowPosition(
       ey = tp.y2 as number ?? 0;
     }
 
+    // Non-closed route through waypoints
+    if (!isClosed && route && route.length > 0) {
+      const routePts = (route as Array<unknown>).map(r => {
+        if (Array.isArray(r) && typeof (r as unknown[])[0] === 'number') return { x: (r as number[])[0], y: (r as number[])[1] };
+        if (typeof r === 'string' && allProps[r]) return { x: allProps[r].x as number, y: allProps[r].y as number };
+        if (Array.isArray(r) && typeof (r as unknown[])[0] === 'string') {
+          const id = (r as [string, number, number])[0];
+          const p = allProps[id];
+          if (p) return { x: (p.x as number) + (r as [string, number, number])[1], y: (p.y as number) + (r as [string, number, number])[2] };
+        }
+        return null;
+      }).filter((p): p is { x: number; y: number } => p !== null);
+      if (routePts.length > 0) {
+        const allPts = [{ x: sx, y: sy }, ...routePts, { x: ex, y: ey }];
+        const ep = splineEndpoint(allPts, clamped);
+        return { x: ep.x, y: ep.y };
+      }
+    }
+
     if (typeof bend === 'number' && bend !== 0) {
       const { cx, cy } = autoCurveControl(sx, sy, ex, ey, bend);
       return quadPoint(sx, sy, cx, cy, ex, ey, clamped);
