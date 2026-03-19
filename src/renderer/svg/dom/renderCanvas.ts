@@ -8,29 +8,31 @@ export interface CanvasHandles {
   clearViewBox: () => void;
 }
 
-export function createCanvas(background = '#0e1117'): CanvasHandles {
+export function createCanvas(background = '#0e1117', showGrid = false): CanvasHandles {
   const svg = createSvgEl('svg', {
     width: '100%',
     height: '100%',
   });
   svg.style.display = 'block';
 
-  const defs = createSvgEl('defs');
-  const pattern = createSvgEl('pattern', {
-    id: 'starch-grid',
-    width: 40,
-    height: 40,
-    patternUnits: 'userSpaceOnUse',
-  });
-  const gridPath = createSvgEl('path', {
-    d: 'M 40 0 L 0 0 0 40',
-    fill: 'none',
-    stroke: '#ffffff04',
-    'stroke-width': 1,
-  });
-  pattern.appendChild(gridPath);
-  defs.appendChild(pattern);
-  svg.appendChild(defs);
+  if (showGrid) {
+    const defs = createSvgEl('defs');
+    const pattern = createSvgEl('pattern', {
+      id: 'starch-grid',
+      width: 40,
+      height: 40,
+      patternUnits: 'userSpaceOnUse',
+    });
+    const gridPath = createSvgEl('path', {
+      d: 'M 40 0 L 0 0 0 40',
+      fill: 'none',
+      stroke: '#ffffff04',
+      'stroke-width': 1,
+    });
+    pattern.appendChild(gridPath);
+    defs.appendChild(pattern);
+    svg.appendChild(defs);
+  }
 
   const bg = createSvgEl('rect', {
     width: '100%',
@@ -44,7 +46,7 @@ export function createCanvas(background = '#0e1117'): CanvasHandles {
   function setBackground(color: string) {
     const isTransparent = color === 'transparent' || color === 'none';
     svg.style.background = isTransparent ? 'transparent' : color;
-    bg.setAttribute('fill', isTransparent ? 'none' : 'url(#starch-grid)');
+    bg.setAttribute('fill', isTransparent ? 'none' : (showGrid ? 'url(#starch-grid)' : 'none'));
   }
 
   setBackground(background);
