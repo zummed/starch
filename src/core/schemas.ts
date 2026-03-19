@@ -229,7 +229,7 @@ export const SCHEMA_METADATA = {
   align: ['start', 'center', 'end', 'stretch'],
   justify: ['start', 'center', 'end', 'spaceBetween', 'spaceAround'],
   direction: ['row', 'column'],
-  keyframeProps: ['time', 'easing', 'changes'],
+  keyframeProps: ['time', 'easing', 'autoKey', 'changes'],
   animateProps: ['duration', 'loop', 'autoKey', 'easing', 'keyframes', 'chapters'],
   shorthandProps: ['at', 'size'],
   effects: ['pulse', 'flash', 'shake', 'glow'],

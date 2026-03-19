@@ -337,7 +337,7 @@ export default function App() {
           <div style={{ width: 1, height: 20, background: '#1e2028', margin: '0 4px' }} />
           {[
             { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
-            ...(diagram.viewport ? [{ label: 'Ratio', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) }] : []),
+            ...(diagram.viewport ? [{ label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) }] : []),
             { label: 'Fit All', active: fitAll, onClick: () => {
               const next = !fitAll;
               setFitAll(next);
