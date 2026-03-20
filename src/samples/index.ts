@@ -954,6 +954,42 @@ export const SAMPLES: Sample[] = [
 }`,
   },
 
+  {
+    id: 'animated-styles',
+    title: 'Animated Styles',
+    category: 'styles',
+    description: 'Animate a style to change all objects using it at once — like a live theme switch.',
+    dsl: `{
+  styles: {
+    card: { colour: "#22d3ee", radius: 12, w: 140 },
+  },
+  objects: [
+    { label: "title", at: [400, 40], text: "Animated Styles", size: 16, color: "#e2e5ea", bold: true },
+    { label: "hint", at: [400, 420], text: "All cards share a style — animating the style changes them all", size: 11, color: "#4a4f59" },
+
+    { box: "a", at: [150, 150], style: "card", text: "Card A" },
+    { box: "b", at: [400, 150], style: "card", text: "Card B" },
+    { box: "c", at: [650, 150], style: "card", text: "Card C" },
+
+    // This one overrides fill — won't be affected by the style's fill animation
+    { box: "d", at: [400, 300], style: "card", colour: "#34d399", text: "Override" },
+  ],
+  animate: {
+    duration: 4, loop: true, easing: "easeInOut",
+    keyframes: {
+      card: [
+        [0, "fill", "#173040"],
+        [0, "stroke", "#22d3ee"],
+        [2, "fill", "#2a1530"],
+        [2, "stroke", "#f472b6"],
+        [4, "fill", "#173040"],
+        [4, "stroke", "#22d3ee"],
+      ],
+    },
+  },
+}`,
+  },
+
   // ═════════════════════════════════════════════════════════════
   // ANIMATION
   // ═════════════════════════════════════════════════════════════

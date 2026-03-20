@@ -43,7 +43,7 @@ function applyStyle(
       obj[key] = value;
     }
   }
-  delete obj.style;
+  // Preserve the style reference — it's now a proper schema property
 }
 
 /**
@@ -62,11 +62,16 @@ export function expandShorthands(raw: unknown): unknown {
     : {};
   delete obj.images;
 
-  // Extract styles registry
-  const stylesRegistry = (obj.styles && typeof obj.styles === 'object')
+  // Extract and resolve styles registry (preserved on obj for runtime use)
+  const rawStyles = (obj.styles && typeof obj.styles === 'object')
     ? obj.styles as Record<string, Record<string, unknown>>
     : {};
-  delete obj.styles;
+  // Flatten composed styles so the registry contains resolved props
+  const stylesRegistry: Record<string, Record<string, unknown>> = {};
+  for (const name of Object.keys(rawStyles)) {
+    stylesRegistry[name] = resolveStyle(name, rawStyles);
+  }
+  obj.styles = stylesRegistry;
 
   // Expand objects array
   if (Array.isArray(obj.objects)) {

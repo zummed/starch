@@ -33,6 +33,7 @@ function useDiagramCore(props: DiagramProps) {
   const fallback = useRef({
     objects: {} as Record<string, SceneObject>,
     animConfig: { duration: 5, loop: true, keyframes: [], chapters: [] } as AnimConfig,
+    styles: {} as Record<string, Record<string, unknown>>,
   });
 
   const evaluatorRef = useRef(createEvaluator());
@@ -44,6 +45,7 @@ function useDiagramCore(props: DiagramProps) {
         result = {
           objects: props.scene.getObjects(),
           animConfig: props.scene.getAnimConfig(),
+          styles: props.scene.getStyles(),
         };
       } else if (props.dsl) {
         result = parseDSL(props.dsl);
@@ -59,13 +61,14 @@ function useDiagramCore(props: DiagramProps) {
   }, [props.scene, props.dsl]);
 
   const { objects, animConfig } = parsed;
+  const styles = ('styles' in parsed) ? (parsed as { styles?: Record<string, Record<string, unknown>> }).styles ?? {} : {};
   const diagramName = ('name' in parsed) ? (parsed as { name?: string }).name : undefined;
   const diagramBackground = ('background' in parsed) ? (parsed as { background?: string }).background : undefined;
   const diagramViewport = ('viewport' in parsed) ? (parsed as { viewport?: { width: number; height: number } }).viewport : undefined;
-  const tracks = useMemo(() => buildTimeline(animConfig, objects), [animConfig, objects]);
+  const tracks = useMemo(() => buildTimeline(animConfig, objects, styles), [animConfig, objects, styles]);
   const effects = useMemo(() => extractEffects(animConfig), [animConfig]);
-  // Recreate evaluator when effects change
-  useMemo(() => { evaluatorRef.current = createEvaluator(effects); }, [effects]);
+  // Recreate evaluator when effects or styles change
+  useMemo(() => { evaluatorRef.current = createEvaluator(effects, styles); }, [effects, styles]);
   const duration = animConfig.duration ?? 5;
   const chapters = animConfig.chapters;
 

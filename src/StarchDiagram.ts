@@ -26,6 +26,7 @@ export class StarchDiagram implements DiagramHandle {
   private _dispatcher: RenderDispatcher;
 
   private _objects: Record<string, SceneObject> = {};
+  private _styles: Record<string, Record<string, unknown>> = {};
   private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [], chapters: [] };
   private _tracks: Tracks = {};
   private _renderOrder: Array<[string, SceneObject]> = [];
@@ -186,6 +187,7 @@ export class StarchDiagram implements DiagramHandle {
     try {
       const result = parseDSL(dsl);
       this._objects = result.objects;
+      this._styles = result.styles;
       this._animConfig = result.animConfig;
       if (result.background) {
         this._canvas.setBackground(result.background);
@@ -202,14 +204,15 @@ export class StarchDiagram implements DiagramHandle {
 
   private _loadScene(scene: Scene): void {
     this._objects = scene.getObjects();
+    this._styles = scene.getStyles();
     this._animConfig = scene.getAnimConfig();
     this._rebuild();
   }
 
   private _rebuild(): void {
-    this._tracks = buildTimeline(this._animConfig, this._objects);
+    this._tracks = buildTimeline(this._animConfig, this._objects, this._styles);
     const effects = extractEffects(this._animConfig);
-    this._evaluator = createEvaluator(effects);
+    this._evaluator = createEvaluator(effects, this._styles);
     const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
     this._renderOrder = computeRenderOrder(this._objects, animatedProps);
   }

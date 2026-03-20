@@ -66,4 +66,7 @@ export interface BaseProps {
 
   // ─── Position reference ──────────────────────────
   at?: string;               // ID of target object to position relative to (x/y become offset)
+
+  // ─── Style reference ─────────────────────────────
+  style?: string;            // name of a style to inherit props from (style props are defaults)
 }

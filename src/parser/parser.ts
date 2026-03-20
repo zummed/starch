@@ -20,6 +20,7 @@ export interface ParseResult {
   viewport?: Viewport;
   objects: Record<string, SceneObject>;
   animConfig: AnimConfig;
+  styles: Record<string, Record<string, unknown>>;
 }
 
 interface RawObject {
@@ -49,6 +50,7 @@ interface RawDiagram {
   description?: string;
   background?: string;
   viewport?: unknown;
+  styles?: Record<string, Record<string, unknown>>;
   objects?: RawObject[];
   animate?: {
     duration?: number;
@@ -232,6 +234,7 @@ export function parseDSL(src: string): ParseResult {
     viewport: parseViewport(raw.viewport),
     objects,
     animConfig,
+    styles: (raw.styles as Record<string, Record<string, unknown>>) ?? {},
   };
 }
 
@@ -258,5 +261,6 @@ export function parseJSON(input: RawDiagram): ParseResult {
     viewport: parseViewport(raw.viewport),
     objects,
     animConfig,
+    styles: (raw.styles as Record<string, Record<string, unknown>>) ?? {},
   };
 }

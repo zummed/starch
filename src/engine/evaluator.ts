@@ -35,8 +35,13 @@ function computePropsAt(
   objects: Record<string, SceneObject>,
   tracks: Tracks,
   time: number,
+  styles: Record<string, Record<string, unknown>> = {},
 ): Record<string, Record<string, unknown>> {
   const result: Record<string, Record<string, unknown>> = {};
+  // Include style entries so tracks like "card.fill" can animate them
+  for (const [name, styleProps] of Object.entries(styles)) {
+    result[name] = { ...styleProps };
+  }
   for (const [id, obj] of Object.entries(objects)) {
     result[id] = { ...obj.props as Record<string, unknown> };
     // Create sub-element entries for textblock lines with defaults from parent
@@ -75,7 +80,10 @@ function computePropsAt(
  * Create a stateless evaluator. Layout position changes are blended
  * between adjacent block times, so scrubbing and easing work correctly.
  */
-export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
+export function createEvaluator(
+  effects: EffectInstance[] = [],
+  styles: Record<string, Record<string, unknown>> = {},
+): EvaluatorFn {
   let cachedBlockTimes: number[] | null = null;
 
   const evaluate = (
@@ -88,7 +96,8 @@ export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
     }
 
     // Step 1+2: Compute base props + animated values at current time
-    const result = computePropsAt(objects, tracks, time);
+    const result = computePropsAt(objects, tracks, time, styles);
+    resolveStyles(result, objects, tracks);
 
     // Step 3: Layout with position blending
     // Find the block window we're in: [prevBlockTime, nextBlockTime]
@@ -105,11 +114,13 @@ export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
       // Two-pass layout: compute positions at block boundaries, then blend.
       // "from" = layout at prevBlock, "to" = layout at nextBlock.
       // This gives smooth blending regardless of when discrete props snap.
-      const fromResult = computePropsAt(objects, tracks, prevBlock);
+      const fromResult = computePropsAt(objects, tracks, prevBlock, styles);
+      resolveStyles(fromResult, objects, tracks);
       computeLayout(objects, fromResult);
       resolveAtRefs(fromResult, tracks);
 
-      const toResult = computePropsAt(objects, tracks, nextBlock);
+      const toResult = computePropsAt(objects, tracks, nextBlock, styles);
+      resolveStyles(toResult, objects, tracks);
       computeLayout(objects, toResult);
       resolveAtRefs(toResult, tracks);
 
@@ -287,6 +298,32 @@ function applyTransformCascade(
       }
 
       parentId = parentMap.get(parentId);
+    }
+  }
+}
+
+// ── Resolve style references (apply animated style props as defaults) ──
+
+function resolveStyles(
+  allProps: Record<string, Record<string, unknown>>,
+  objects: Record<string, SceneObject>,
+  tracks: Tracks,
+): void {
+  for (const [id, obj] of Object.entries(objects)) {
+    const props = allProps[id];
+    if (!props) continue;
+    const styleName = props.style as string | undefined;
+    if (!styleName) continue;
+    const styleProps = allProps[styleName];
+    if (!styleProps) continue;
+
+    // Apply style props where the object didn't explicitly set them
+    // and they aren't being animated by the object's own tracks
+    const inputKeys = obj._inputKeys;
+    for (const [key, value] of Object.entries(styleProps)) {
+      if (inputKeys?.has(key)) continue;        // user explicitly set this prop
+      if (`${id}.${key}` in tracks) continue;   // object has its own track for this prop
+      props[key] = value;
     }
   }
 }
