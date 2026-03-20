@@ -496,6 +496,55 @@ export const SAMPLES: Sample[] = [
 }`,
   },
 
+  {
+    id: 'coordinates',
+    title: 'Coordinate Methods',
+    category: 'layout',
+    description: 'All the ways to position objects: at [x,y], at "id", at ["id", dx, dy], and raw x/y.',
+    dsl: `{
+  objects: [
+    { label: "title", at: [400, 30], text: "Coordinate Methods", size: 16, color: "#e2e5ea", bold: true },
+
+    // 1. Absolute coordinates with at: [x, y]
+    { box: "origin", at: [120, 140], colour: "#22d3ee", text: "at: [120, 140]" },
+    { label: "m1", at: [120, 180], text: "Absolute [x, y]", size: 11, color: "#6b7280" },
+
+    // 2. Raw x/y properties
+    { box: "raw", x: 370, y: 140, colour: "#34d399", text: "x: 370, y: 140" },
+    { label: "m2", at: [370, 180], text: "Raw x / y", size: 11, color: "#6b7280" },
+
+    // 3. Position at another object: at: "id"
+    { box: "anchor", at: [600, 140], colour: "#a78bfa", text: "Anchor" },
+    { circle: "snap", at: "anchor", r: 40, colour: "#fbbf24", opacity: 0.4 },
+    { label: "m3", at: [600, 200], text: "at: \\"anchor\\"", size: 11, color: "#6b7280" },
+
+    // 4. Object + offset: at: ["id", dx, dy]
+    { point: "hub", at: [200, 330] },
+    { label: "hubL", at: [200, 330], text: "+", size: 14, color: "#4a4f59" },
+    { box: "offA", at: ["hub", -80, -40], colour: "#f472b6", text: "[-80,-40]", w: 100 },
+    { box: "offB", at: ["hub", 80, -40], colour: "#60a5fa", text: "[+80,-40]", w: 100 },
+    { box: "offC", at: ["hub", 0, 60], colour: "#fb923c", text: "[0,+60]", w: 100 },
+    { label: "m4", at: [200, 420], text: "at: [\\"hub\\", dx, dy]", size: 11, color: "#6b7280" },
+
+    // 5. Lines also use PointRef: from/to accept same formats
+    { box: "src", at: [470, 290], colour: "#22d3ee", text: "Source" },
+    { box: "dst", at: [700, 290], colour: "#34d399", text: "Dest" },
+    { line: "l1", from: "src", to: "dst", colour: "#fbbf24", label: "from \\"id\\"", progress: 0 },
+    { line: "l2", from: [470, 360], to: [700, 360], colour: "#a78bfa", label: "from [x,y]", progress: 0 },
+    { line: "l3", from: ["src", 0, 80], to: ["dst", 0, 80], colour: "#f472b6", label: "[\\"id\\",dx,dy]", progress: 0 },
+    { label: "m5", at: [585, 460], text: "Lines accept the same PointRef formats", size: 11, color: "#6b7280" },
+  ],
+  animate: {
+    duration: 5, loop: false, easing: "easeInOut",
+    keyframes: [
+      { time: 1.5, changes: { l1: { progress: 1 }, snap: { opacity: 0.8 } } },
+      { plus: 1.0, changes: { l2: { progress: 1 } } },
+      { plus: 1.0, changes: { l3: { progress: 1 } } },
+    ],
+  },
+}`,
+  },
+
   // ═════════════════════════════════════════════════════════════
   // EFFECTS
   // ═════════════════════════════════════════════════════════════
