@@ -282,8 +282,8 @@ function expandObject(raw: unknown): unknown {
     }
   }
 
-  // at: [x, y] shorthand
-  if (Array.isArray(obj.at)) {
+  // at: [x, y] shorthand (skip PointRef object references — those are resolved at scene level)
+  if (Array.isArray(obj.at) && typeof (obj.at as unknown[])[0] === 'number') {
     const [x, y] = obj.at as number[];
     if (obj.x !== undefined || obj.y !== undefined) {
       throw new Error(`Cannot use "at" shorthand alongside "x" or "y" properties.`);
