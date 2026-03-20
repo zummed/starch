@@ -63,4 +63,7 @@ export interface BaseProps {
   cascadeOpacity?: boolean;  // default true
   cascadeScale?: boolean;    // default true
   cascadeRotation?: boolean; // default true
+
+  // ─── Position reference ──────────────────────────
+  at?: string;               // ID of target object to position relative to (x/y become offset)
 }

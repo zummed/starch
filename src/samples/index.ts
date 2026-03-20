@@ -534,13 +534,59 @@ export const SAMPLES: Sample[] = [
     { line: "l3", from: ["src", 0, 80], to: ["dst", 0, 80], colour: "#f472b6", label: "[\\"id\\",dx,dy]", progress: 0 },
     { label: "m5", at: [585, 460], text: "Lines accept the same PointRef formats", size: 11, color: "#6b7280" },
   ],
+}`,
+  },
+
+  {
+    id: 'at-ref-animation',
+    title: 'Relative Position Tracking',
+    category: 'layout',
+    description: 'Objects positioned with at: "id" follow their target during animation, preserving offsets through nested chains.',
+    dsl: `{
+  objects: [
+    { label: "title", at: [400, 30], text: "Relative Position Tracking", size: 16, color: "#e2e5ea", bold: true },
+    { label: "hint", at: [400, 460], text: "Hub moves the constellation — satellite C also orbits independently", size: 11, color: "#4a4f59" },
+
+    // Hub: the root that everything is relative to
+    { box: "hub", at: [200, 250], colour: "#a78bfa", text: "Hub", w: 80, h: 50, radius: 24 },
+
+    // Satellites positioned relative to hub
+    { box: "satA", at: ["hub", -120, -80], colour: "#22d3ee", text: "A", w: 70 },
+    { box: "satB", at: ["hub", 120, -80], colour: "#34d399", text: "B", w: 70 },
+    { box: "satC", at: ["hub", 0, 100], colour: "#f472b6", text: "C", w: 70 },
+
+    // Nested: labels relative to satellites (chained refs)
+    { label: "lblA", at: ["satA", 0, 35], text: "child of A", size: 10, color: "#6b7280" },
+    { label: "lblB", at: ["satB", 0, 35], text: "child of B", size: 10, color: "#6b7280" },
+    { label: "lblC", at: ["satC", 0, 35], text: "child of C", size: 10, color: "#6b7280" },
+
+    // Lines connecting hub to satellites
+    { line: "lA", from: "hub", to: "satA", colour: "#22d3ee", dashed: true, arrow: false },
+    { line: "lB", from: "hub", to: "satB", colour: "#34d399", dashed: true, arrow: false },
+    { line: "lC", from: "hub", to: "satC", colour: "#f472b6", dashed: true, arrow: false },
+  ],
   animate: {
-    duration: 5, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { l1: { progress: 1 }, snap: { opacity: 0.8 } } },
-      { plus: 1.0, changes: { l2: { progress: 1 } } },
-      { plus: 1.0, changes: { l3: { progress: 1 } } },
-    ],
+    duration: 6, loop: true, easing: "easeInOut",
+    keyframes: {
+      hub: [
+        [0, "x", 200],
+        [0, "y", 250],
+        [1.5, "x", 550],
+        [1.5, "y", 180],
+        [3.0, "x", 550],
+        [3.0, "y", 320],
+        [4.5, "x", 200],
+        [4.5, "y", 250],
+      ],
+      // C's offset orbits independently while still tracking hub
+      satC: [
+        [0, "x", 0],     [0, "y", 100],
+        [1.5, "x", 100], [1.5, "y", 0],
+        [3.0, "x", 0],   [3.0, "y", -100],
+        [4.5, "x", -100],[4.5, "y", 0],
+        [6.0, "x", 0],   [6.0, "y", 100],
+      ],
+    },
   },
 }`,
   },

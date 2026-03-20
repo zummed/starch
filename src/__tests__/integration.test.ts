@@ -108,4 +108,29 @@ describe('integration: flexbox layout with animation', () => {
 
     expect(result.child.opacity).toBeCloseTo(0.3);
   });
+
+  it('at-ref tracking: dependent follows target during animation', () => {
+    const scene = new Scene();
+
+    scene.box('target', { x: 100, y: 100 });
+    scene.box('follower', { at: 'target', x: 20, y: 10 } as never);
+
+    scene.animate({ duration: 2 })
+      .keyframe(0, { target: { x: 100 } })
+      .keyframe(2, { target: { x: 300 } });
+
+    const objects = scene.getObjects();
+    const tracks = buildTimeline(scene.getAnimConfig(), objects);
+    const evaluate = createEvaluator();
+
+    // At t=0: follower at target(100,100) + offset(20,10)
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.follower.x).toBe(120);
+    expect(t0.follower.y).toBe(110);
+
+    // At t=2: follower at target(300,100) + offset(20,10)
+    const t2 = evaluate(objects, tracks, 2);
+    expect(t2.follower.x).toBe(320);
+    expect(t2.follower.y).toBe(110);
+  });
 });
