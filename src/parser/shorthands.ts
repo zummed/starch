@@ -89,54 +89,24 @@ export function expandShorthands(raw: unknown): unknown {
 
   // Resolve position references: at: "objectId" or at: ["objectId", dx, dy]
   if (Array.isArray(obj.objects)) {
-    // Build position map from all objects that have numeric x/y
-    const posMap = new Map<string, [number, number]>();
     for (const item of obj.objects as Array<Record<string, unknown>>) {
-      if (item && typeof item === 'object' && typeof item.id === 'string') {
-        const x = item.x as number;
-        const y = item.y as number;
-        if (typeof x === 'number' && typeof y === 'number') {
-          posMap.set(item.id, [x, y]);
-        }
+      if (!item || typeof item !== 'object') continue;
+
+      // at: "refId" → keep at as string ref, x/y default to 0 (offset)
+      if (typeof item.at === 'string') {
+        // at stays as-is; x/y are the offset (default 0,0 via schema)
+        continue;
       }
-    }
-
-    // Resolve references (multiple passes for chained refs)
-    for (let pass = 0; pass < 3; pass++) {
-      let resolved = false;
-      for (const item of obj.objects as Array<Record<string, unknown>>) {
-        if (!item || typeof item !== 'object') continue;
-
-        // at: "refId" → [refX, refY]
-        if (typeof item.at === 'string') {
-          const pos = posMap.get(item.at);
-          if (pos) {
-            item.at = [...pos];
-            resolved = true;
-          }
-        }
-        // at: ["refId", dx, dy] → [refX + dx, refY + dy]
-        if (Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'string') {
-          const [ref, dx = 0, dy = 0] = item.at as [string, number?, number?];
-          const pos = posMap.get(ref);
-          if (pos) {
-            item.at = [pos[0] + (dx || 0), pos[1] + (dy || 0)];
-            resolved = true;
-          }
-        }
-
-        // Update posMap after resolution (for chained references)
-        if (typeof item.id === 'string' && Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'number') {
-          const [x, y] = item.at as [number, number];
-          posMap.set(item.id, [x, y]);
-        }
+      // at: ["refId", dx, dy] → at: "refId", x: dx, y: dy
+      if (Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'string') {
+        const [ref, dx = 0, dy = 0] = item.at as [string, number?, number?];
+        item.at = ref;
+        if (item.x === undefined) item.x = dx || 0;
+        if (item.y === undefined) item.y = dy || 0;
+        continue;
       }
-      if (!resolved) break;
-    }
-
-    // Re-expand at shorthand for newly resolved references
-    for (const item of obj.objects as Array<Record<string, unknown>>) {
-      if (item && Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'number') {
+      // at: [x, y] (numeric) → expand to x/y, delete at (pure shorthand)
+      if (Array.isArray(item.at) && typeof (item.at as unknown[])[0] === 'number') {
         const [x, y] = item.at as [number, number];
         if (item.x === undefined && item.y === undefined) {
           item.x = x;
@@ -282,8 +252,8 @@ function expandObject(raw: unknown): unknown {
     }
   }
 
-  // at: [x, y] shorthand
-  if (Array.isArray(obj.at)) {
+  // at: [x, y] shorthand (skip PointRef object references — those are resolved at scene level)
+  if (Array.isArray(obj.at) && typeof (obj.at as unknown[])[0] === 'number') {
     const [x, y] = obj.at as number[];
     if (obj.x !== undefined || obj.y !== undefined) {
       throw new Error(`Cannot use "at" shorthand alongside "x" or "y" properties.`);

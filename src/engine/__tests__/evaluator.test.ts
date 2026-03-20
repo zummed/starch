@@ -139,3 +139,132 @@ describe('createEvaluator', () => {
     expect(typeof result.item.x).toBe('number');
   });
 });
+
+describe('at-reference tracking', () => {
+  it('object follows its at-ref target', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 100, y: 200 }),
+      B: makeObj('B', { x: 0, y: 0, at: 'A' }),
+    };
+    const tracks: Tracks = {
+      'A.x': [
+        { time: 0, value: 100, easing: 'linear' },
+        { time: 2, value: 300, easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator();
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.B.x).toBe(100);
+    expect(t0.B.y).toBe(200);
+
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.B.x).toBe(200);
+    expect(t1.B.y).toBe(200);
+
+    const t2 = evaluate(objects, tracks, 2);
+    expect(t2.B.x).toBe(300);
+    expect(t2.B.y).toBe(200);
+  });
+
+  it('applies offset from x/y when following at-ref', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 100, y: 100 }),
+      B: makeObj('B', { x: 50, y: 30, at: 'A' }),
+    };
+    const tracks: Tracks = {
+      'A.x': [
+        { time: 0, value: 100, easing: 'linear' },
+        { time: 1, value: 200, easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator();
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.B.x).toBe(150);
+    expect(t0.B.y).toBe(130);
+
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.B.x).toBe(250);
+    expect(t1.B.y).toBe(130);
+  });
+
+  it('handles chained at-refs (C→B→A)', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 100, y: 100 }),
+      B: makeObj('B', { x: 10, y: 0, at: 'A' }),
+      C: makeObj('C', { x: 5, y: 0, at: 'B' }),
+    };
+    const tracks: Tracks = {
+      'A.x': [
+        { time: 0, value: 100, easing: 'linear' },
+        { time: 1, value: 200, easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator();
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.B.x).toBe(110); // A.x + 10
+    expect(t0.C.x).toBe(115); // A.x + 10 + 5
+
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.B.x).toBe(210);
+    expect(t1.C.x).toBe(215);
+  });
+
+  it('does not crash on circular at-refs', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 100, y: 100, at: 'B' }),
+      B: makeObj('B', { x: 50, y: 50, at: 'A' }),
+    };
+    const tracks: Tracks = {};
+    const evaluate = createEvaluator();
+    // Should not throw or infinite-loop
+    const result = evaluate(objects, tracks, 0);
+    expect(typeof result.A.x).toBe('number');
+    expect(typeof result.B.x).toBe('number');
+  });
+
+  it('own x/y keyframes animate the offset relative to at-ref', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 100, y: 100 }),
+      B: makeObj('B', { x: 0, y: 0, at: 'A' }),
+    };
+    const tracks: Tracks = {
+      'A.x': [
+        { time: 0, value: 100, easing: 'linear' },
+        { time: 1, value: 200, easing: 'linear' },
+      ],
+      // B's x track animates its offset from A
+      'B.x': [
+        { time: 0, value: 0, easing: 'linear' },
+        { time: 1, value: 50, easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator();
+
+    // t=0: B offset 0 + A at 100 = 100
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.B.x).toBe(100);
+
+    // t=0.5: B offset 25 + A at 150 = 175
+    const tMid = evaluate(objects, tracks, 0.5);
+    expect(tMid.B.x).toBe(175);
+
+    // t=1: B offset 50 + A at 200 = 250
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.B.x).toBe(250);
+  });
+
+  it('works with no animation (static diagram)', () => {
+    const objects: Record<string, SceneObject> = {
+      A: makeObj('A', { x: 200, y: 300 }),
+      B: makeObj('B', { x: 10, y: 20, at: 'A' }),
+    };
+    const tracks: Tracks = {};
+    const evaluate = createEvaluator();
+    const result = evaluate(objects, tracks, 0);
+    expect(result.B.x).toBe(210);
+    expect(result.B.y).toBe(320);
+  });
+});

@@ -107,12 +107,15 @@ export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
       // This gives smooth blending regardless of when discrete props snap.
       const fromResult = computePropsAt(objects, tracks, prevBlock);
       computeLayout(objects, fromResult);
+      resolveAtRefs(fromResult, tracks);
 
       const toResult = computePropsAt(objects, tracks, nextBlock);
       computeLayout(objects, toResult);
+      resolveAtRefs(toResult, tracks);
 
       // Also compute layout at current time for non-grouped objects and container sizing
       computeLayout(objects, result);
+      resolveAtRefs(result, tracks);
 
       // Blend positions of all grouped objects between block boundary states
       const dur = nextBlock - prevBlock;
@@ -166,6 +169,7 @@ export function createEvaluator(effects: EffectInstance[] = []): EvaluatorFn {
       }
     } else {
       computeLayout(objects, result);
+      resolveAtRefs(result, tracks);
     }
 
     // Step 3c: Apply effects (after layout so shake offsets aren't overwritten)
@@ -284,6 +288,51 @@ function applyTransformCascade(
 
       parentId = parentMap.get(parentId);
     }
+  }
+}
+
+// ── Resolve at-references (position relative to target) ──
+
+function resolveAtRefs(
+  allProps: Record<string, Record<string, unknown>>,
+  tracks: Tracks,
+): void {
+  // Collect objects with an `at` string reference
+  const refs = new Map<string, string>();
+  for (const [id, props] of Object.entries(allProps)) {
+    const at = props.at as string | undefined;
+    if (typeof at === 'string' && allProps[at]) {
+      refs.set(id, at);
+    }
+  }
+
+  if (refs.size === 0) return;
+
+  // Topological resolve: targets before dependents, with cycle detection
+  const resolved = new Set<string>();
+  const visiting = new Set<string>();
+
+  function resolve(id: string): void {
+    if (resolved.has(id)) return;
+    if (visiting.has(id)) return; // circular ref — bail, use current position
+    const target = refs.get(id);
+    if (!target) { resolved.add(id); return; }
+
+    visiting.add(id);
+    resolve(target);
+    visiting.delete(id);
+
+    const tp = allProps[target];
+    const props = allProps[id];
+    if (tp && props) {
+      props.x = ((tp.x as number) ?? 0) + ((props.x as number) ?? 0);
+      props.y = ((tp.y as number) ?? 0) + ((props.y as number) ?? 0);
+    }
+    resolved.add(id);
+  }
+
+  for (const id of refs.keys()) {
+    resolve(id);
   }
 }
 
