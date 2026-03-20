@@ -44,6 +44,7 @@ class AnimationBuilder {
 
 export class Scene {
   private _objects: Record<string, SceneObject> = {};
+  private _styles: Record<string, Record<string, unknown>> = {};
   private _nextOrder = 0;
   private _animConfig: AnimConfig = {
     duration: 5,
@@ -52,6 +53,13 @@ export class Scene {
     chapters: [],
   };
   private _listeners: Map<StarchEventType, Set<StarchEventHandler>> = new Map();
+
+  // ── Style definition ───────────────────────────
+
+  defineStyle(name: string, props: Record<string, unknown>): this {
+    this._styles[name] = props;
+    return this;
+  }
 
   // ── Object creation ─────────────────────────────
 
@@ -128,6 +136,10 @@ export class Scene {
 
   getAnimConfig(): AnimConfig {
     return this._animConfig;
+  }
+
+  getStyles(): Record<string, Record<string, unknown>> {
+    return this._styles;
   }
 
   getChapters(): Chapter[] {

@@ -133,4 +133,29 @@ describe('integration: flexbox layout with animation', () => {
     expect(t2.follower.x).toBe(320);
     expect(t2.follower.y).toBe(110);
   });
+
+  it('animated styles propagate to all objects using them', () => {
+    const scene = new Scene();
+
+    scene.defineStyle('theme', { fill: '#22d3ee', stroke: '#1a9cb0' });
+    scene.box('a', { x: 100, y: 100, style: 'theme' } as never);
+    scene.box('b', { x: 300, y: 100, style: 'theme' } as never);
+
+    scene.animate({ duration: 2 })
+      .keyframe(0, { theme: { fill: '#22d3ee' } })
+      .keyframe(2, { theme: { fill: '#ff0000' } });
+
+    const objects = scene.getObjects();
+    const styles = scene.getStyles();
+    const tracks = buildTimeline(scene.getAnimConfig(), objects, styles);
+    const evaluate = createEvaluator([], styles);
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.a.fill).toBe('#22d3ee');
+    expect(t0.b.fill).toBe('#22d3ee');
+
+    const t2 = evaluate(objects, tracks, 2);
+    expect(t2.a.fill).toBe('#ff0000');
+    expect(t2.b.fill).toBe('#ff0000');
+  });
 });

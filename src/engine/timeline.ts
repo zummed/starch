@@ -4,6 +4,7 @@ import { EFFECT_NAMES } from '../core/types';
 export function buildTimeline(
   animConfig: AnimConfig,
   objects?: Record<string, SceneObject>,
+  styles?: Record<string, Record<string, unknown>>,
 ): Tracks {
   const tracks: Tracks = {};
   const defaultEasing: EasingName = animConfig.easing || 'linear';
@@ -71,11 +72,13 @@ export function buildTimeline(
         const target = key.slice(0, lastDot);
         const prop = key.slice(lastDot + 1);
 
-        // Try direct object lookup first, then sub-element lookup
+        // Try direct object lookup, then style lookup, then sub-element lookup
         let baseValue: unknown;
         const obj = objects[target];
         if (obj) {
           baseValue = (obj.props as Record<string, unknown>)[prop];
+        } else if (styles?.[target]) {
+          baseValue = styles[target][prop];
         } else {
           // Sub-element: e.g., target="snippet.line0" — find parent and extract line default
           const subMatch = target.match(/^(.+)\.line(\d+)$/);

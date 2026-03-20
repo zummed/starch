@@ -53,6 +53,7 @@ const BaseSchema = z.object({
   cascadeScale: z.boolean().default(true),
   cascadeRotation: z.boolean().default(true),
   at: z.string().optional(),
+  style: z.string().optional(),
 }).passthrough();
 
 // ─── Shape Schemas ──────────────────────────────────────────────
@@ -205,7 +206,7 @@ export const VALID_TYPES = new Set<string>([
 export const SCHEMA_METADATA = {
   types: [...VALID_TYPES],
   props: {
-    base: ['x', 'y', 'opacity', 'scale', 'anchor', 'colour', 'fill', 'stroke', 'text', 'textColor', 'textSize', 'textOffset', 'depth', 'visible', 'follow', 'pathProgress', 'rotation', 'direction', 'gap', 'justify', 'align', 'wrap', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'group', 'order', 'grow', 'shrink', 'alignSelf', 'cascadeOpacity', 'cascadeScale', 'cascadeRotation', 'at'],
+    base: ['x', 'y', 'opacity', 'scale', 'anchor', 'colour', 'fill', 'stroke', 'text', 'textColor', 'textSize', 'textOffset', 'depth', 'visible', 'follow', 'pathProgress', 'rotation', 'direction', 'gap', 'justify', 'align', 'wrap', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'group', 'order', 'grow', 'shrink', 'alignSelf', 'cascadeOpacity', 'cascadeScale', 'cascadeRotation', 'at', 'style'],
     box: ['w', 'h', 'radius', 'strokeWidth', 'bold', 'textAlign', 'textVAlign', 'image', 'imageFit', 'imagePadding'],
     circle: ['r', 'strokeWidth', 'image', 'imageFit', 'imagePadding'],
     label: ['text', 'color', 'size', 'bold', 'align', 'image', 'imageFit', 'imagePadding'],

@@ -268,3 +268,86 @@ describe('at-reference tracking', () => {
     expect(result.B.y).toBe(320);
   });
 });
+
+describe('animatable styles', () => {
+  it('applies style props as defaults', () => {
+    const styles = { card: { fill: '#22d3ee', stroke: '#1a9cb0' } };
+    const objects: Record<string, SceneObject> = {
+      a: makeObj('a', { x: 0, y: 0, style: 'card' }),
+    };
+    const tracks: Tracks = {};
+    const evaluate = createEvaluator([], styles);
+    const result = evaluate(objects, tracks, 0);
+    expect(result.a.fill).toBe('#22d3ee');
+    expect(result.a.stroke).toBe('#1a9cb0');
+  });
+
+  it('object explicit props override style', () => {
+    const styles = { card: { fill: '#22d3ee' } };
+    const objects: Record<string, SceneObject> = {
+      a: { type: 'box', id: 'a', props: { x: 0, y: 0, w: 100, h: 50, fill: '#ff0000', style: 'card' } as never, _inputKeys: new Set(['fill', 'style']), _definitionOrder: 0 },
+    };
+    const tracks: Tracks = {};
+    const evaluate = createEvaluator([], styles);
+    const result = evaluate(objects, tracks, 0);
+    expect(result.a.fill).toBe('#ff0000');
+  });
+
+  it('animated style propagates to all objects using it', () => {
+    const styles = { card: { fill: '#22d3ee' } };
+    const objects: Record<string, SceneObject> = {
+      a: makeObj('a', { x: 0, y: 0, style: 'card' }),
+      b: makeObj('b', { x: 100, y: 0, style: 'card' }),
+    };
+    const tracks: Tracks = {
+      'card.fill': [
+        { time: 0, value: '#22d3ee', easing: 'linear' },
+        { time: 1, value: '#ff0000', easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator([], styles);
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.a.fill).toBe('#22d3ee');
+    expect(t0.b.fill).toBe('#22d3ee');
+
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.a.fill).toBe('#ff0000');
+    expect(t1.b.fill).toBe('#ff0000');
+  });
+
+  it('object own track overrides style animation', () => {
+    const styles = { card: { fill: '#22d3ee' } };
+    const objects: Record<string, SceneObject> = {
+      a: makeObj('a', { x: 0, y: 0, style: 'card' }),
+    };
+    const tracks: Tracks = {
+      'card.fill': [
+        { time: 0, value: '#22d3ee', easing: 'linear' },
+        { time: 1, value: '#ff0000', easing: 'linear' },
+      ],
+      'a.fill': [
+        { time: 0, value: '#00ff00', easing: 'linear' },
+        { time: 1, value: '#0000ff', easing: 'linear' },
+      ],
+    };
+    const evaluate = createEvaluator([], styles);
+
+    const t0 = evaluate(objects, tracks, 0);
+    expect(t0.a.fill).toBe('#00ff00');
+
+    const t1 = evaluate(objects, tracks, 1);
+    expect(t1.a.fill).toBe('#0000ff');
+  });
+
+  it('works with no animation (static)', () => {
+    const styles = { muted: { opacity: 0.5, fill: '#666' } };
+    const objects: Record<string, SceneObject> = {
+      a: makeObj('a', { x: 0, y: 0, style: 'muted' }),
+    };
+    const tracks: Tracks = {};
+    const evaluate = createEvaluator([], styles);
+    const result = evaluate(objects, tracks, 0);
+    expect(result.a.fill).toBe('#666');
+  });
+});
