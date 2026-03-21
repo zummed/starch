@@ -117,6 +117,23 @@ A button in the preview panel toolbar:
 8. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace `animated.find(n => n.camera)` with `findActiveCamera`.
 9. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
 
+## Samples
+
+A set of dedicated camera samples in `src/v2/samples/`, each demonstrating a specific feature:
+
+1. **Camera Target** — Camera targeting a coordinate, a node ID, and a node+offset. Animate target between them to show smooth transitions.
+2. **Camera Zoom** — Zoom in/out on a group of objects with easing.
+3. **Camera Fit** — Fit specific nodes, then `fit: "all"`, showing smooth bounding box transitions as the fitted set changes.
+4. **Camera Follow** — Camera targeting a moving node (e.g. a box animating along a path), demonstrating real-time tracking.
+5. **Camera Ratio** — Animated aspect ratio change (e.g. 16:9 to 2.35:1 cinematic letterbox transition).
+6. **Camera Rotation** — Rotating the camera view with easing.
+7. **Camera Switch** — Multiple cameras with `active` toggling between them (cut transitions).
+8. **Camera Combined** — A cinematic sequence combining target, zoom, fit, ratio, and rotation in one animation.
+
+## Files to Modify (Samples)
+
+- **`src/v2/samples/index.ts`** (or new files in `src/v2/samples/`) — Add the camera sample definitions listed above and register them in the sample browser.
+
 ## Non-goals
 
 - DSL shorthand for cameras (deferred to future DSL simplification work)
