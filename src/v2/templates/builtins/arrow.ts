@@ -46,20 +46,19 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
       ...(route ? { route } : {}),
       ...(radius !== undefined ? { radius } : {}),
       ...(drawProgress !== undefined ? { drawProgress } : {}),
-      gap,
-      ...(arrow ? { toGap: gap + ARROW_SIZE } : {}),
-      ...(arrowStart ? { fromGap: gap + ARROW_SIZE } : {}),
+      ...(arrow ? { toGap: gap + ARROW_SIZE } : { toGap: gap }),
+      ...(arrowStart ? { fromGap: gap + ARROW_SIZE } : { fromGap: gap }),
     },
     stroke: { ...stroke, width: strokeWidth },
     ...(dashed ? { dash: { pattern: 'dashed', length: 8, gap: 4 } } : {}),
   }));
 
-  // End arrowhead
+  // End arrowhead — points forward from path end toward target
   if (arrow) {
     children.push(createNode({
       id: `${id}.headEnd`,
       path: {
-        points: [[-ARROW_SIZE, -ARROW_SIZE / 2], [0, 0], [-ARROW_SIZE, ARROW_SIZE / 2]],
+        points: [[0, -ARROW_SIZE / 2], [ARROW_SIZE, 0], [0, ARROW_SIZE / 2]],
         closed: true,
       },
       fill: stroke,
@@ -67,12 +66,12 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
     }));
   }
 
-  // Start arrowhead
+  // Start arrowhead — points backward from path start toward source
   if (arrowStart) {
     children.push(createNode({
       id: `${id}.headStart`,
       path: {
-        points: [[ARROW_SIZE, -ARROW_SIZE / 2], [0, 0], [ARROW_SIZE, ARROW_SIZE / 2]],
+        points: [[0, -ARROW_SIZE / 2], [-ARROW_SIZE, 0], [0, ARROW_SIZE / 2]],
         closed: true,
       },
       fill: stroke,
