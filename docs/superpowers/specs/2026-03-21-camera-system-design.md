@@ -62,7 +62,12 @@ Since the camera's view is a standard rect + transform:
 
 - **Scale**: Animate transform scale independently of zoom — works immediately
 - **Stretch**: Non-uniform scaling for distortion effects — works immediately
-- **Rotation**: Requires renderer support — SVG `viewBox` is axis-aligned, so a rotated camera would need the renderer to wrap content in a counter-rotated `<g>` transform. This is not free but is enabled by the rect-based approach. Deferred to a future enhancement.
+- **Rotation**: The camera node's `transform.rotation` rotates the view. SVG `viewBox` is axis-aligned, so the SVG backend applies the inverse rotation to the content `<g>` group: `transform="rotate(-angle, cx, cy)"`. Implementation requires:
+  1. Add optional `rotation` parameter to `RenderBackend.setViewBox`
+  2. In `SvgRenderBackend.setViewBox`, apply the counter-rotation to `_content`
+  3. In `emitFrame`, read the camera's `transform.rotation` and pass it through
+
+  ~10 lines across 3 files.
 
 ### Edge cases
 
@@ -96,9 +101,12 @@ A button in the preview panel toolbar:
 
 1. **`src/v2/types/node.ts`** — Extend `CameraSchema` with `ratio`, `active`, update `fit` to `z.union([z.array(z.string()), z.literal("all")])`. Update `NodeInput` and `Node` interfaces to match (they are hand-coded, not derived from `CameraSchema`).
 2. **`src/v2/animation/timeline.ts`** — Add camera track expansion as a second pass after all other tracks (including slot expansion) are built. Resolve camera settings at each keyframe time → rect/transform tracks.
-3. **`src/v2/renderer/camera.ts`** — Simplify `computeViewBox` to read active camera rect/transform. Add `findActiveCamera` (depth-first tree walk, not root-only). Handle `["nodeId", dx, dy]` target form. Remove `lerpViewBox` (dead code — interpolation now handled by track system).
-4. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace root-level `animated.find(n => n.camera)` with `findActiveCamera` (recursive).
-5. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
+3. **`src/v2/renderer/camera.ts`** — Simplify `computeViewBox` to read active camera rect/transform (including rotation). Add `findActiveCamera` (depth-first tree walk, not root-only). Handle `["nodeId", dx, dy]` target form. Remove `lerpViewBox` (dead code — interpolation now handled by track system).
+4. **`src/v2/renderer/backend.ts`** — Add optional `rotation` parameter to `setViewBox`
+5. **`src/v2/renderer/svgBackend.ts`** — Apply counter-rotation to `_content` group in `setViewBox`
+6. **`src/v2/renderer/emitter.ts`** — Read camera `transform.rotation` and pass to `setViewBox`
+7. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace root-level `animated.find(n => n.camera)` with `findActiveCamera` (recursive).
+8. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
 
 ## Non-goals
 
