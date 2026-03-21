@@ -62,15 +62,17 @@ export function useV2Diagram(props: V2DiagramProps) {
   const vpH = typeof viewport === 'object' && viewport ? (viewport as { height: number }).height ?? 500 : 500;
 
   // Build timeline (once per DSL change) — pass nodes so slot tracks get expanded
-  const tracks = useMemo(() => buildTimeline(animConfig, scene.nodes), [animConfig, scene.nodes]);
+  const { tracks, animatedSlotNodeIds } = useMemo(() => buildTimeline(animConfig, scene.nodes), [animConfig, scene.nodes]);
 
   // Store latest values in refs so render() always has current data
   const sceneRef = useRef(scene);
   const tracksRef = useRef(tracks);
+  const slotIdsRef = useRef(animatedSlotNodeIds);
   const vpRef = useRef({ w: vpW, h: vpH });
   const viewportOverrideRef = useRef(props.viewportOverride);
   sceneRef.current = scene;
   tracksRef.current = tracks;
+  slotIdsRef.current = animatedSlotNodeIds;
   vpRef.current = { w: vpW, h: vpH };
   viewportOverrideRef.current = props.viewportOverride;
 
@@ -85,7 +87,7 @@ export function useV2Diagram(props: V2DiagramProps) {
 
     const values = evaluateAllTracks(currentTracks, t);
     const animated = applyTrackValues(currentScene.nodes, values);
-    runLayout(animated);
+    runLayout(animated, slotIdsRef.current);
 
     let viewBox: ViewBox | undefined;
     if (viewportOverrideRef.current) {

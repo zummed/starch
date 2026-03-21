@@ -73,7 +73,12 @@ function computeSlotPosition(
   return { x: p.targetX, y: p.targetY };
 }
 
-export function buildTimeline(config: AnimConfig, nodes?: Node[]): Tracks {
+export interface TimelineResult {
+  tracks: Tracks;
+  animatedSlotNodeIds: Set<string>;
+}
+
+export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResult {
   const tracks: Tracks = new Map();
   const globalEasing: EasingName = config.easing ?? 'linear';
   const autoKey = config.autoKey ?? true;
@@ -144,6 +149,8 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): Tracks {
   }
 
   // Expand slot tracks into transform.x/y tracks
+  const animatedSlotNodeIds = new Set<string>();
+
   if (nodes) {
     const slotTracks: string[] = [];
     for (const [path] of tracks) {
@@ -174,14 +181,13 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): Tracks {
         }
       }
 
-      // Sort the generated tracks
       xTrack.sort((a, b) => a.time - b.time);
       yTrack.sort((a, b) => a.time - b.time);
 
-      // Remove the slot track — it's been expanded
       tracks.delete(slotPath);
+      animatedSlotNodeIds.add(nodeId);
     }
   }
 
-  return tracks;
+  return { tracks, animatedSlotNodeIds };
 }

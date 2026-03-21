@@ -99,7 +99,7 @@ export function computeLayoutPlacements(roots: Node[]): LayoutResult[] {
  * Apply layout placements directly to nodes.
  * Used for simple cases (direct children, no animation needed).
  */
-export function applyLayoutPlacements(roots: Node[], placements: LayoutResult[]): void {
+export function applyLayoutPlacements(roots: Node[], placements: LayoutResult[], animatedSlotNodeIds?: Set<string>): void {
   function findNode(nodes: Node[], id: string): Node | undefined {
     for (const n of nodes) {
       if (n.id === id) return n;
@@ -110,6 +110,9 @@ export function applyLayoutPlacements(roots: Node[], placements: LayoutResult[])
   }
 
   for (const p of placements) {
+    // Skip slot members whose positions are driven by animation tracks
+    if (p.isSlotMember && animatedSlotNodeIds?.has(p.nodeId)) continue;
+
     const node = findNode(roots, p.nodeId);
     if (!node) continue;
     if (!node.transform) (node as any).transform = {};
@@ -121,7 +124,7 @@ export function applyLayoutPlacements(roots: Node[], placements: LayoutResult[])
 }
 
 /** Convenience: compute and apply in one step */
-export function runLayout(roots: Node[]): void {
+export function runLayout(roots: Node[], animatedSlotNodeIds?: Set<string>): void {
   const placements = computeLayoutPlacements(roots);
-  applyLayoutPlacements(roots, placements);
+  applyLayoutPlacements(roots, placements, animatedSlotNodeIds);
 }

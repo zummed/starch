@@ -18,7 +18,7 @@ describe('buildTimeline', () => {
         { time: 2, changes: { 'box.transform.x': 100 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     expect(tracks.has('box.transform.x')).toBe(true);
     const kfs = tracks.get('box.transform.x')!;
     expect(kfs).toHaveLength(2);
@@ -33,7 +33,7 @@ describe('buildTimeline', () => {
         { time: 2, easing: 'easeOut', changes: { 'a.opacity': 0 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const kfs = tracks.get('a.opacity')!;
     expect(kfs[1].easing).toBe('easeOut');
   });
@@ -49,7 +49,7 @@ describe('buildTimeline', () => {
         },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const kfs = tracks.get('a.opacity')!;
     expect(kfs[1].easing).toBe('bounce');
   });
@@ -62,7 +62,7 @@ describe('buildTimeline', () => {
         { time: 2, changes: { 'x.fill.h': 180 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const kfs = tracks.get('x.fill.h')!;
     expect(kfs[1].easing).toBe('easeInOut');
   });
@@ -74,7 +74,7 @@ describe('buildTimeline', () => {
         { time: 0, plus: 1.5, changes: { 'a.opacity': 0.5 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const kfs = tracks.get('a.opacity')!;
     expect(kfs[1].time).toBe(1.5);
   });
@@ -87,7 +87,7 @@ describe('buildTimeline', () => {
         { time: 2, changes: { 'a.opacity': 0 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const bKfs = tracks.get('b.opacity')!;
     expect(bKfs.some(kf => kf.time === 2 && kf.value === 1)).toBe(true);
   });
@@ -99,7 +99,7 @@ describe('buildTimeline', () => {
         { time: 2, changes: { 'box.fill': { h: 120, s: 80, l: 60 } } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     expect(tracks.has('box.fill.h')).toBe(true);
     expect(tracks.has('box.fill.s')).toBe(true);
     expect(tracks.has('box.fill.l')).toBe(true);
@@ -114,7 +114,7 @@ describe('buildTimeline', () => {
         { time: 0, plus: 2, delay: 0.5, changes: { 'a.opacity': 0 } },
       ],
     });
-    const tracks = buildTimeline(config);
+    const { tracks } = buildTimeline(config);
     const kfs = tracks.get('a.opacity')!;
     expect(kfs.some(kf => kf.time === 2 && kf.value === 1)).toBe(true);
     expect(kfs.some(kf => kf.time === 2.5 && kf.value === 0)).toBe(true);
