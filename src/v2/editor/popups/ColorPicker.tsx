@@ -68,7 +68,23 @@ interface ColorPickerProps {
   onChange: (value: { h: number; s: number; l: number }) => void;
 }
 
-/** 2D Saturation/Lightness square + Hue strip */
+// HSL ↔ HSB conversion for the 2D picker square
+// The square works in HSB (Hue/Saturation/Brightness) space
+function hslToHsb(h: number, s: number, l: number): { hb_s: number; hb_b: number } {
+  const s1 = s / 100, l1 = l / 100;
+  const b = l1 + s1 * Math.min(l1, 1 - l1);
+  const sb = b === 0 ? 0 : 2 * (1 - l1 / b);
+  return { hb_s: sb * 100, hb_b: b * 100 };
+}
+
+function hsbToHsl(h: number, hb_s: number, hb_b: number): { s: number; l: number } {
+  const s1 = hb_s / 100, b1 = hb_b / 100;
+  const l = b1 * (1 - s1 / 2);
+  const sl = (l === 0 || l === 1) ? 0 : (b1 - l) / Math.min(l, 1 - l);
+  return { s: Math.round(sl * 100), l: Math.round(l * 100) };
+}
+
+/** 2D Saturation/Brightness square (HSB) + Hue strip */
 function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; onChange: (h: number, s: number, l: number) => void }) {
   const sqRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
@@ -80,7 +96,11 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
     const rect = sqRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    onChange(h, Math.round(x * 100), Math.round((1 - y) * 100));
+    // x = HSB saturation (0→1), y inverted = HSB brightness (1→0)
+    const hb_s = x * 100;
+    const hb_b = (1 - y) * 100;
+    const { s: newS, l: newL } = hsbToHsl(h, hb_s, hb_b);
+    onChange(h, newS, newL);
   }, [h, onChange]);
 
   const pickHue = useCallback((clientX: number) => {
@@ -107,10 +127,11 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
           `,
         }}
       >
-        {/* Crosshair indicator */}
+        {/* Crosshair indicator — positioned in HSB space */}
+        {(() => { const { hb_s, hb_b } = hslToHsb(h, s, l); return (
         <div style={{
           position: 'absolute',
-          left: `${s}%`, top: `${100 - l}%`,
+          left: `${hb_s}%`, top: `${100 - hb_b}%`,
           width: 10, height: 10,
           border: '2px solid white',
           borderRadius: '50%',
@@ -118,6 +139,7 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
           boxShadow: '0 0 2px rgba(0,0,0,0.5)',
           pointerEvents: 'none',
         }} />
+        ); })()}
       </div>
 
       {/* Hue strip */}
