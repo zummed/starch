@@ -18,9 +18,9 @@ export const StrokeSchema = z.object({
 });
 
 export const TransformSchema = z.object({
-  x: z.number().min(-2000).max(2000).describe('X position').optional(),
-  y: z.number().min(-2000).max(2000).describe('Y position').optional(),
-  rotation: z.number().min(-360).max(360).describe('Rotation (degrees)').optional(),
+  x: z.number().describe('X position').optional(),
+  y: z.number().describe('Y position').optional(),
+  rotation: z.number().describe('Rotation (degrees)').optional(),
   scale: z.number().min(0).max(10).describe('Scale factor').optional(),
   anchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Pivot point').optional(),
   pathFollow: z.string().describe('Path node ID to follow').optional(),
@@ -46,8 +46,8 @@ export const LayoutSchema = z.object({
 export const LayoutHintSchema = z.record(z.string(), z.union([z.number(), z.string(), z.boolean()]));
 
 export const SizeSchema = z.object({
-  w: z.number().min(0).max(2000).describe('Width'),
-  h: z.number().min(0).max(2000).describe('Height'),
+  w: z.number().min(0).describe('Width'),
+  h: z.number().min(0).describe('Height'),
 });
 
 // ─── Derived Types ──────────────────────────────────────────────

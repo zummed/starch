@@ -15,11 +15,17 @@ function stop(e: React.SyntheticEvent) {
   e.stopPropagation();
 }
 
+function clamp(val: number, lo?: number, hi?: number): number {
+  if (lo !== undefined && val < lo) return lo;
+  if (hi !== undefined && val > hi) return hi;
+  return val;
+}
+
 const TRACK_WIDTH = 160;
 const THUMB_W = 4;
 const MAX_DEFLECT = (TRACK_WIDTH / 2) - THUMB_W;
 
-export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderProps) {
+export function NumberSlider({ value, min, max, step = 1, label, onChange }: NumberSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -46,10 +52,11 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
       const dec = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
       const stepSize = Math.pow(10, -dec); // minimum change we can represent
       if (Math.abs(accumulator.current) >= stepSize) {
-        const snapped = parseFloat((currentVal.current + accumulator.current).toFixed(dec));
-        if (snapped !== currentVal.current) {
-          currentVal.current = snapped;
-          onChange(snapped);
+        const raw = parseFloat((currentVal.current + accumulator.current).toFixed(dec));
+        const clamped = clamp(raw, min, max);
+        if (clamped !== currentVal.current) {
+          currentVal.current = clamped;
+          onChange(clamped);
         }
         accumulator.current = 0;
       }
@@ -127,10 +134,11 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
     e.stopPropagation();
     const nudge = e.shiftKey ? step * 10 : step;
     const dir = e.deltaY > 0 ? -1 : 1;
-    const newVal = value + dir * nudge;
+    const raw = value + dir * nudge;
+    const clamped = clamp(raw, min, max);
     const dec = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
-    onChange(parseFloat(newVal.toFixed(dec)));
-  }, [value, step, onChange]);
+    onChange(parseFloat(clamped.toFixed(dec)));
+  }, [value, step, min, max, onChange]);
 
   // Cleanup
   useEffect(() => () => {

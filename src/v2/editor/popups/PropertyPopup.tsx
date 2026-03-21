@@ -53,12 +53,15 @@ function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; v
       )}
       {otherNumericProps.map(prop => {
         const constraints = getNumberConstraints(prop.schema);
-        const range = (constraints?.max ?? 100) - (constraints?.min ?? 0);
+        const hasRange = constraints?.min !== undefined && constraints?.max !== undefined;
+        const range = hasRange ? (constraints!.max! - constraints!.min!) : 100;
         const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
         return (
           <NumberSlider
             key={prop.name}
             value={(value[prop.name] as number) ?? 0}
+            min={constraints?.min}
+            max={constraints?.max}
             step={step}
             label={prop.name}
             onChange={(v) => handleSubChange(prop.name, v)}
@@ -110,11 +113,14 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     }
     case 'number': {
       const constraints = getNumberConstraints(schema);
-      const range = (constraints?.max ?? 100) - (constraints?.min ?? 0);
+      const hasRange = constraints?.min !== undefined && constraints?.max !== undefined;
+      const range = hasRange ? (constraints!.max! - constraints!.min!) : 100;
       const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
       content = (
         <NumberSlider
           value={(value as number) ?? 0}
+          min={constraints?.min}
+          max={constraints?.max}
           step={step}
           label={schemaPath.split('.').pop()}
           onChange={onChange}
