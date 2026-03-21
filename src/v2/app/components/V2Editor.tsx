@@ -117,6 +117,42 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     const doc = view.state.doc.toString();
     const ctx = getCursorContext(doc, pos);
 
+    // Clicking on a property name (like "fill", "rect") — open compound popup
+    if (ctx.isPropertyName && ctx.prefix && ctx.path) {
+      const parts = ctx.path.split('.');
+      const filtered: string[] = [];
+      let i = 0;
+      if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) i = 2;
+      else if (parts[0] === 'styles' && parts.length >= 2) i = 2;
+      while (i < parts.length) {
+        if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) i += 2;
+        else { filtered.push(parts[i]); i++; }
+      }
+      // The prefix is the property name being clicked (e.g., "fill")
+      const schemaPath = filtered.length > 0 ? [...filtered, ctx.prefix].join('.') : ctx.prefix;
+
+      const schema = getPropertySchema(schemaPath);
+      if (schema) {
+        const type = detectSchemaType(schema);
+        if (['color', 'object'].includes(type)) {
+          const currentValue = extractValueAtCursor(doc, pos, type, ctx.prefix);
+          const coords = view.coordsAtPos(pos);
+          if (coords) {
+            setPopup({
+              schemaPath,
+              dslPath: ctx.path,
+              key: ctx.prefix,
+              cursorPos: pos,
+              value: currentValue,
+              position: { x: coords.left, y: coords.bottom + 4 },
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // Clicking on a value (after the colon)
     if (!ctx.isPropertyName && ctx.currentKey && ctx.path) {
       // Map DSL path to schema path — strip structural segments to get to node property path
       const parts = ctx.path.split('.');
