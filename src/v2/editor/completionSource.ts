@@ -8,6 +8,7 @@ import {
   getPropertySchema,
   detectSchemaType,
   getEnumValues,
+  AnimConfigSchema,
 } from '../types/schemaRegistry';
 
 export interface CompletionItem {
@@ -18,23 +19,28 @@ export interface CompletionItem {
   type: 'property' | 'value' | 'keyword';
 }
 
+interface SchemaContext {
+  path: string;
+  rootSchema?: import('zod').ZodType;
+}
+
 /**
- * Map a DSL-level path to a schema path.
- * DSL paths like "objects.0.rect" → schema path "rect" (inside NodeSchema)
- * DSL paths like "objects.0.rect.w" → schema path "rect.w"
- * DSL paths like "styles.primary.fill" → schema path "fill"
- * DSL paths like "animate.duration" → schema path handled by AnimConfigSchema
+ * Map a DSL-level path to a schema path + root schema.
  */
-function dslPathToSchemaPath(dslPath: string): string {
+function dslPathToSchemaContext(dslPath: string): SchemaContext {
   const parts = dslPath.split('.');
   const filtered: string[] = [];
   let i = 0;
+  let rootSchema: import('zod').ZodType | undefined;
 
-  // Strip top-level key
+  // Determine context from top-level key
   if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
-    i = 2;
+    i = 2; // NodeSchema (default)
   } else if (parts[0] === 'styles' && parts.length >= 2) {
-    i = 2;
+    i = 2; // NodeSchema (styles have node properties)
+  } else if (parts[0] === 'animate') {
+    i = 1; // AnimConfigSchema
+    rootSchema = AnimConfigSchema;
   }
 
   // Walk remaining parts, skipping children.N pairs
@@ -47,7 +53,7 @@ function dslPathToSchemaPath(dslPath: string): string {
     }
   }
 
-  return filtered.join('.');
+  return { path: filtered.join('.'), rootSchema };
 }
 
 /**
@@ -55,21 +61,21 @@ function dslPathToSchemaPath(dslPath: string): string {
  */
 export function getCompletions(text: string, cursorOffset: number): CompletionItem[] {
   const ctx = getCursorContext(text, cursorOffset);
-  const schemaPath = dslPathToSchemaPath(ctx.path);
+  const { path: schemaPath, rootSchema } = dslPathToSchemaContext(ctx.path);
 
   if (ctx.isPropertyName) {
-    return getPropertyCompletions(schemaPath, ctx.prefix, text);
+    return getPropertyCompletions(schemaPath, ctx.prefix, text, rootSchema);
   }
 
   if (ctx.currentKey) {
-    return getValueCompletions(schemaPath, ctx.currentKey, ctx.prefix);
+    return getValueCompletions(schemaPath, ctx.currentKey, ctx.prefix, rootSchema);
   }
 
   return [];
 }
 
-function getPropertyCompletions(path: string, prefix: string, text: string): CompletionItem[] {
-  const props = getAvailableProperties(path);
+function getPropertyCompletions(path: string, prefix: string, text: string, rootSchema?: import('zod').ZodType): CompletionItem[] {
+  const props = getAvailableProperties(path, rootSchema);
   if (props.length === 0) return [];
 
   // Filter out properties that already exist in the current text context
@@ -124,16 +130,14 @@ function getPropertyCompletions(path: string, prefix: string, text: string): Com
   return items;
 }
 
-function getValueCompletions(path: string, key: string, prefix: string): CompletionItem[] {
-  // The path may already end with the key (e.g., path="fill", key="fill")
-  // or the key may be a child of the path (e.g., path="rect", key="w")
+function getValueCompletions(path: string, key: string, prefix: string, rootSchema?: import('zod').ZodType): CompletionItem[] {
   let fullPath: string;
   if (path.endsWith(key)) {
     fullPath = path;
   } else {
     fullPath = path ? `${path}.${key}` : key;
   }
-  const schema = getPropertySchema(fullPath);
+  const schema = getPropertySchema(fullPath, rootSchema);
   if (!schema) return [];
 
   const type = detectSchemaType(schema);

@@ -58,11 +58,12 @@ function unwrap(schema: z.ZodType): z.ZodType {
 /**
  * Get the Zod schema for a dotted property path.
  */
-export function getPropertySchema(path: string): z.ZodType | null {
-  if (!path) return NodeSchema;
+export function getPropertySchema(path: string, rootSchema?: z.ZodType): z.ZodType | null {
+  const root = rootSchema ?? NodeSchema;
+  if (!path) return root;
 
   const segments = path.split('.');
-  let current: z.ZodType = NodeSchema;
+  let current: z.ZodType = root;
 
   for (const segment of segments) {
     const unwrapped = unwrap(current);
@@ -105,8 +106,8 @@ export function getPropertySchema(path: string): z.ZodType | null {
 /**
  * Get all available properties for a given context path.
  */
-export function getAvailableProperties(path: string): PropertyDescriptor[] {
-  const schema = path ? getPropertySchema(path) : NodeSchema;
+export function getAvailableProperties(path: string, rootSchema?: z.ZodType): PropertyDescriptor[] {
+  const schema = path ? getPropertySchema(path, rootSchema) : (rootSchema ?? NodeSchema);
   if (!schema) return [];
 
   const unwrapped = unwrap(schema);
@@ -133,7 +134,7 @@ export function getAvailableProperties(path: string): PropertyDescriptor[] {
 /**
  * Detect the "type" of a schema for popup selection.
  */
-export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'unknown';
+export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'pointref' | 'unknown';
 
 export function detectSchemaType(schema: z.ZodType): SchemaType {
   const unwrapped = unwrap(schema);
@@ -158,6 +159,10 @@ export function detectSchemaType(schema: z.ZodType): SchemaType {
       for (const opt of options) {
         if (detectSchemaType(opt) === 'color') return 'color';
       }
+      // PointRef: union of string, [number,number], [string,number,number]
+      const hasString = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodString);
+      const hasTuple = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodTuple);
+      if (hasString && hasTuple) return 'pointref';
     }
   }
 

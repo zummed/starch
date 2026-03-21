@@ -21,10 +21,40 @@ import {
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
+  AnimConfigSchema,
 } from '../../types/schemaRegistry';
 import { PropertyPopup } from '../../editor/popups/PropertyPopup';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
+
+// ─── DSL path to schema resolution ──────────────────────────────
+
+function resolveDslPath(dslPath: string): { schemaPath: string; rootSchema?: import('zod').ZodType } {
+  const parts = dslPath.split('.');
+  const filtered: string[] = [];
+  let i = 0;
+  let rootSchema: import('zod').ZodType | undefined;
+
+  if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
+    i = 2;
+  } else if (parts[0] === 'styles' && parts.length >= 2) {
+    i = 2;
+  } else if (parts[0] === 'animate') {
+    i = 1;
+    rootSchema = AnimConfigSchema;
+  }
+
+  while (i < parts.length) {
+    if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      i += 2;
+    } else {
+      filtered.push(parts[i]);
+      i++;
+    }
+  }
+
+  return { schemaPath: filtered.join('.'), rootSchema };
+}
 
 // ─── V2 Linter ──────────────────────────────────────────────────
 
@@ -135,18 +165,10 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       if (!clickedWord) clickedWord = ctx.prefix;
 
       if (clickedWord) {
-        const parts = ctx.path.split('.');
-        const filtered: string[] = [];
-        let i = 0;
-        if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) i = 2;
-        else if (parts[0] === 'styles' && parts.length >= 2) i = 2;
-        while (i < parts.length) {
-          if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) i += 2;
-          else { filtered.push(parts[i]); i++; }
-        }
-        const schemaPath = filtered.length > 0 ? [...filtered, clickedWord].join('.') : clickedWord;
+        const { schemaPath: basePath, rootSchema } = resolveDslPath(ctx.path);
+        const schemaPath = basePath ? `${basePath}.${clickedWord}` : clickedWord;
 
-        const schema = getPropertySchema(schemaPath);
+        const schema = getPropertySchema(schemaPath, rootSchema);
         if (schema) {
           const type = detectSchemaType(schema);
           if (['color', 'object'].includes(type)) {
@@ -170,39 +192,20 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 
     // Clicking on a value (after the colon)
     if (!ctx.isPropertyName && ctx.currentKey && ctx.path) {
-      // Map DSL path to schema path — strip structural segments to get to node property path
-      const parts = ctx.path.split('.');
-      // Strip objects.N, styles.name, and children.N segments
-      const filtered: string[] = [];
-      let i = 0;
-      // Skip top-level key (objects, styles, animate)
-      if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
-        i = 2;
-      } else if (parts[0] === 'styles' && parts.length >= 2) {
-        i = 2;
-      }
-      // Walk remaining parts, skipping children.N pairs
-      while (i < parts.length) {
-        if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
-          i += 2; // skip children.N
-        } else {
-          filtered.push(parts[i]);
-          i++;
-        }
-      }
-      let schemaPath = filtered.join('.');
+      const { schemaPath: basePath, rootSchema } = resolveDslPath(ctx.path);
+      let schemaPath = basePath;
 
       // Append current key if not already at the end
       if (!schemaPath.endsWith(ctx.currentKey)) {
         schemaPath = schemaPath ? `${schemaPath}.${ctx.currentKey}` : ctx.currentKey;
       }
 
-      const schema = getPropertySchema(schemaPath);
+      const schema = getPropertySchema(schemaPath, rootSchema);
       if (!schema) return;
 
       const type = detectSchemaType(schema);
-      // Show popup for types that have widgets (including compound objects)
-      if (['number', 'color', 'enum', 'boolean', 'object'].includes(type)) {
+      // Show popup for types that have widgets
+      if (['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) {
         const currentValue = extractValueAtCursor(doc, pos, type, ctx.currentKey);
 
         const coords = view.coordsAtPos(pos);

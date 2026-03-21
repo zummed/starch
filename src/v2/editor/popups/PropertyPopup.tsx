@@ -160,6 +160,45 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
       );
       break;
     }
+    case 'pointref': {
+      // PointRef: string ID, [x,y], or ["id", dx, dy]
+      const strVal = typeof value === 'string' ? value
+        : Array.isArray(value) ? JSON.stringify(value)
+        : '';
+      content = (
+        <div style={{ padding: 8, minWidth: 180 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}>
+          <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, fontFamily: FONT }}>
+            {schemaPath.split('.').pop()} — ID, [x,y], or ["id", dx, dy]
+          </div>
+          <input
+            type="text"
+            defaultValue={strVal}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                const v = (e.target as HTMLInputElement).value.trim();
+                // Try to parse as JSON array, otherwise treat as string ID
+                try {
+                  const parsed = JSON.parse(v);
+                  if (Array.isArray(parsed)) { onChange(parsed); return; }
+                } catch { /* not JSON */ }
+                onChange(v.replace(/^["']|["']$/g, ''));
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', padding: '4px 6px', fontSize: 11, fontFamily: FONT,
+              background: '#0e1117', border: '1px solid #2a2d35', borderRadius: 4,
+              color: '#e2e5ea', outline: 'none',
+            }}
+          />
+        </div>
+      );
+      break;
+    }
     default:
       return null;
   }
