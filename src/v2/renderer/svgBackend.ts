@@ -26,6 +26,8 @@ function applyFillStroke(el: SVGElement, fill: RgbaColor | null, stroke: StrokeS
   if (stroke) {
     el.setAttribute('stroke', rgbaToCSS(stroke.color));
     el.setAttribute('stroke-width', String(stroke.width));
+    // Paint stroke behind fill to avoid double-tone with semi-transparent strokes
+    el.setAttribute('paint-order', 'stroke');
     if (stroke.dash) {
       el.setAttribute('stroke-dasharray', `${stroke.dash.length} ${stroke.dash.gap}`);
       if (stroke.dash.pattern === 'dotted') {
