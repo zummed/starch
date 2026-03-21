@@ -11,6 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching } from '@codemirror/language';
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
+import JSON5 from 'json5';
 import { starchTheme, starchHighlight } from '../../../editor/theme';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
@@ -95,6 +96,7 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
   // Property popup state
   const [popup, setPopup] = useState<{
     schemaPath: string;
+    dslPath: string;  // full path in the JSON5 object (e.g., "objects.0.fill.h")
     value: unknown;
     position: { x: number; y: number };
   } | null>(null);
@@ -139,6 +141,7 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
         if (coords) {
           setPopup({
             schemaPath,
+            dslPath: ctx.path,
             value: currentValue,
             position: { x: coords.left, y: coords.bottom + 4 },
           });
@@ -217,12 +220,31 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     }
   }, [value]);
 
-  // Handle popup value change
+  // Handle popup value change — update JSON5 text at the DSL path
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
-    // For now, just log — proper integration would update the model
-    // and re-serialize. This will be connected through ModelManager.
-    console.log('Popup change:', popup.schemaPath, newValue);
+    const view = viewRef.current;
+    if (!view) return;
+
+    try {
+      const doc = view.state.doc.toString();
+      const raw = JSON5.parse(doc);
+      setNestedValue(raw, popup.dslPath.split('.'), newValue);
+      const newText = JSON5.stringify(raw, null, 2);
+
+      externalUpdate.current = true;
+      view.dispatch({
+        changes: { from: 0, to: doc.length, insert: newText },
+      });
+      externalUpdate.current = false;
+
+      onChangeRef.current(newText);
+
+      // Update popup's own value so the widget reflects the change
+      setPopup(prev => prev ? { ...prev, value: newValue } : null);
+    } catch {
+      // If parse fails, ignore the change
+    }
   }, [popup]);
 
   return (
@@ -251,6 +273,19 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
+
+function setNestedValue(obj: any, keys: string[], value: unknown): void {
+  if (keys.length === 0) return;
+  if (keys.length === 1) {
+    obj[keys[0]] = value;
+    return;
+  }
+  const [head, ...rest] = keys;
+  if (!(head in obj) || typeof obj[head] !== 'object') {
+    obj[head] = {};
+  }
+  setNestedValue(obj[head], rest, value);
+}
 
 function extractValueAtCursor(doc: string, pos: number, type: string): unknown {
   // Simple extraction — look for the value after the colon near the cursor
