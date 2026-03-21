@@ -184,7 +184,7 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
       xTrack.sort((a, b) => a.time - b.time);
       yTrack.sort((a, b) => a.time - b.time);
 
-      tracks.delete(slotPath);
+      // Keep slot track (membership updates at render time for container sizing)
       animatedSlotNodeIds.add(nodeId);
     }
   }

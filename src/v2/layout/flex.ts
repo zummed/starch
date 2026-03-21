@@ -134,10 +134,12 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   const offsetMain = -containerW / 2;
   const offsetCross = -containerH / 2;
 
-  // Auto-size container rect when dimensions are 0
-  if (container.rect) {
-    const actualW = isRow ? containerW : containerH;
-    const actualH = isRow ? containerH : containerW;
+  // Auto-size: set rect dimensions from content when missing or zero
+  const actualW = isRow ? containerW : containerH;
+  const actualH = isRow ? containerH : containerW;
+  if (!container.rect) {
+    (container as any).rect = { w: actualW, h: actualH };
+  } else {
     if (container.rect.w === 0) container.rect.w = actualW;
     if (container.rect.h === 0) container.rect.h = actualH;
   }

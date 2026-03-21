@@ -555,7 +555,6 @@ export const v2Samples: V2Sample[] = [
   objects: [
     {
       id: "left",
-      rect: { w: 0, h: 0 },
       fill: { h: 210, s: 30, l: 15 },
       stroke: { h: 210, s: 50, l: 40, width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
@@ -563,7 +562,6 @@ export const v2Samples: V2Sample[] = [
     },
     {
       id: "right",
-      rect: { w: 0, h: 0 },
       fill: { h: 0, s: 30, l: 15 },
       stroke: { h: 0, s: 50, l: 40, width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
