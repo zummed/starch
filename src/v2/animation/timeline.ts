@@ -58,19 +58,35 @@ function cloneWithSlot(nodes: Node[], nodeId: string, slotValue: string): Node[]
 }
 
 /**
- * Find a node's layout position for a given slot assignment.
+ * Compute layout state for a given slot assignment.
+ * Returns the mover's position and all container sizes (after auto-sizing).
  */
-function computeSlotPosition(
+interface SlotLayoutState {
+  x: number;
+  y: number;
+  containerSizes: Map<string, { w: number; h: number }>;
+}
+
+function computeSlotLayoutState(
   nodes: Node[],
   nodeId: string,
   slotValue: string,
-): { x: number; y: number } | null {
+): SlotLayoutState | null {
   ensureStrategies();
   const cloned = cloneWithSlot(nodes, nodeId, slotValue);
   const placements = computeLayoutPlacements(cloned);
   const p = placements.find(r => r.nodeId === nodeId);
   if (!p) return null;
-  return { x: p.targetX, y: p.targetY };
+
+  // Read auto-sized container dimensions from the cloned tree
+  const containerSizes = new Map<string, { w: number; h: number }>();
+  for (const n of cloned) {
+    if (n.layout && n.rect) {
+      containerSizes.set(n.id, { w: n.rect.w, h: n.rect.h });
+    }
+  }
+
+  return { x: p.targetX, y: p.targetY, containerSizes };
 }
 
 export interface TimelineResult {
@@ -159,6 +175,9 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
       }
     }
 
+    // Collect container size keyframes across all slot tracks
+    const containerSizeKfs = new Map<string, { wKfs: TrackKeyframe[]; hKfs: TrackKeyframe[] }>();
+
     for (const slotPath of slotTracks) {
       const nodeId = slotPath.replace(/\.slot$/, '');
       const slotKeyframes = tracks.get(slotPath)!;
@@ -174,10 +193,20 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
 
       for (const kf of slotKeyframes) {
         const slotValue = kf.value as string;
-        const pos = computeSlotPosition(nodes, nodeId, slotValue);
-        if (pos) {
-          xTrack.push({ time: kf.time, value: pos.x, easing: kf.easing });
-          yTrack.push({ time: kf.time, value: pos.y, easing: kf.easing });
+        const state = computeSlotLayoutState(nodes, nodeId, slotValue);
+        if (state) {
+          xTrack.push({ time: kf.time, value: state.x, easing: kf.easing });
+          yTrack.push({ time: kf.time, value: state.y, easing: kf.easing });
+
+          // Record container sizes at this keyframe time
+          for (const [cId, size] of state.containerSizes) {
+            if (!containerSizeKfs.has(cId)) {
+              containerSizeKfs.set(cId, { wKfs: [], hKfs: [] });
+            }
+            const entry = containerSizeKfs.get(cId)!;
+            entry.wKfs.push({ time: kf.time, value: size.w, easing: kf.easing });
+            entry.hKfs.push({ time: kf.time, value: size.h, easing: kf.easing });
+          }
         }
       }
 
@@ -186,6 +215,14 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
 
       // Keep slot track (membership updates at render time for container sizing)
       animatedSlotNodeIds.add(nodeId);
+    }
+
+    // Emit container size tracks
+    for (const [cId, { wKfs, hKfs }] of containerSizeKfs) {
+      const wPath = `${cId}.rect.w`;
+      const hPath = `${cId}.rect.h`;
+      if (!tracks.has(wPath)) tracks.set(wPath, wKfs);
+      if (!tracks.has(hPath)) tracks.set(hPath, hKfs);
     }
   }
 
