@@ -323,11 +323,23 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       }
     }
 
-    // Apply gaps
+    // Apply gaps — push outward from the object center (away from the box)
     const fromGap = path.fromGap ?? path.gap ?? 0;
     const toGap = path.toGap ?? path.gap ?? 0;
-    if (fromGap > 0) fromPoint = applyGap(fromPoint, firstTarget, fromGap);
-    if (toGap > 0) toPoint = applyGap(toPoint, lastTarget, toGap);
+    if (fromGap > 0) {
+      // Push away from the source center
+      const dx = fromPoint[0] - fromCenter[0];
+      const dy = fromPoint[1] - fromCenter[1];
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      fromPoint = [fromPoint[0] + (dx / len) * fromGap, fromPoint[1] + (dy / len) * fromGap];
+    }
+    if (toGap > 0) {
+      // Push away from the target center
+      const dx = toPoint[0] - toCenter[0];
+      const dy = toPoint[1] - toCenter[1];
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      toPoint = [toPoint[0] + (dx / len) * toGap, toPoint[1] + (dy / len) * toGap];
+    }
 
     rawPoints = [fromPoint, ...waypoints, toPoint];
   }
