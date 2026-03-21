@@ -547,6 +547,44 @@ export const v2Samples: V2Sample[] = [
   ]
 }`,
   },
+  {
+    name: 'slot-animation',
+    category: 'Layout',
+    description: 'Animate an item between containers using slot — smooth position transition',
+    dsl: `{
+  objects: [
+    {
+      id: "left",
+      rect: { w: 160, h: 120 },
+      fill: { h: 210, s: 30, l: 15 },
+      stroke: { h: 210, s: 50, l: 40, width: 1 },
+      layout: { type: "flex", direction: "column", gap: 8 },
+      transform: { x: 120, y: 150 }
+    },
+    {
+      id: "right",
+      rect: { w: 160, h: 120 },
+      fill: { h: 0, s: 30, l: 15 },
+      stroke: { h: 0, s: 50, l: 40, width: 1 },
+      layout: { type: "flex", direction: "column", gap: 8 },
+      transform: { x: 350, y: 150 }
+    },
+    { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 210, s: 60, l: 45 }, slot: "left" },
+    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 120, s: 60, l: 45 }, slot: "left" },
+    { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 40, s: 80, l: 50 }, slot: "left" }
+  ],
+  animate: {
+    duration: 4,
+    loop: true,
+    easing: "easeInOut",
+    keyframes: [
+      { time: 0, changes: { "mover.slot": "left" } },
+      { time: 2, changes: { "mover.slot": "right" } },
+      { time: 4, changes: { "mover.slot": "left" } }
+    ]
+  }
+}`,
+  },
 ];
 
 export function getV2SampleCategories(): string[] {

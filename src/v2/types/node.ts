@@ -92,6 +92,7 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   size: SizeSchema.describe('Explicit size for layout').optional(),
   layout: LayoutSchema.describe('Layout strategy').optional(),
   layoutHint: LayoutHintSchema.describe('Layout hints for parent strategy').optional(),
+  slot: z.string().describe('Container ID for layout membership — animatable to move between containers').optional(),
 
   // Styling
   style: z.string().describe('Style name reference').optional(),
@@ -132,6 +133,7 @@ export interface NodeInput {
   size?: Size;
   layout?: Layout;
   layoutHint?: LayoutHint;
+  slot?: string;
   style?: string;
   camera?: { target?: PointRef; zoom?: number; fit?: string[] };
   template?: string;
@@ -157,6 +159,7 @@ export interface Node {
   size?: Size;
   layout?: Layout;
   layoutHint?: LayoutHint;
+  slot?: string;
   style?: string;
   camera?: { target?: PointRef; zoom?: number; fit?: string[] };
   _ownKeys?: Set<string>;
