@@ -163,7 +163,7 @@ export const v2Samples: V2Sample[] = [
       transform: { x: 200, y: 150 },
       children: [
         { id: "bg", rect: { w: 160, h: 70, radius: 8 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
-        { id: "label", text: { content: "Composed Box", size: 14, align: "middle" }, fill: { h: 0, s: 0, l: 90 }, transform: { x: 80, y: 35 } }
+        { id: "label", text: { content: "Composed Box", size: 14, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
     }
   ]
@@ -172,18 +172,27 @@ export const v2Samples: V2Sample[] = [
   {
     name: 'line-composition',
     category: 'Composition',
-    description: 'A "line" is a path with an arrowhead and a label — all children of a parent node',
+    description: 'Two boxes connected by a path — the line and its label are children of a group node',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 100, y: 150 } },
-    { id: "b", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 400, y: 150 } },
     {
-      id: "conn",
+      id: "a",
+      transform: { x: 100, y: 150 },
       children: [
-        { id: "route", path: { from: "a", to: "b" }, stroke: { h: 0, s: 0, l: 60, width: 2 } },
-        { id: "label", text: { content: "sends data", size: 11 }, fill: { h: 0, s: 0, l: 70 }, transform: { x: 250, y: 140 } }
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
+        { id: "a.label", text: { content: "Source", size: 12, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
-    }
+    },
+    {
+      id: "b",
+      transform: { x: 400, y: 150 },
+      children: [
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { h: 0, s: 70, l: 50, width: 2 } },
+        { id: "b.label", text: { content: "Target", size: 12, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
+      ]
+    },
+    { id: "line", path: { from: "a", to: "b" }, stroke: { h: 0, s: 0, l: 60, width: 2 } },
+    { id: "lineLabel", text: { content: "sends data", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { x: 250, y: 130 } }
   ]
 }`,
   },
@@ -195,12 +204,12 @@ export const v2Samples: V2Sample[] = [
   objects: [
     {
       id: "card",
-      transform: { x: 200, y: 120 },
+      transform: { x: 200, y: 150 },
       children: [
-        { id: "bg", rect: { w: 140, h: 100, radius: 6 }, fill: { h: 210, s: 50, l: 18 }, stroke: { h: 210, s: 70, l: 45, width: 2 } },
-        { id: "title", text: { content: "Card Title", size: 14, bold: true }, fill: { h: 0, s: 0, l: 90 }, transform: { x: 70, y: 25 } },
-        { id: "badge", ellipse: { rx: 8, ry: 8 }, fill: { h: 120, s: 70, l: 45 }, transform: { x: 120, y: 18 } },
-        { id: "body", text: { content: "Some description", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { x: 70, y: 55 } }
+        { id: "bg", rect: { w: 160, h: 100, radius: 6 }, fill: { h: 210, s: 50, l: 18 }, stroke: { h: 210, s: 70, l: 45, width: 2 } },
+        { id: "title", text: { content: "Card Title", size: 14, bold: true }, fill: { h: 0, s: 0, l: 90 }, transform: { y: -20 } },
+        { id: "badge", ellipse: { rx: 8, ry: 8 }, fill: { h: 120, s: 70, l: 45 }, transform: { x: 55, y: -30 } },
+        { id: "body", text: { content: "Some description text", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { y: 15 } }
       ]
     }
   ],
