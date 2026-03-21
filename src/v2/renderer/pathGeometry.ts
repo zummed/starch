@@ -293,15 +293,18 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
     let fromPoint = fromCenter;
     let toPoint = toCenter;
 
+    // Determine if line has routing (bend, smooth, waypoints) — anchors only
+    // apply when the line can actually exit in a non-target direction
+    const hasRouting = (path.bend && path.bend !== 0) || path.smooth || waypoints.length > 0;
+
     if (typeof path.from === 'string') {
       const fromNode = findNodeById(allRoots, path.from);
       if (fromNode) {
         const bounds = getNodeBounds(fromNode);
         if (bounds.hw > 0 || bounds.hh > 0) {
-          // Always snap to the edge facing the target
-          // fromAnchor can bias the exit direction but we always ensure
-          // the point is on the edge and outside the bounds
-          const target = path.fromAnchor
+          // With routing + anchor: exit in the anchor's direction
+          // Without routing: always exit toward the first target point
+          const target = (hasRouting && path.fromAnchor)
             ? anchorDirection(path.fromAnchor, bounds)
             : firstTarget;
           const angle = Math.atan2(target[1] - bounds.cy, target[0] - bounds.cx);
@@ -315,7 +318,7 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       if (toNode) {
         const bounds = getNodeBounds(toNode);
         if (bounds.hw > 0 || bounds.hh > 0) {
-          const source = path.toAnchor
+          const source = (hasRouting && path.toAnchor)
             ? anchorDirection(path.toAnchor, bounds)
             : lastTarget;
           const angle = Math.atan2(source[1] - bounds.cy, source[0] - bounds.cx);
