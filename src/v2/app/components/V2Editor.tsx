@@ -136,8 +136,7 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       const type = detectSchemaType(schema);
       // Only show popup for types that have widgets
       if (['number', 'color', 'enum', 'boolean'].includes(type)) {
-        // Get the current value from the text (rough extraction)
-        const currentValue = extractValueAtCursor(doc, pos, type);
+        const currentValue = extractValueAtCursor(doc, pos, type, ctx.currentKey);
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
@@ -277,28 +276,28 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-function extractValueAtCursor(doc: string, pos: number, type: string): unknown {
-  // Simple extraction — look for the value after the colon near the cursor
-  const before = doc.slice(Math.max(0, pos - 100), pos);
-  const after = doc.slice(pos, Math.min(doc.length, pos + 100));
+function extractValueAtCursor(doc: string, pos: number, type: string, key: string): unknown {
+  // Use findValueSpan to get the exact text of the value for this key
+  const span = findValueSpan(doc, pos, key);
+  if (!span) return type === 'number' ? 0 : type === 'boolean' ? false : null;
+
+  const valueText = doc.slice(span.from, span.to).trim();
 
   if (type === 'number') {
-    const numMatch = (before + after).match(/:\s*(-?\d+\.?\d*)/);
-    return numMatch ? parseFloat(numMatch[1]) : 0;
+    const num = parseFloat(valueText);
+    return isNaN(num) ? 0 : num;
   }
   if (type === 'boolean') {
-    const boolMatch = (before + after).match(/:\s*(true|false)/);
-    return boolMatch ? boolMatch[1] === 'true' : false;
+    return valueText === 'true';
   }
   if (type === 'enum') {
-    const enumMatch = (before + after).match(/:\s*"([^"]+)"/);
-    return enumMatch ? enumMatch[1] : '';
+    return valueText.replace(/^["']|["']$/g, '');
   }
   if (type === 'color') {
-    // Try to extract HSL object
-    const hMatch = (before + after).match(/h:\s*(\d+)/);
-    const sMatch = (before + after).match(/s:\s*(\d+)/);
-    const lMatch = (before + after).match(/l:\s*(\d+)/);
+    // Parse the HSL object from the value text
+    const hMatch = valueText.match(/h:\s*(-?\d+)/);
+    const sMatch = valueText.match(/s:\s*(-?\d+)/);
+    const lMatch = valueText.match(/l:\s*(-?\d+)/);
     if (hMatch && sMatch && lMatch) {
       return { h: parseInt(hMatch[1]), s: parseInt(sMatch[1]), l: parseInt(lMatch[1]) };
     }

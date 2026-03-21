@@ -177,6 +177,7 @@ export function getEnumValues(schema: z.ZodType): string[] | null {
 
 /**
  * Get number constraints from a schema using validation probes.
+ * Uses binary search to find the actual min/max boundaries.
  */
 export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: number } | null {
   const unwrapped = unwrap(schema);
@@ -184,17 +185,26 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
 
   const result: { min?: number; max?: number } = {};
 
-  // Probe for min by testing -Infinity and 0
-  if (!unwrapped.safeParse(-1).success && unwrapped.safeParse(0).success) {
-    result.min = 0;
+  // Find min: binary search between -10000 and 0
+  if (!unwrapped.safeParse(-10000).success && unwrapped.safeParse(0).success) {
+    let lo = -10000, hi = 0;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (unwrapped.safeParse(mid).success) hi = mid;
+      else lo = mid;
+    }
+    result.min = Math.round(hi * 100) / 100;
   }
 
-  // Probe for common max values
-  for (const max of [1, 100, 360]) {
-    if (unwrapped.safeParse(max).success && !unwrapped.safeParse(max + 1).success) {
-      result.max = max;
-      break;
+  // Find max: binary search between 0 and 10000
+  if (unwrapped.safeParse(0).success && !unwrapped.safeParse(10000).success) {
+    let lo = 0, hi = 10000;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (unwrapped.safeParse(mid).success) lo = mid;
+      else hi = mid;
     }
+    result.max = Math.round(lo * 100) / 100;
   }
 
   return result;
