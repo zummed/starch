@@ -6,12 +6,14 @@ export const HslColorSchema = z.object({
   h: z.number().min(0).max(360).describe('Hue (degrees)'),
   s: z.number().min(0).max(100).describe('Saturation (%)'),
   l: z.number().min(0).max(100).describe('Lightness (%)'),
+  a: z.number().min(0).max(1).describe('Alpha (0-1)').optional(),
 });
 
 export const StrokeSchema = z.object({
   h: z.number().min(0).max(360).describe('Hue (degrees)'),
   s: z.number().min(0).max(100).describe('Saturation (%)'),
   l: z.number().min(0).max(100).describe('Lightness (%)'),
+  a: z.number().min(0).max(1).describe('Alpha (0-1)').optional(),
   width: z.number().min(0).max(20).describe('Stroke width'),
 });
 

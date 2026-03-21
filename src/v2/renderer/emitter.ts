@@ -10,13 +10,18 @@ import { hslToRgba } from './colorConvert';
 import { resolveConnectionPath, resolveEndpoint } from './connections';
 
 function hslFillToRgba(fill: HslColor | undefined): RgbaColor | null {
-  return fill ? hslToRgba(fill) : null;
+  if (!fill) return null;
+  const rgba = hslToRgba(fill);
+  if (fill.a !== undefined) rgba.a = fill.a;
+  return rgba;
 }
 
 function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeStyle | null {
   if (!stroke) return null;
+  const color = hslToRgba({ h: stroke.h, s: stroke.s, l: stroke.l });
+  if (stroke.a !== undefined) color.a = stroke.a;
   const style: StrokeStyle = {
-    color: hslToRgba({ h: stroke.h, s: stroke.s, l: stroke.l }),
+    color,
     width: stroke.width,
   };
   if (dash) {

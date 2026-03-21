@@ -71,7 +71,10 @@ describe('getAvailableProperties', () => {
   it('returns fill properties (HSL)', () => {
     const props = getAvailableProperties('fill');
     const names = props.map(p => p.name);
-    expect(names).toEqual(['h', 's', 'l']);
+    expect(names).toContain('h');
+    expect(names).toContain('s');
+    expect(names).toContain('l');
+    expect(names).toContain('a');
   });
 
   it('includes descriptions', () => {
