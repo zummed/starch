@@ -87,7 +87,7 @@ describe('getAvailableProperties', () => {
     const props = getAvailableProperties('rect');
     const wProp = props.find(p => p.name === 'w');
     const radiusProp = props.find(p => p.name === 'radius');
-    expect(wProp?.required).toBe(true);
+    expect(wProp?.required).toBe(false); // w defaults to 0 (auto-sized by layout)
     expect(radiusProp?.required).toBe(false);
   });
 

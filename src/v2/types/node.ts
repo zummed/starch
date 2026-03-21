@@ -8,8 +8,8 @@ import type { HslColor, Stroke, Transform, Dash, Layout, LayoutHint, Size } from
 // ─── Geometry Schemas ───────────────────────────────────────────
 
 export const RectGeomSchema = z.object({
-  w: z.number().min(0).describe('Width'),
-  h: z.number().min(0).describe('Height'),
+  w: z.number().min(0).describe('Width').default(0),
+  h: z.number().min(0).describe('Height').default(0),
   radius: z.number().min(0).describe('Corner radius').optional(),
 });
 
