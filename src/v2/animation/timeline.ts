@@ -49,6 +49,8 @@ function expandChanges(
 function cloneWithSlot(nodes: Node[], nodeId: string, slotValue: string): Node[] {
   function cloneNode(n: Node): Node {
     const clone = { ...n, children: n.children.map(cloneNode) };
+    // Deep-clone mutable geometry so layout auto-sizing doesn't leak back to originals
+    if (clone.rect) clone.rect = { ...clone.rect };
     if (clone.id === nodeId) {
       clone.slot = slotValue;
     }
