@@ -63,7 +63,7 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   // Compute available main axis space from container
   let containerMain = 0;
   if (container.rect) {
-    containerMain = isRow ? container.rect.w : container.rect.h;
+    containerMain = (isRow ? container.rect.w : container.rect.h) || 0;
   } else if (container.size) {
     containerMain = isRow ? container.size.w : container.size.h;
   }
@@ -121,7 +121,7 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   // Cross-axis
   let containerCross = 0;
   if (container.rect) {
-    containerCross = isRow ? container.rect.h : container.rect.w;
+    containerCross = (isRow ? container.rect.h : container.rect.w) || 0;
   } else if (container.size) {
     containerCross = isRow ? container.size.h : container.size.w;
   }
@@ -140,8 +140,8 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   if (!container.rect) {
     (container as any).rect = { w: actualW, h: actualH };
   } else {
-    if (container.rect.w === 0) container.rect.w = actualW;
-    if (container.rect.h === 0) container.rect.h = actualH;
+    if (!container.rect.w) container.rect.w = actualW;
+    if (!container.rect.h) container.rect.h = actualH;
   }
 
   const placements: ChildPlacement[] = [];
