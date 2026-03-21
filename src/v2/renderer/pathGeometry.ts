@@ -275,9 +275,15 @@ function isInsideBounds(
  * Returns the parameter t (0-1) of the intersection, or null if none.
  * For rect: checks all 4 edges. For ellipse: solves quadratic.
  */
+/**
+ * Find intersection of a line segment with bounds boundary.
+ * mode 'last': returns the largest t (last exit — for start clipping)
+ * mode 'first': returns the smallest t (first entry — for end clipping)
+ */
 function segmentBoundsIntersection(
   a: [number, number], b: [number, number],
   bounds: { cx: number; cy: number; hw: number; hh: number; isEllipse: boolean },
+  mode: 'first' | 'last' = 'last',
 ): number | null {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -293,9 +299,11 @@ function segmentBoundsIntersection(
     const sq = Math.sqrt(disc);
     const t1 = (-B - sq) / (2 * A);
     const t2 = (-B + sq) / (2 * A);
-    // Return the intersection in [0,1] range
-    if (t1 >= 0 && t1 <= 1) return t1;
-    if (t2 >= 0 && t2 <= 1) return t2;
+    // Return intersection based on mode
+    const valid = [t1, t2].filter(t => t >= 0 && t <= 1);
+    if (valid.length === 0) return null;
+    if (valid.length === 1) return valid[0];
+    return mode === 'last' ? Math.max(...valid) : Math.min(...valid);
     return null;
   }
 
@@ -321,8 +329,9 @@ function segmentBoundsIntersection(
     const px = a[0] + t * dx;
     const py = a[1] + t * dy;
     if (Math.abs(px - bounds.cx) <= bounds.hw + 0.01 && Math.abs(py - bounds.cy) <= bounds.hh + 0.01) {
-      // Take the largest t — the last exit point from the bounds
-      if (bestT === null || t > bestT) bestT = t;
+      if (bestT === null) bestT = t;
+      else if (mode === 'last' && t > bestT) bestT = t;
+      else if (mode === 'first' && t < bestT) bestT = t;
     }
   }
   return bestT;
@@ -349,7 +358,7 @@ function clipPathFromBounds(
 
       if (aInside && !bInside) {
         // This segment crosses the boundary — find intersection
-        const t = segmentBoundsIntersection(points[i], points[i + 1], bounds);
+        const t = segmentBoundsIntersection(points[i], points[i + 1], bounds, 'last');
         if (t !== null) {
           const ix = points[i][0] + t * (points[i + 1][0] - points[i][0]);
           const iy = points[i][1] + t * (points[i + 1][1] - points[i][1]);
@@ -386,7 +395,7 @@ function clipPathFromBounds(
     const bInside = isInsideBounds(points[i - 1], bounds);
 
     if (aInside && !bInside) {
-      const t = segmentBoundsIntersection(points[i - 1], points[i], bounds);
+      const t = segmentBoundsIntersection(points[i - 1], points[i], bounds, 'first');
       if (t !== null) {
         const ix = points[i - 1][0] + t * (points[i][0] - points[i - 1][0]);
         const iy = points[i - 1][1] + t * (points[i][1] - points[i - 1][1]);
