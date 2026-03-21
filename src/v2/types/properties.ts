@@ -1,45 +1,59 @@
-export interface HslColor {
-  h: number; // 0-360
-  s: number; // 0-100
-  l: number; // 0-100
-}
+import { z } from 'zod';
 
-export interface Stroke {
-  h: number;
-  s: number;
-  l: number;
-  width: number;
-}
+// ─── Property Sub-Object Schemas ────────────────────────────────
 
-export interface Transform {
-  x?: number;
-  y?: number;
-  rotation?: number;
-  scale?: number;
-  anchor?: string | [number, number];
-  pathFollow?: string;
-  pathProgress?: number;
-}
+export const HslColorSchema = z.object({
+  h: z.number().min(0).max(360).describe('Hue (degrees)'),
+  s: z.number().min(0).max(100).describe('Saturation (%)'),
+  l: z.number().min(0).max(100).describe('Lightness (%)'),
+});
 
-export interface Dash {
-  pattern: string; // "solid", "dashed", "dotted", or SVG dasharray
-  length: number;
-  gap: number;
-}
+export const StrokeSchema = z.object({
+  h: z.number().min(0).max(360).describe('Hue (degrees)'),
+  s: z.number().min(0).max(100).describe('Saturation (%)'),
+  l: z.number().min(0).max(100).describe('Lightness (%)'),
+  width: z.number().min(0).describe('Stroke width'),
+});
 
-export interface Layout {
-  type: string;
-  direction?: string;
-  gap?: number;
-  justify?: string;
-  align?: string;
-  wrap?: boolean;
-  padding?: number;
-}
+export const TransformSchema = z.object({
+  x: z.number().describe('X position').optional(),
+  y: z.number().describe('Y position').optional(),
+  rotation: z.number().describe('Rotation (degrees)').optional(),
+  scale: z.number().min(0).describe('Scale factor').optional(),
+  anchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Pivot point').optional(),
+  pathFollow: z.string().describe('Path node ID to follow').optional(),
+  pathProgress: z.number().min(0).max(1).describe('Position along path (0-1)').optional(),
+});
 
-export type LayoutHint = Record<string, number | string | boolean>;
+export const DashSchema = z.object({
+  pattern: z.string().describe('Dash pattern (solid, dashed, dotted, or SVG dasharray)'),
+  length: z.number().min(0).describe('Dash length'),
+  gap: z.number().min(0).describe('Gap between dashes'),
+});
 
-export interface Size {
-  w: number;
-  h: number;
-}
+export const LayoutSchema = z.object({
+  type: z.string().describe('Layout strategy (flex, absolute, grid, circular)'),
+  direction: z.enum(['row', 'column']).describe('Layout direction').optional(),
+  gap: z.number().min(0).describe('Gap between children').optional(),
+  justify: z.enum(['start', 'center', 'end', 'spaceBetween', 'spaceAround']).describe('Main axis alignment').optional(),
+  align: z.enum(['start', 'center', 'end', 'stretch']).describe('Cross axis alignment').optional(),
+  wrap: z.boolean().describe('Wrap children').optional(),
+  padding: z.number().min(0).describe('Inner padding').optional(),
+});
+
+export const LayoutHintSchema = z.record(z.string(), z.union([z.number(), z.string(), z.boolean()]));
+
+export const SizeSchema = z.object({
+  w: z.number().min(0).describe('Width'),
+  h: z.number().min(0).describe('Height'),
+});
+
+// ─── Derived Types ──────────────────────────────────────────────
+
+export type HslColor = z.infer<typeof HslColorSchema>;
+export type Stroke = z.infer<typeof StrokeSchema>;
+export type Transform = z.infer<typeof TransformSchema>;
+export type Dash = z.infer<typeof DashSchema>;
+export type Layout = z.infer<typeof LayoutSchema>;
+export type LayoutHint = z.infer<typeof LayoutHintSchema>;
+export type Size = z.infer<typeof SizeSchema>;
