@@ -8,7 +8,7 @@ export const EasingNameSchema = z.enum([
   'easeInQuart', 'easeOutQuart', 'easeInOutQuart',
   'easeInBack', 'easeOutBack',
   'bounce', 'elastic', 'spring',
-  'snap', 'step', 'cut',
+  'snap', 'step',
 ]);
 
 export const PropertyChangeSchema = z.object({

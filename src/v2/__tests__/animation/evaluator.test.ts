@@ -49,14 +49,14 @@ describe('evaluateTrack', () => {
     expect(evaluateTrack(stepKfs, 2)).toBe(100);
   });
 
-  it('handles cut easing (snap at start)', () => {
-    const cutKfs: TrackKeyframe[] = [
+  it('handles snap easing (instant jump)', () => {
+    const snapKfs: TrackKeyframe[] = [
       { time: 0, value: 0, easing: 'linear' },
-      { time: 2, value: 100, easing: 'cut' },
+      { time: 2, value: 100, easing: 'snap' },
     ];
-    expect(evaluateTrack(cutKfs, 0)).toBe(0);
-    expect(evaluateTrack(cutKfs, 0.01)).toBe(100);
-    expect(evaluateTrack(cutKfs, 2)).toBe(100);
+    expect(evaluateTrack(snapKfs, 0)).toBe(0);
+    expect(evaluateTrack(snapKfs, 0.01)).toBe(100);
+    expect(evaluateTrack(snapKfs, 2)).toBe(100);
   });
 });
 

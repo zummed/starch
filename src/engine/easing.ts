@@ -47,12 +47,9 @@ export const EASINGS: Record<EasingName, (t: number) => number> = {
       ? t
       : -Math.pow(2, 10 * (t - 1)) * Math.sin((t - 1.1) * 5 * Math.PI),
   spring: (t) => 1 - Math.cos(t * 4.5 * Math.PI) * Math.exp(-t * 6),
-  snap: (t) => {
-    const s = t * t * (3 - 2 * t);
-    return s * s * (3 - 2 * s);
-  },
+  snap: (t) => (t > 0 ? 1 : 0),
   step: (t) => (t < 1 ? 0 : 1),
-  cut: (t) => (t > 0 ? 1 : 0),
+  cut: (t) => (t > 0 ? 1 : 0),  // deprecated — same as snap
 };
 
 export function applyEasing(t: number, easingName?: EasingName | string): number {

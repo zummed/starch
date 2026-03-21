@@ -16,7 +16,7 @@ const ALL_EASINGS = [
   'easeInQuart', 'easeOutQuart', 'easeInOutQuart',
   'easeInBack', 'easeOutBack',
   'bounce', 'elastic', 'spring',
-  'snap', 'step', 'cut',
+  'snap', 'step',
 ];
 
 function buildEasingSample(): V2Sample {
