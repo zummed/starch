@@ -10,6 +10,56 @@ export interface V2Sample {
   dsl: string;
 }
 
+const ALL_EASINGS = [
+  'linear', 'easeIn', 'easeOut', 'easeInOut',
+  'easeInCubic', 'easeOutCubic', 'easeInOutCubic',
+  'easeInQuart', 'easeOutQuart', 'easeInOutQuart',
+  'easeInBack', 'easeOutBack',
+  'bounce', 'elastic', 'spring',
+  'snap', 'step', 'cut',
+];
+
+function buildEasingSample(): V2Sample {
+  const startX = 120;
+  const endX = 500;
+  const spacing = 22;
+  const startY = 30;
+
+  const objects = ALL_EASINGS.flatMap((name, i) => {
+    const y = startY + i * spacing;
+    const hue = Math.round((i / ALL_EASINGS.length) * 360);
+    return [
+      `{ id: "${name}", rect: { w: 16, h: 16, radius: 3 }, fill: { h: ${hue}, s: 70, l: 50 }, transform: { x: ${startX}, y: ${y} } }`,
+      `{ id: "l_${name}", text: { content: "${name}", size: 9, align: "end" }, fill: { h: 0, s: 0, l: 45 }, transform: { x: ${startX - 10}, y: ${y} } }`,
+    ];
+  });
+
+  const resetChanges = ALL_EASINGS.map(name => `"${name}.transform.x": ${startX}`).join(', ');
+  const moveChanges = ALL_EASINGS.map(name => `"${name}.transform.x": { value: ${endX}, easing: "${name}" }`).join(',\n        ');
+
+  return {
+    name: 'easing-comparison',
+    category: 'Animation',
+    description: `All ${ALL_EASINGS.length} easing functions compared side by side`,
+    dsl: `{
+  objects: [
+    ${objects.join(',\n    ')}
+  ],
+  animate: {
+    duration: 3,
+    loop: true,
+    keyframes: [
+      { time: 0, changes: { ${resetChanges} } },
+      { time: 1.5, changes: {
+        ${moveChanges}
+      }},
+      { time: 3, changes: { ${resetChanges} } }
+    ]
+  }
+}`,
+  };
+}
+
 export const v2Samples: V2Sample[] = [
 
   // ─── PRIMITIVES ────────────────────────────────────────────────
@@ -264,43 +314,7 @@ export const v2Samples: V2Sample[] = [
   },
 
   // ─── ANIMATION ─────────────────────────────────────────────────
-  {
-    name: 'easing-comparison',
-    category: 'Animation',
-    description: 'Compare easing functions side by side',
-    dsl: `{
-  objects: [
-    { id: "linear", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 0, s: 80, l: 50 }, transform: { x: 80, y: 80 } },
-    { id: "easeOut", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 60, s: 80, l: 50 }, transform: { x: 80, y: 120 } },
-    { id: "bounce", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 120, s: 80, l: 50 }, transform: { x: 80, y: 160 } },
-    { id: "elastic", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 210, s: 80, l: 50 }, transform: { x: 80, y: 200 } },
-    { id: "l1", text: { content: "linear", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 35, y: 80 } },
-    { id: "l2", text: { content: "easeOut", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 30, y: 120 } },
-    { id: "l3", text: { content: "bounce", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 32, y: 160 } },
-    { id: "l4", text: { content: "elastic", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 32, y: 200 } }
-  ],
-  animate: {
-    duration: 3,
-    loop: true,
-    keyframes: [
-      { time: 0, changes: {
-        "linear.transform.x": 80, "easeOut.transform.x": 80,
-        "bounce.transform.x": 80, "elastic.transform.x": 80
-      }},
-      { time: 1.5, changes: {
-        "linear.transform.x": { value: 400, easing: "linear" },
-        "easeOut.transform.x": { value: 400, easing: "easeOut" },
-        "bounce.transform.x": { value: 400, easing: "bounce" },
-        "elastic.transform.x": { value: 400, easing: "elastic" }
-      }},
-      { time: 3, changes: {
-        "linear.transform.x": 80, "easeOut.transform.x": 80,
-        "bounce.transform.x": 80, "elastic.transform.x": 80
-      }}
-    ]
-  }
-}`,
-  },
+  buildEasingSample(),
   {
     name: 'position-animation',
     category: 'Animation',
