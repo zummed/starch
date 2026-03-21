@@ -74,6 +74,26 @@ export function getPropertySchema(path: string): z.ZodType | null {
       } else {
         return null;
       }
+    } else if (unwrapped instanceof z.ZodArray) {
+      // Numeric index into array → return the element type
+      if (/^\d+$/.test(segment)) {
+        current = (unwrapped as any)._def.type;
+      } else {
+        return null;
+      }
+    } else if (unwrapped instanceof z.ZodLazy) {
+      // Resolve lazy schema and retry
+      const resolved = (unwrapped as any)._def.getter();
+      if (resolved instanceof z.ZodObject) {
+        const shape = (resolved as z.ZodObject<any>).shape;
+        if (segment in shape) {
+          current = shape[segment];
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
     } else {
       return null;
     }
