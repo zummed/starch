@@ -255,6 +255,165 @@ function ensureOutsideBounds(
   return point;
 }
 
+/**
+ * Test if a point is inside bounds (rect or ellipse).
+ */
+function isInsideBounds(
+  p: [number, number],
+  bounds: { cx: number; cy: number; hw: number; hh: number; isEllipse: boolean },
+): boolean {
+  if (bounds.isEllipse) {
+    const dx = (p[0] - bounds.cx) / bounds.hw;
+    const dy = (p[1] - bounds.cy) / bounds.hh;
+    return dx * dx + dy * dy <= 1;
+  }
+  return Math.abs(p[0] - bounds.cx) <= bounds.hw && Math.abs(p[1] - bounds.cy) <= bounds.hh;
+}
+
+/**
+ * Find intersection of a line segment with bounds boundary.
+ * Returns the parameter t (0-1) of the intersection, or null if none.
+ * For rect: checks all 4 edges. For ellipse: solves quadratic.
+ */
+function segmentBoundsIntersection(
+  a: [number, number], b: [number, number],
+  bounds: { cx: number; cy: number; hw: number; hh: number; isEllipse: boolean },
+): number | null {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+
+  if (bounds.isEllipse) {
+    // Parametric: (a + t*d - c)^2 / r^2 = 1
+    const ox = a[0] - bounds.cx, oy = a[1] - bounds.cy;
+    const A = (dx * dx) / (bounds.hw * bounds.hw) + (dy * dy) / (bounds.hh * bounds.hh);
+    const B = 2 * ((ox * dx) / (bounds.hw * bounds.hw) + (oy * dy) / (bounds.hh * bounds.hh));
+    const C = (ox * ox) / (bounds.hw * bounds.hw) + (oy * oy) / (bounds.hh * bounds.hh) - 1;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    const t1 = (-B - sq) / (2 * A);
+    const t2 = (-B + sq) / (2 * A);
+    // Return the intersection in [0,1] range
+    if (t1 >= 0 && t1 <= 1) return t1;
+    if (t2 >= 0 && t2 <= 1) return t2;
+    return null;
+  }
+
+  // Rect: check 4 edges
+  let bestT: number | null = null;
+  const edges: Array<{ axis: 'x' | 'y'; val: number }> = [
+    { axis: 'x', val: bounds.cx - bounds.hw },
+    { axis: 'x', val: bounds.cx + bounds.hw },
+    { axis: 'y', val: bounds.cy - bounds.hh },
+    { axis: 'y', val: bounds.cy + bounds.hh },
+  ];
+  for (const edge of edges) {
+    let t: number;
+    if (edge.axis === 'x') {
+      if (Math.abs(dx) < 1e-10) continue;
+      t = (edge.val - a[0]) / dx;
+    } else {
+      if (Math.abs(dy) < 1e-10) continue;
+      t = (edge.val - a[1]) / dy;
+    }
+    if (t < 0 || t > 1) continue;
+    // Check the other axis is within bounds
+    const px = a[0] + t * dx;
+    const py = a[1] + t * dy;
+    if (Math.abs(px - bounds.cx) <= bounds.hw + 0.01 && Math.abs(py - bounds.cy) <= bounds.hh + 0.01) {
+      if (bestT === null) bestT = t;
+      else bestT = t; // take the later one for multiple intersections
+    }
+  }
+  return bestT;
+}
+
+/**
+ * Clip a point list at object bounds.
+ * 'start': trims points from the beginning until the path exits the bounds.
+ * 'end': trims points from the end until the path enters the bounds.
+ */
+function clipPathFromBounds(
+  points: [number, number][],
+  bounds: { cx: number; cy: number; hw: number; hh: number; isEllipse: boolean },
+  gap: number,
+  side: 'start' | 'end',
+): [number, number][] {
+  if (points.length < 2) return points;
+
+  if (side === 'start') {
+    // Walk forward, find the first segment that exits the bounds
+    for (let i = 0; i < points.length - 1; i++) {
+      const aInside = isInsideBounds(points[i], bounds);
+      const bInside = isInsideBounds(points[i + 1], bounds);
+
+      if (aInside && !bInside) {
+        // This segment crosses the boundary — find intersection
+        const t = segmentBoundsIntersection(points[i], points[i + 1], bounds);
+        if (t !== null) {
+          const ix = points[i][0] + t * (points[i + 1][0] - points[i][0]);
+          const iy = points[i][1] + t * (points[i + 1][1] - points[i][1]);
+          let clipPoint: [number, number] = [ix, iy];
+          // Apply gap: push outward along the segment direction
+          if (gap > 0) {
+            const dx = points[i + 1][0] - points[i][0];
+            const dy = points[i + 1][1] - points[i][1];
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            clipPoint = [ix + (dx / len) * gap, iy + (dy / len) * gap];
+          }
+          return [clipPoint, ...points.slice(i + 1)];
+        }
+      }
+      if (!aInside) {
+        // Already outside — apply gap if at start
+        if (i === 0 && gap > 0) {
+          const dx = points[0][0] - bounds.cx;
+          const dy = points[0][1] - bounds.cy;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          return [[points[0][0] + (dx / len) * gap, points[0][1] + (dy / len) * gap], ...points.slice(1)];
+        }
+        return points.slice(i);
+      }
+    }
+    // All points inside — return last point
+    return [points[points.length - 1]];
+  }
+
+  // side === 'end'
+  // Walk backward, find the last segment that enters the bounds
+  for (let i = points.length - 1; i > 0; i--) {
+    const aInside = isInsideBounds(points[i], bounds);
+    const bInside = isInsideBounds(points[i - 1], bounds);
+
+    if (aInside && !bInside) {
+      const t = segmentBoundsIntersection(points[i - 1], points[i], bounds);
+      if (t !== null) {
+        const ix = points[i - 1][0] + t * (points[i][0] - points[i - 1][0]);
+        const iy = points[i - 1][1] + t * (points[i][1] - points[i - 1][1]);
+        let clipPoint: [number, number] = [ix, iy];
+        if (gap > 0) {
+          const dx = points[i - 1][0] - points[i][0];
+          const dy = points[i - 1][1] - points[i][1];
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          clipPoint = [ix + (dx / len) * gap, iy + (dy / len) * gap];
+        }
+        return [...points.slice(0, i), clipPoint];
+      }
+    }
+    if (!aInside) {
+      if (i === points.length - 1 && gap > 0) {
+        const last = points[points.length - 1];
+        const dx = last[0] - bounds.cx;
+        const dy = last[1] - bounds.cy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        return [...points.slice(0, -1), [last[0] + (dx / len) * gap, last[1] + (dy / len) * gap]];
+      }
+      return points.slice(0, i + 1);
+    }
+  }
+  return [points[0]];
+}
+
 function applyGap(point: [number, number], toward: [number, number], gap: number): [number, number] {
   const dx = toward[0] - point[0];
   const dy = toward[1] - point[1];
@@ -285,63 +444,50 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       }
     }
 
-    // Determine "next point" for edge snapping direction
-    const firstTarget = waypoints.length > 0 ? waypoints[0] : toCenter;
-    const lastTarget = waypoints.length > 0 ? waypoints[waypoints.length - 1] : fromCenter;
-
-    // Edge snap: resolve from/to to object edges
+    // Resolve anchor positions (or use center)
     let fromPoint = fromCenter;
     let toPoint = toCenter;
+
+    if (path.fromAnchor && typeof path.from === 'string') {
+      const fromNode = findNodeById(allRoots, path.from);
+      if (fromNode) {
+        const anchor = resolveAnchorOnBounds(path.fromAnchor, getNodeBounds(fromNode));
+        if (anchor) fromPoint = anchor;
+      }
+    }
+    if (path.toAnchor && typeof path.to === 'string') {
+      const toNode = findNodeById(allRoots, path.to);
+      if (toNode) {
+        const anchor = resolveAnchorOnBounds(path.toAnchor, getNodeBounds(toNode));
+        if (anchor) toPoint = anchor;
+      }
+    }
+
+    // Build full unclipped path
+    rawPoints = [fromPoint, ...waypoints, toPoint];
+
+    // Clip: trim the path at source and target object boundaries
+    const fromGap = path.fromGap ?? path.gap ?? 0;
+    const toGap = path.toGap ?? path.gap ?? 0;
 
     if (typeof path.from === 'string') {
       const fromNode = findNodeById(allRoots, path.from);
       if (fromNode) {
         const bounds = getNodeBounds(fromNode);
-        if (path.fromAnchor) {
-          // Explicit anchor: line starts from that position on the edge
-          const anchor = resolveAnchorOnBounds(path.fromAnchor, bounds);
-          if (anchor) fromPoint = anchor;
-        } else if (bounds.hw > 0 || bounds.hh > 0) {
-          // Auto: snap to edge facing the target
-          const angle = Math.atan2(firstTarget[1] - bounds.cy, firstTarget[0] - bounds.cx);
-          fromPoint = edgePoint(bounds, angle);
+        if (bounds.hw > 0 || bounds.hh > 0) {
+          rawPoints = clipPathFromBounds(rawPoints, bounds, fromGap, 'start');
         }
       }
     }
-
     if (typeof path.to === 'string') {
       const toNode = findNodeById(allRoots, path.to);
       if (toNode) {
         const bounds = getNodeBounds(toNode);
-        if (path.toAnchor) {
-          const anchor = resolveAnchorOnBounds(path.toAnchor, bounds);
-          if (anchor) toPoint = anchor;
-        } else if (bounds.hw > 0 || bounds.hh > 0) {
-          const angle = Math.atan2(lastTarget[1] - bounds.cy, lastTarget[0] - bounds.cx);
-          toPoint = edgePoint(bounds, angle);
+        if (bounds.hw > 0 || bounds.hh > 0) {
+          rawPoints = clipPathFromBounds(rawPoints, bounds, toGap, 'end');
         }
       }
     }
-
-    // Apply gaps — push outward from the object center (away from the box)
-    const fromGap = path.fromGap ?? path.gap ?? 0;
-    const toGap = path.toGap ?? path.gap ?? 0;
-    if (fromGap > 0) {
-      // Push away from the source center
-      const dx = fromPoint[0] - fromCenter[0];
-      const dy = fromPoint[1] - fromCenter[1];
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      fromPoint = [fromPoint[0] + (dx / len) * fromGap, fromPoint[1] + (dy / len) * fromGap];
-    }
-    if (toGap > 0) {
-      // Push away from the target center
-      const dx = toPoint[0] - toCenter[0];
-      const dy = toPoint[1] - toCenter[1];
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      toPoint = [toPoint[0] + (dx / len) * toGap, toPoint[1] + (dy / len) * toGap];
-    }
-
-    rawPoints = [fromPoint, ...waypoints, toPoint];
   }
 
   if (!rawPoints || rawPoints.length < 2) {
