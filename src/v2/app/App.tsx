@@ -3,8 +3,7 @@ import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabLayout } from './components/TabLayout';
 import { Timeline } from '../../components/Timeline';
-import { Editor } from '../../components/Editor';
-import { v2Linter } from '../editor/v2Linter';
+import { V2Editor } from './components/V2Editor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
 
@@ -242,7 +241,7 @@ export default function App() {
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <Editor value={activeDsl} onChange={updateTabDsl} onClose={tabs.length > 1 ? () => closeTab(activeTabId) : undefined} linterExtension={v2Linter} />
+        <V2Editor value={activeDsl} onChange={updateTabDsl} />
       </div>
     </div>
   );
