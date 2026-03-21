@@ -1,25 +1,13 @@
-import type { Node } from './v2/types/node';
-import type { AnimConfig, Tracks, TrackKeyframe } from './v2/types/animation';
-import type { Chapter, StarchEvent, StarchEventHandler, DiagramHandle } from './core/types';
+import type { SceneObject, Chapter, AnimConfig, Tracks, StarchEvent, StarchEventHandler, DiagramHandle, EffectInstance, EasingName } from './core/types';
 import { Scene } from './core/Scene';
-import { parseScene } from './v2/parser/parser';
-import { buildTimeline } from './v2/animation/timeline';
-import { evaluateAllTracks } from './v2/animation/evaluator';
-import { applyTrackValues } from './v2/animation/applyTracks';
-import { runLayout } from './v2/layout/registry';
-import { registerStrategy } from './v2/layout/registry';
-import { flexStrategy } from './v2/layout/flex';
-import { absoluteStrategy } from './v2/layout/absolute';
-import { computeViewBox, lerpViewBox, type ViewBox } from './v2/renderer/camera';
+import { parseDSL } from './parser/parser';
+import { buildTimeline } from './engine/timeline';
+import { extractEffects } from './engine/effects';
+import { createEvaluator, getActiveChapter } from './engine/evaluator';
+import { computeRenderOrder } from './engine/renderOrder';
+import { findCamera, resolveCamera } from './engine/camera';
 import { createCanvas } from './renderer/svg/dom/renderCanvas';
-import { V2DomRenderer } from './v2/renderer/domRenderer';
-import { getActiveChapter } from './engine/evaluator';
-import { convertOldFormat } from './v2/parser/compat';
-import JSON5 from 'json5';
-
-// Register layout strategies
-registerStrategy('flex', flexStrategy);
-registerStrategy('absolute', absoluteStrategy);
+import { RenderDispatcher } from './renderer/svg/dom/renderObject';
 
 export interface StarchDiagramOptions {
   dsl?: string;
@@ -35,13 +23,14 @@ export interface StarchDiagramOptions {
 export class StarchDiagram implements DiagramHandle {
   private _container: HTMLElement;
   private _canvas: ReturnType<typeof createCanvas>;
-  private _renderer: V2DomRenderer;
+  private _dispatcher: RenderDispatcher;
 
-  private _nodes: Node[] = [];
-  private _styles: Record<string, any> = {};
+  private _objects: Record<string, SceneObject> = {};
+  private _styles: Record<string, Record<string, unknown>> = {};
   private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [], chapters: [] };
-  private _tracks: Tracks = new Map();
-  private _chapters: Chapter[] = [];
+  private _tracks: Tracks = {};
+  private _renderOrder: Array<[string, SceneObject]> = [];
+  private _evaluator = createEvaluator();
 
   private _time = 0;
   private _playing = false;
@@ -60,7 +49,7 @@ export class StarchDiagram implements DiagramHandle {
   constructor(container: HTMLElement, options?: StarchDiagramOptions) {
     this._container = container;
     this._canvas = createCanvas();
-    this._renderer = new V2DomRenderer(this._canvas.content);
+    this._dispatcher = new RenderDispatcher(this._canvas.content);
     this._container.appendChild(this._canvas.svg);
 
     if (options) {
@@ -70,6 +59,7 @@ export class StarchDiagram implements DiagramHandle {
       this._onEvent = options.onEvent;
       this._onChapterEnter = options.onChapterEnter;
       this._onChapterExit = options.onChapterExit;
+      this._dispatcher.setDebug(this._debug);
 
       if (options.scene) {
         this._loadScene(options.scene);
@@ -89,8 +79,8 @@ export class StarchDiagram implements DiagramHandle {
   get duration(): number { return this._animConfig.duration ?? 5; }
   get playing(): boolean { return this._playing; }
   get speed(): number { return this._speed; }
-  get chapters(): Chapter[] { return this._chapters; }
-  get activeChapter(): Chapter | undefined { return getActiveChapter(this._chapters, this._time); }
+  get chapters(): Chapter[] { return this._animConfig.chapters; }
+  get activeChapter(): Chapter | undefined { return getActiveChapter(this._animConfig.chapters, this._time); }
 
   // ── Playback control ──
 
@@ -111,7 +101,8 @@ export class StarchDiagram implements DiagramHandle {
 
   seek(time: number): void {
     this._time = Math.max(0, Math.min(time, this._animConfig.duration ?? 5));
-    this._lastChapter = getActiveChapter(this._chapters, this._time);
+    this._evaluator.reset();
+    this._lastChapter = getActiveChapter(this._animConfig.chapters, this._time);
     this._render();
   }
 
@@ -120,7 +111,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   nextChapter(): void {
-    const sorted = [...this._chapters].sort((a, b) => a.time - b.time);
+    const sorted = [...this._animConfig.chapters].sort((a, b) => a.time - b.time);
     const next = sorted.find((ch) => ch.time > this._time + 0.01);
     if (next) {
       this.seek(next.time);
@@ -129,7 +120,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   prevChapter(): void {
-    const sorted = [...this._chapters].sort((a, b) => b.time - a.time);
+    const sorted = [...this._animConfig.chapters].sort((a, b) => b.time - a.time);
     const prev = sorted.find((ch) => ch.time < this._time - 0.1);
     if (prev) {
       this.seek(prev.time);
@@ -138,7 +129,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   goToChapter(id: string): void {
-    const ch = this._chapters.find((c) => c.id === id);
+    const ch = this._animConfig.chapters.find((c) => c.id === id);
     if (ch) {
       this.seek(ch.time);
       this.play();
@@ -160,6 +151,7 @@ export class StarchDiagram implements DiagramHandle {
 
   setDebug(debug: boolean): void {
     this._debug = debug;
+    this._dispatcher.setDebug(debug);
     this._render();
   }
 
@@ -182,7 +174,7 @@ export class StarchDiagram implements DiagramHandle {
 
   destroy(): void {
     this.pause();
-    this._renderer.clear();
+    this._dispatcher.clear();
     this._canvas.svg.remove();
     this._listeners.clear();
   }
@@ -193,75 +185,36 @@ export class StarchDiagram implements DiagramHandle {
 
   private _loadDSL(dsl: string): void {
     try {
-      // Try v2 format first
-      const scene = parseScene(dsl);
-      this._nodes = scene.nodes;
-      this._styles = scene.styles;
-      this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [], chapters: [] };
-      this._chapters = this._animConfig.chapters?.map(c => ({ id: c.name, name: c.name, title: c.name, time: c.time })) ?? [];
-
-      if (scene.background) {
-        this._canvas.setBackground(scene.background);
+      const result = parseDSL(dsl);
+      this._objects = result.objects;
+      this._styles = result.styles;
+      this._animConfig = result.animConfig;
+      if (result.background) {
+        this._canvas.setBackground(result.background);
       }
-      if (scene.viewport) {
-        if (typeof scene.viewport === 'string') {
-          const match = scene.viewport.match(/^(\d+)[x:](\d+)$/);
-          if (match) {
-            this._viewport = { width: parseInt(match[1]), height: parseInt(match[2]) };
-          }
-        } else if (typeof scene.viewport === 'object') {
-          this._viewport = scene.viewport as { width: number; height: number };
-        }
+      if (result.viewport) {
+        this._viewport = result.viewport;
       }
     } catch {
-      // Try converting from v1 format
-      try {
-        const raw = JSON5.parse(dsl);
-        const converted = convertOldFormat(raw);
-        const scene = parseScene(JSON.stringify(converted));
-        this._nodes = scene.nodes;
-        this._styles = scene.styles;
-        this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [], chapters: [] };
-        this._chapters = this._animConfig.chapters?.map(c => ({ id: c.name, name: c.name, title: c.name, time: c.time })) ?? [];
-      } catch {
-        // Keep previous state on parse error
-        return;
-      }
-    }
-    this._rebuild();
-  }
-
-  private _loadScene(scene: Scene): void {
-    // Convert v1 Scene to v2 by serializing and parsing through compat layer
-    const objects = scene.getObjects();
-    const styles = scene.getStyles();
-    const animConfig = scene.getAnimConfig();
-
-    const raw = {
-      objects: Object.values(objects).map(obj => ({
-        type: obj.type,
-        id: obj.id,
-        ...obj.props,
-      })),
-      styles,
-      animate: animConfig,
-    };
-
-    try {
-      const converted = convertOldFormat(raw);
-      const parsed = parseScene(JSON.stringify(converted));
-      this._nodes = parsed.nodes;
-      this._styles = parsed.styles;
-      this._animConfig = parsed.animate ?? { duration: 5, loop: true, keyframes: [], chapters: [] };
-      this._chapters = this._animConfig.chapters?.map(c => ({ id: c.name, name: c.name, title: c.name, time: c.time })) ?? [];
-    } catch {
+      // Keep previous state on parse error
       return;
     }
     this._rebuild();
   }
 
+  private _loadScene(scene: Scene): void {
+    this._objects = scene.getObjects();
+    this._styles = scene.getStyles();
+    this._animConfig = scene.getAnimConfig();
+    this._rebuild();
+  }
+
   private _rebuild(): void {
-    this._tracks = buildTimeline(this._animConfig);
+    this._tracks = buildTimeline(this._animConfig, this._objects, this._styles);
+    const effects = extractEffects(this._animConfig);
+    this._evaluator = createEvaluator(effects, this._styles);
+    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
+    this._renderOrder = computeRenderOrder(this._objects, animatedProps);
   }
 
   private _scheduleFrame(): void {
@@ -295,7 +248,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   private _checkChapters(): void {
-    const active = getActiveChapter(this._chapters, this._time);
+    const active = getActiveChapter(this._animConfig.chapters, this._time);
     const prev = this._lastChapter;
 
     if (active && active !== prev) {
@@ -331,27 +284,57 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   private _render(): void {
-    // Evaluate all tracks at current time
-    const values = evaluateAllTracks(this._tracks, this._time);
+    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
+    this._dispatcher.update(this._renderOrder, animatedProps, this._objects);
 
-    // Apply evaluated values to node tree (immutable)
-    const animated = applyTrackValues(this._nodes, values);
+    // Apply camera viewBox with smooth target blending
+    const cam = findCamera(this._objects, animatedProps);
+    if (cam) {
+      // Find block times for camera blending
+      const camTracks = Object.keys(this._tracks).filter(k => k.startsWith(cam.id + '.'));
+      let blendInfo: Parameters<typeof resolveCamera>[5] = undefined;
 
-    // Run layout pass
-    runLayout(animated);
+      if (camTracks.length > 0) {
+        const allTimes = new Set<number>();
+        for (const k of camTracks) {
+          for (const kf of this._tracks[k]) allTimes.add(kf.time);
+        }
+        const blockTimes = [...allTimes].sort((a, b) => a - b);
+        let prevBlock = 0, nextBlock = blockTimes[blockTimes.length - 1] || 0;
+        for (const bt of blockTimes) {
+          if (bt <= this._time) prevBlock = bt;
+          if (bt > this._time) { nextBlock = bt; break; }
+        }
+        if (this._time > prevBlock && this._time < nextBlock && prevBlock !== nextBlock) {
+          const fromResult = this._evaluator(this._objects, this._tracks, prevBlock);
+          const toResult = this._evaluator(this._objects, this._tracks, nextBlock);
 
-    // Render to DOM
-    this._renderer.update(animated);
+          // Find easing from the camera track keyframe at nextBlock
+          let easing: EasingName = 'easeInOut';
+          for (const k of camTracks) {
+            const kfs = this._tracks[k];
+            for (const kf of kfs) {
+              if (Math.abs(kf.time - nextBlock) < 0.001 && kf.easing !== 'linear') {
+                easing = kf.easing;
+                break;
+              }
+            }
+            if (easing !== 'easeInOut') break;
+          }
 
-    // Camera
-    const cameraNode = animated.find(n => n.camera);
-    if (cameraNode) {
-      const vb = computeViewBox(cameraNode, animated, {
-        x: 0, y: 0,
-        w: this._viewport.width,
-        h: this._viewport.height,
-      });
-      this._canvas.setViewBox(vb.x, vb.y, vb.w, vb.h);
+          blendInfo = {
+            fromProps: fromResult[cam.id] || {},
+            toProps: toResult[cam.id] || {},
+            fromAllProps: fromResult,
+            toAllProps: toResult,
+            rawT: (this._time - prevBlock) / (nextBlock - prevBlock),
+            easing,
+          };
+        }
+      }
+
+      const vb = resolveCamera(cam.props, animatedProps, this._objects, this._viewport.width, this._viewport.height, blendInfo);
+      this._canvas.setViewBox(vb.x, vb.y, vb.width, vb.height);
     } else {
       this._canvas.clearViewBox();
     }
