@@ -1,6 +1,14 @@
 import type { AnimConfig, KeyframeBlock, TrackKeyframe, Tracks, EasingName, PropertyChange } from '../types/animation';
 import type { Node } from '../types/node';
-import { computeLayoutPlacements, type LayoutResult } from '../layout/registry';
+import { computeLayoutPlacements, registerStrategy, getStrategy } from '../layout/registry';
+import { flexStrategy } from '../layout/flex';
+import { absoluteStrategy } from '../layout/absolute';
+
+// Ensure layout strategies are available for slot expansion
+function ensureStrategies(): void {
+  if (!getStrategy('flex')) registerStrategy('flex', flexStrategy);
+  if (!getStrategy('absolute')) registerStrategy('absolute', absoluteStrategy);
+}
 
 function isPropertyChange(value: unknown): value is PropertyChange {
   return typeof value === 'object' && value !== null && 'value' in value;
@@ -57,6 +65,7 @@ function computeSlotPosition(
   nodeId: string,
   slotValue: string,
 ): { x: number; y: number } | null {
+  ensureStrategies();
   const cloned = cloneWithSlot(nodes, nodeId, slotValue);
   const placements = computeLayoutPlacements(cloned);
   const p = placements.find(r => r.nodeId === nodeId);
