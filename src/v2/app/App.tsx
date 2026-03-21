@@ -1,14 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
+import { TabLayout } from './components/TabLayout';
 import { Timeline } from '../../components/Timeline';
 import { Editor } from '../../components/Editor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
-
 const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
+const PREFS_KEY = 'starch-v2-prefs';
+
+type LayoutMode = 'panel' | 'tab';
 
 interface EditorTab {
   id: string;
@@ -19,29 +22,66 @@ interface EditorTab {
 
 let nextTabId = 1;
 
+function detectDefaultMode(): LayoutMode {
+  if (typeof window === 'undefined') return 'panel';
+  return window.innerWidth < 768 ? 'tab' : 'panel';
+}
+
+function loadPrefs(): { layoutMode: LayoutMode | null; showBrowser: boolean; showEditor: boolean; editorWidth: number } {
+  try {
+    const stored = localStorage.getItem(PREFS_KEY);
+    if (stored) return { layoutMode: null, showBrowser: true, showEditor: true, editorWidth: 360, ...JSON.parse(stored) };
+  } catch { /* ignore */ }
+  return { layoutMode: null, showBrowser: true, showEditor: true, editorWidth: 360 };
+}
+
+function savePrefs(prefs: Record<string, unknown>) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
+}
+
 export default function App() {
+  const initialPrefs = useRef(loadPrefs());
+  const [userLayoutMode, setUserLayoutMode] = useState<LayoutMode | null>(initialPrefs.current.layoutMode);
+  const [autoMode, setAutoMode] = useState<LayoutMode>(detectDefaultMode);
+  const layoutMode = userLayoutMode ?? autoMode;
+
   const [tabs, setTabs] = useState<EditorTab[]>([
     { id: 'sample', label: 'Sample', dsl: DEFAULT_DSL, closable: false },
   ]);
   const [activeTabId, setActiveTabId] = useState('sample');
-  const [showEditor, setShowEditor] = useState(true);
-  const [showBrowser, setShowBrowser] = useState(true);
+  const [showEditor, setShowEditor] = useState(layoutMode === 'panel' ? initialPrefs.current.showEditor : true);
+  const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
   const [debugMode, setDebugMode] = useState(false);
   const [previewRatio, setPreviewRatio] = useState(false);
   const [fitAll, setFitAll] = useState(false);
   const [fixedCamera, setFixedCamera] = useState(false);
   const [panZoom, setPanZoom] = useState<{ x: number; y: number; zoom: number } | null>(null);
-  const [editorWidth, setEditorWidth] = useState(360);
+  const [editorWidth, setEditorWidth] = useState(initialPrefs.current.editorWidth);
   const [isDragging, setIsDragging] = useState(false);
   const [activeSampleId, setActiveSampleId] = useState<string | null>(v2Samples[0]?.name || null);
   const dragging = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
+  // Auto-detect layout on resize (only when user hasn't explicitly chosen)
+  useEffect(() => {
+    if (userLayoutMode !== null) return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setAutoMode(e.matches ? 'tab' : 'panel');
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [userLayoutMode]);
+
+  // Persist prefs
+  useEffect(() => {
+    savePrefs({ layoutMode: userLayoutMode, showBrowser, showEditor, editorWidth });
+  }, [userLayoutMode, showBrowser, showEditor, editorWidth]);
+
+  const isCompact = layoutMode === 'tab';
+
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const activeDsl = activeTab.dsl;
 
-  // Compute viewport override from pan/zoom state
-  const vpW = 800; // TODO: derive from diagram viewport setting
+  const vpW = 800;
   const vpH = 500;
   let viewportOverride: ViewBox | null = null;
   if (panZoom) {
@@ -58,7 +98,6 @@ export default function App() {
     viewportOverride: fixedCamera ? viewportOverride : null,
   });
 
-  // Seek to end when DSL changes
   const lastDslRef = useRef(activeDsl);
   if (lastDslRef.current !== activeDsl) {
     lastDslRef.current = activeDsl;
@@ -84,8 +123,7 @@ export default function App() {
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabId++);
     setTabs(prev => [...prev, {
-      id,
-      label: 'Untitled',
+      id, label: 'Untitled',
       dsl: '{\n  objects: [],\n  animate: {\n    duration: 3,\n    loop: true,\n    keyframes: [],\n  },\n}',
       closable: true,
     }]);
@@ -95,12 +133,118 @@ export default function App() {
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {
       const remaining = prev.filter(t => t.id !== id);
-      if (activeTabId === id) {
-        setActiveTabId(remaining[remaining.length - 1]?.id || 'sample');
-      }
+      if (activeTabId === id) setActiveTabId(remaining[remaining.length - 1]?.id || 'sample');
       return remaining;
     });
   }, [activeTabId]);
+
+  const toggleLayoutMode = useCallback(() => {
+    const next: LayoutMode = layoutMode === 'panel' ? 'tab' : 'panel';
+    setUserLayoutMode(next);
+  }, [layoutMode]);
+
+  // Touch-friendly button size
+  const btnPad = isCompact ? '8px 14px' : '4px 10px';
+  const btnSize = isCompact ? 12 : 11;
+
+  // Shared canvas content (used by both layouts)
+  const canvasContent = (
+    <div
+      style={{
+        width: '100%', height: '100%', position: 'relative', overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'grab',
+      }}
+      onWheel={(e) => {
+        e.preventDefault();
+        const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) / rect.width;
+        const my = (e.clientY - rect.top) / rect.height;
+        const viewW = vpW / cur.zoom;
+        const viewH = vpH / cur.zoom;
+        const worldX = cur.x - viewW / 2 + mx * viewW;
+        const worldY = cur.y - viewH / 2 + my * viewH;
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        const newZoom = Math.max(0.1, Math.min(20, cur.zoom * factor));
+        const newViewW = vpW / newZoom;
+        const newViewH = vpH / newZoom;
+        setPanZoom({ x: worldX + newViewW * (0.5 - mx), y: worldY + newViewH * (0.5 - my), zoom: newZoom });
+        setFitAll(false);
+        if (!fixedCamera) setFixedCamera(true);
+      }}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
+        const pixelToWorld = (vpW / cur.zoom) / rect.width;
+        const onMove = (me: MouseEvent) => {
+          setPanZoom({ x: cur.x - (me.clientX - startX) * pixelToWorld, y: cur.y - (me.clientY - startY) * pixelToWorld, zoom: cur.zoom });
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          document.body.style.cursor = '';
+        };
+        document.body.style.cursor = 'grabbing';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        setFitAll(false);
+        if (!fixedCamera) setFixedCamera(true);
+      }}
+    >
+      <div ref={diagram.containerRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
+
+  const timelineContent = (
+    <Timeline
+      time={diagram.time}
+      duration={diagram.duration}
+      playing={diagram.playing}
+      speed={diagram.speed}
+      chapters={diagram.chapters}
+      onSeek={(t) => { diagram.seek(t); diagram.setPlaying(false); }}
+      onTogglePlay={() => {
+        if (!diagram.playing && diagram.time >= diagram.duration - 0.01) diagram.seek(0);
+        diagram.setPlaying(!diagram.playing);
+      }}
+      onRestart={() => { diagram.seek(0); diagram.setPlaying(true); }}
+      onSpeedChange={diagram.setSpeed}
+    />
+  );
+
+  const editorContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1d24',
+        flexShrink: 0, background: '#0a0c10', overflow: 'hidden',
+      }}>
+        {tabs.map(tab => (
+          <div
+            key={tab.id}
+            onClick={() => setActiveTabId(tab.id)}
+            style={{
+              padding: '6px 12px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
+              color: tab.id === activeTabId ? '#e2e5ea' : '#6b7280',
+              background: tab.id === activeTabId ? '#0e1117' : 'transparent',
+              borderBottom: tab.id === activeTabId ? '2px solid #a78bfa' : '2px solid transparent',
+              whiteSpace: 'nowrap', userSelect: 'none',
+            }}
+          >
+            {tab.label}
+          </div>
+        ))}
+        <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <Editor value={activeDsl} onChange={updateTabDsl} onClose={tabs.length > 1 ? () => closeTab(activeTabId) : undefined} />
+      </div>
+    </div>
+  );
 
   return (
     <div style={{
@@ -120,14 +264,15 @@ export default function App() {
           -webkit-appearance: none; height: 4px; background: #1e2028; border-radius: 2px; outline: none;
         }
         input[type=range]::-webkit-slider-thumb {
-          -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-          background: #a78bfa; cursor: pointer; border: 2px solid #0e1117;
+          -webkit-appearance: none; width: ${isCompact ? 20 : 14}px; height: ${isCompact ? 20 : 14}px;
+          border-radius: 50%; background: #a78bfa; cursor: pointer; border: 2px solid #0e1117;
         }
       `}</style>
 
       {/* Header */}
       <div style={{
-        padding: '10px 20px', display: 'flex', alignItems: 'center',
+        padding: isCompact ? '8px 12px' : '10px 20px',
+        display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', borderBottom: '1px solid #1a1d24', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -138,85 +283,99 @@ export default function App() {
           <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e5ea' }}>starch</span>
           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 2, fontWeight: 600 }}>v2</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {[
-            { label: 'Samples', active: showBrowser, onClick: () => setShowBrowser(!showBrowser) },
-            null, // separator
-            { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
-            ...(diagram.viewport ? [{ label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) }] : []),
-            { label: 'Fit All', active: fitAll, onClick: () => { setFitAll(!fitAll); setPanZoom(null); if (!fitAll && !fixedCamera) setFixedCamera(true); } },
-            { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); setFitAll(false); } } },
-            null,
-            { label: showEditor ? 'Hide' : 'Edit', active: false, onClick: () => { const next = !showEditor; setShowEditor(next); if (!next) setShowBrowser(false); } },
-          ].map((btn, i) => {
-            if (!btn) return <div key={`sep-${i}`} style={{ width: 1, height: 20, background: '#1e2028', margin: '0 4px' }} />;
-            return (
-              <button
-                key={btn.label}
-                onClick={btn.onClick}
-                style={{
-                  padding: '4px 10px', borderRadius: 6,
-                  border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
-                  background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
-                  color: btn.active ? '#a78bfa' : '#6b7280',
-                  fontSize: 11, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {btn.label}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', gap: isCompact ? 4 : 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Layout mode toggle */}
+          <button
+            onClick={toggleLayoutMode}
+            style={{
+              padding: btnPad, borderRadius: 6,
+              border: '1px solid #a78bfa',
+              background: 'rgba(167,139,250,0.06)',
+              color: '#a78bfa',
+              fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
+              minHeight: isCompact ? 44 : undefined,
+            }}
+          >
+            {layoutMode === 'panel' ? '☰ Panel' : '⊞ Tab'}
+          </button>
+
+          {!isCompact && (
+            <>
+              <div style={{ width: 1, height: 20, background: '#1e2028', margin: '0 4px' }} />
+              {[
+                { label: 'Samples', active: showBrowser, onClick: () => setShowBrowser(!showBrowser) },
+                { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
+                { label: 'Fit All', active: fitAll, onClick: () => { setFitAll(!fitAll); setPanZoom(null); if (!fitAll && !fixedCamera) setFixedCamera(true); } },
+                { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); setFitAll(false); } } },
+                { label: showEditor ? 'Hide' : 'Edit', active: false, onClick: () => { const next = !showEditor; setShowEditor(next); if (!next) setShowBrowser(false); } },
+              ].map(btn => (
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  style={{
+                    padding: btnPad, borderRadius: 6,
+                    border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
+                    background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
+                    color: btn.active ? '#a78bfa' : '#6b7280',
+                    fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
       {/* Body */}
-      <div
-        ref={bodyRef}
-        style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, userSelect: isDragging ? 'none' : 'auto' }}
-        onMouseMove={(e) => {
-          if (!dragging.current || !bodyRef.current) return;
-          const browserWidth = showBrowser ? 240 : 0;
-          const bodyLeft = bodyRef.current.getBoundingClientRect().left;
-          setEditorWidth(Math.max(e.clientX - bodyLeft - browserWidth, 200));
-        }}
-        onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
-        onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
-      >
-        {/* Sample browser */}
-        {showBrowser && (
-          <V2SampleBrowser
-            activeSampleId={activeSampleId}
-            onSelect={handleSampleClick}
-          />
-        )}
+      {isCompact ? (
+        <TabLayout
+          canvasContent={canvasContent}
+          timelineContent={timelineContent}
+          editorContent={editorContent}
+          onSampleSelect={handleSampleClick}
+          activeSampleId={activeSampleId}
+        />
+      ) : (
+        <div
+          ref={bodyRef}
+          style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, userSelect: isDragging ? 'none' : 'auto' }}
+          onMouseMove={(e) => {
+            if (!dragging.current || !bodyRef.current) return;
+            const browserWidth = showBrowser ? 240 : 0;
+            const bodyLeft = bodyRef.current.getBoundingClientRect().left;
+            setEditorWidth(Math.max(e.clientX - bodyLeft - browserWidth, 200));
+          }}
+          onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
+          onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
+        >
+          {/* Sample browser — slide in/out */}
+          <div style={{
+            width: showBrowser ? 240 : 0,
+            flexShrink: 0, overflow: 'hidden',
+            transition: 'width 0.2s ease',
+          }}>
+            <V2SampleBrowser
+              activeSampleId={activeSampleId}
+              onSelect={handleSampleClick}
+            />
+          </div>
 
-        {/* Editor panel */}
-        {showEditor && (
-          <>
-            <div style={{ width: editorWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #1a1d24', minHeight: 0, overflow: 'hidden' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1d24',
-                flexShrink: 0, background: '#0a0c10', overflow: 'hidden',
-              }}>
-                {tabs.map(tab => (
-                  <div
-                    key={tab.id}
-                    onClick={() => setActiveTabId(tab.id)}
-                    style={{
-                      padding: '6px 12px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
-                      color: tab.id === activeTabId ? '#e2e5ea' : '#6b7280',
-                      background: tab.id === activeTabId ? '#0e1117' : 'transparent',
-                      borderBottom: tab.id === activeTabId ? '2px solid #a78bfa' : '2px solid transparent',
-                      whiteSpace: 'nowrap', userSelect: 'none',
-                    }}
-                  >
-                    {tab.label}
-                  </div>
-                ))}
-                <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
-              </div>
-              <Editor value={activeDsl} onChange={updateTabDsl} onClose={tabs.length > 1 ? () => closeTab(activeTabId) : undefined} />
-            </div>
+          {/* Editor panel — slide in/out */}
+          <div style={{
+            width: showEditor ? editorWidth : 0,
+            flexShrink: 0, overflow: 'hidden',
+            transition: isDragging ? 'none' : 'width 0.2s ease',
+            display: 'flex', flexDirection: 'column',
+            borderRight: showEditor ? '1px solid #1a1d24' : 'none',
+            minHeight: 0,
+          }}>
+            {editorContent}
+          </div>
+
+          {/* Resize handle */}
+          {showEditor && (
             <div
               onMouseDown={(e) => { e.preventDefault(); dragging.current = true; setIsDragging(true); }}
               style={{
@@ -227,77 +386,17 @@ export default function App() {
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#22d3ee40'; }}
               onMouseLeave={(e) => { if (!dragging.current) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
             />
-          </>
-        )}
+          )}
 
-        {/* Diagram canvas */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div
-            style={{
-              flex: 1, position: 'relative', overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'grab',
-            }}
-            onWheel={(e) => {
-              e.preventDefault();
-              const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
-              const rect = e.currentTarget.getBoundingClientRect();
-              const mx = (e.clientX - rect.left) / rect.width;
-              const my = (e.clientY - rect.top) / rect.height;
-              const viewW = vpW / cur.zoom;
-              const viewH = vpH / cur.zoom;
-              const worldX = cur.x - viewW / 2 + mx * viewW;
-              const worldY = cur.y - viewH / 2 + my * viewH;
-              const factor = e.deltaY > 0 ? 0.9 : 1.1;
-              const newZoom = Math.max(0.1, Math.min(20, cur.zoom * factor));
-              const newViewW = vpW / newZoom;
-              const newViewH = vpH / newZoom;
-              setPanZoom({ x: worldX + newViewW * (0.5 - mx), y: worldY + newViewH * (0.5 - my), zoom: newZoom });
-              setFitAll(false);
-              if (!fixedCamera) setFixedCamera(true);
-            }}
-            onMouseDown={(e) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-              const startX = e.clientX;
-              const startY = e.clientY;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
-              const pixelToWorld = (vpW / cur.zoom) / rect.width;
-              const onMove = (me: MouseEvent) => {
-                setPanZoom({ x: cur.x - (me.clientX - startX) * pixelToWorld, y: cur.y - (me.clientY - startY) * pixelToWorld, zoom: cur.zoom });
-              };
-              const onUp = () => {
-                window.removeEventListener('mousemove', onMove);
-                window.removeEventListener('mouseup', onUp);
-                document.body.style.cursor = '';
-              };
-              document.body.style.cursor = 'grabbing';
-              window.addEventListener('mousemove', onMove);
-              window.addEventListener('mouseup', onUp);
-              setFitAll(false);
-              if (!fixedCamera) setFixedCamera(true);
-            }}
-          >
-            <div ref={diagram.containerRef} style={{ width: '100%', height: '100%' }} />
+          {/* Diagram canvas + timeline */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              {canvasContent}
+            </div>
+            {timelineContent}
           </div>
-
-          <Timeline
-            time={diagram.time}
-            duration={diagram.duration}
-            playing={diagram.playing}
-            speed={diagram.speed}
-            chapters={diagram.chapters}
-            onSeek={(t) => { diagram.seek(t); diagram.setPlaying(false); }}
-            onTogglePlay={() => {
-              if (!diagram.playing && diagram.time >= diagram.duration - 0.01) diagram.seek(0);
-              diagram.setPlaying(!diagram.playing);
-            }}
-            onRestart={() => { diagram.seek(0); diagram.setPlaying(true); }}
-            onSpeedChange={diagram.setSpeed}
-          />
         </div>
-      </div>
+      )}
     </div>
   );
 }
