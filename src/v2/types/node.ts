@@ -8,20 +8,20 @@ import type { HslColor, Stroke, Transform, Dash, Layout, LayoutHint, Size } from
 // ─── Geometry Schemas ───────────────────────────────────────────
 
 export const RectGeomSchema = z.object({
-  w: z.number().min(0).describe('Width'),
-  h: z.number().min(0).describe('Height'),
-  radius: z.number().min(0).describe('Corner radius').optional(),
+  w: z.number().min(0).max(2000).describe('Width'),
+  h: z.number().min(0).max(2000).describe('Height'),
+  radius: z.number().min(0).max(100).describe('Corner radius').optional(),
 });
 
 export const EllipseGeomSchema = z.object({
-  rx: z.number().min(0).describe('Horizontal radius'),
-  ry: z.number().min(0).describe('Vertical radius'),
+  rx: z.number().min(0).max(500).describe('Horizontal radius'),
+  ry: z.number().min(0).max(500).describe('Vertical radius'),
 });
 
 export const TextGeomSchema = z.object({
   content: z.string().describe('Text content'),
-  size: z.number().min(1).describe('Font size'),
-  lineHeight: z.number().min(0).describe('Line height').optional(),
+  size: z.number().min(1).max(200).describe('Font size'),
+  lineHeight: z.number().min(0).max(200).describe('Line height').optional(),
   align: z.enum(['start', 'middle', 'end']).describe('Text alignment').optional(),
   bold: z.boolean().describe('Bold text').optional(),
   mono: z.boolean().describe('Monospace font').optional(),
@@ -41,18 +41,18 @@ export const PathGeomSchema = z.object({
   toAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('End anchor').optional(),
   closed: z.boolean().describe('Close the path').optional(),
   smooth: z.boolean().describe('Catmull-Rom spline').optional(),
-  bend: z.number().describe('Curve bend amount').optional(),
+  bend: z.number().min(-5).max(5).describe('Curve bend amount').optional(),
   route: z.array(z.tuple([z.number(), z.number()])).describe('Waypoints').optional(),
-  radius: z.number().min(0).describe('Corner radius for routed paths').optional(),
+  radius: z.number().min(0).max(100).describe('Corner radius for routed paths').optional(),
   drawProgress: z.number().min(0).max(1).describe('Draw progress (0-1)').optional(),
 });
 
 export const ImageGeomSchema = z.object({
   src: z.string().describe('Image source URL'),
   fit: z.enum(['contain', 'cover', 'fill']).describe('Image fit mode').optional(),
-  padding: z.number().min(0).describe('Image padding').optional(),
-  w: z.number().min(0).describe('Width'),
-  h: z.number().min(0).describe('Height'),
+  padding: z.number().min(0).max(100).describe('Image padding').optional(),
+  w: z.number().min(0).max(2000).describe('Width'),
+  h: z.number().min(0).max(2000).describe('Height'),
 });
 
 export const CameraSchema = z.object({
@@ -84,7 +84,7 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   transform: TransformSchema.describe('Position and orientation').optional(),
 
   // Non-inheritable
-  depth: z.number().describe('Z-order depth').optional(),
+  depth: z.number().min(-100).max(100).describe('Z-order depth').optional(),
   dash: DashSchema.describe('Dash pattern').optional(),
   size: SizeSchema.describe('Explicit size for layout').optional(),
   layout: LayoutSchema.describe('Layout strategy').optional(),
