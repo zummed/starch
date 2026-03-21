@@ -80,13 +80,28 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
     }));
   }
 
-  // Label
+  // Label with background
   if (label) {
+    const labelPadX = 6;
+    const labelPadY = 3;
+    const estWidth = label.length * labelSize * 0.6 + labelPadX * 2;
+    const estHeight = labelSize + labelPadY * 2;
     children.push(createNode({
       id: `${id}.label`,
-      text: { content: label, size: labelSize, align: 'middle' },
-      fill: { h: 0, s: 0, l: 80 },
       transform: { pathFollow: `${id}.route`, pathProgress: 0.5 },
+      children: [
+        createNode({
+          id: `${id}.label.bg`,
+          rect: { w: estWidth, h: estHeight, radius: 3 },
+          fill: { h: 0, s: 0, l: 8 },
+          opacity: 0.85,
+        }),
+        createNode({
+          id: `${id}.label.text`,
+          text: { content: label, size: labelSize, align: 'middle' },
+          fill: { h: 0, s: 0, l: 80 },
+        }),
+      ],
     }));
   }
 

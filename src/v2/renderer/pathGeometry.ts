@@ -104,7 +104,25 @@ export function getNodeBounds(node: Node): { cx: number; cy: number; hw: number;
   if (node.size) {
     return { cx, cy, hw: node.size.w / 2, hh: node.size.h / 2, isEllipse: false };
   }
-  // Text or container with no explicit size — small default
+  // Composition: find bounds from children's geometry
+  if (node.children.length > 0) {
+    let maxHw = 0, maxHh = 0;
+    for (const child of node.children) {
+      if (child.rect) {
+        maxHw = Math.max(maxHw, child.rect.w / 2);
+        maxHh = Math.max(maxHh, child.rect.h / 2);
+      } else if (child.ellipse) {
+        maxHw = Math.max(maxHw, child.ellipse.rx);
+        maxHh = Math.max(maxHh, child.ellipse.ry);
+      } else if (child.image) {
+        maxHw = Math.max(maxHw, child.image.w / 2);
+        maxHh = Math.max(maxHh, child.image.h / 2);
+      }
+    }
+    if (maxHw > 0 || maxHh > 0) {
+      return { cx, cy, hw: maxHw, hh: maxHh, isEllipse: false };
+    }
+  }
   return { cx, cy, hw: 0, hh: 0, isEllipse: false };
 }
 
