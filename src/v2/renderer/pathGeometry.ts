@@ -217,6 +217,27 @@ function resolveAnchorOnBounds(
 }
 
 /**
+ * Convert an anchor to a far-away target point in that direction.
+ * Used to determine which edge to snap to when an anchor biases the exit direction.
+ */
+function anchorDirection(
+  anchor: string | [number, number],
+  bounds: { cx: number; cy: number; hw: number; hh: number },
+): [number, number] {
+  const FAR = 10000;
+  if (Array.isArray(anchor)) {
+    // Float anchor [0-1, 0-1] → direction from center
+    return [bounds.cx + (anchor[0] - 0.5) * FAR, bounds.cy + (anchor[1] - 0.5) * FAR];
+  }
+  const offsets = NAMED_ANCHOR_OFFSETS[anchor];
+  if (!offsets || (offsets[0] === 0 && offsets[1] === 0)) {
+    // center or unknown → no direction bias, return a point far to the right as fallback
+    return [bounds.cx + FAR, bounds.cy];
+  }
+  return [bounds.cx + offsets[0] * FAR, bounds.cy + offsets[1] * FAR];
+}
+
+/**
  * If a point is inside the bounds, push it to the edge along the direction toward the target.
  */
 function ensureOutsideBounds(
@@ -276,13 +297,14 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       const fromNode = findNodeById(allRoots, path.from);
       if (fromNode) {
         const bounds = getNodeBounds(fromNode);
-        if (path.fromAnchor) {
-          const anchor = resolveAnchorOnBounds(path.fromAnchor, bounds);
-          if (anchor) {
-            fromPoint = ensureOutsideBounds(anchor, firstTarget, bounds);
-          }
-        } else if (bounds.hw > 0 || bounds.hh > 0) {
-          const angle = Math.atan2(firstTarget[1] - bounds.cy, firstTarget[0] - bounds.cx);
+        if (bounds.hw > 0 || bounds.hh > 0) {
+          // Always snap to the edge facing the target
+          // fromAnchor can bias the exit direction but we always ensure
+          // the point is on the edge and outside the bounds
+          const target = path.fromAnchor
+            ? anchorDirection(path.fromAnchor, bounds)
+            : firstTarget;
+          const angle = Math.atan2(target[1] - bounds.cy, target[0] - bounds.cx);
           fromPoint = edgePoint(bounds, angle);
         }
       }
@@ -292,13 +314,11 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       const toNode = findNodeById(allRoots, path.to);
       if (toNode) {
         const bounds = getNodeBounds(toNode);
-        if (path.toAnchor) {
-          const anchor = resolveAnchorOnBounds(path.toAnchor, bounds);
-          if (anchor) {
-            toPoint = ensureOutsideBounds(anchor, lastTarget, bounds);
-          }
-        } else if (bounds.hw > 0 || bounds.hh > 0) {
-          const angle = Math.atan2(lastTarget[1] - bounds.cy, lastTarget[0] - bounds.cx);
+        if (bounds.hw > 0 || bounds.hh > 0) {
+          const source = path.toAnchor
+            ? anchorDirection(path.toAnchor, bounds)
+            : lastTarget;
+          const angle = Math.atan2(source[1] - bounds.cy, source[0] - bounds.cx);
           toPoint = edgePoint(bounds, angle);
         }
       }
