@@ -293,21 +293,17 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
     let fromPoint = fromCenter;
     let toPoint = toCenter;
 
-    // Determine if line has routing (bend, smooth, waypoints) — anchors only
-    // apply when the line can actually exit in a non-target direction
-    const hasRouting = (path.bend && path.bend !== 0) || path.smooth || waypoints.length > 0;
-
     if (typeof path.from === 'string') {
       const fromNode = findNodeById(allRoots, path.from);
       if (fromNode) {
         const bounds = getNodeBounds(fromNode);
-        if (bounds.hw > 0 || bounds.hh > 0) {
-          // With routing + anchor: exit in the anchor's direction
-          // Without routing: always exit toward the first target point
-          const target = (hasRouting && path.fromAnchor)
-            ? anchorDirection(path.fromAnchor, bounds)
-            : firstTarget;
-          const angle = Math.atan2(target[1] - bounds.cy, target[0] - bounds.cx);
+        if (path.fromAnchor) {
+          // Explicit anchor: line starts from that position on the edge
+          const anchor = resolveAnchorOnBounds(path.fromAnchor, bounds);
+          if (anchor) fromPoint = anchor;
+        } else if (bounds.hw > 0 || bounds.hh > 0) {
+          // Auto: snap to edge facing the target
+          const angle = Math.atan2(firstTarget[1] - bounds.cy, firstTarget[0] - bounds.cx);
           fromPoint = edgePoint(bounds, angle);
         }
       }
@@ -317,11 +313,11 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       const toNode = findNodeById(allRoots, path.to);
       if (toNode) {
         const bounds = getNodeBounds(toNode);
-        if (bounds.hw > 0 || bounds.hh > 0) {
-          const source = (hasRouting && path.toAnchor)
-            ? anchorDirection(path.toAnchor, bounds)
-            : lastTarget;
-          const angle = Math.atan2(source[1] - bounds.cy, source[0] - bounds.cx);
+        if (path.toAnchor) {
+          const anchor = resolveAnchorOnBounds(path.toAnchor, bounds);
+          if (anchor) toPoint = anchor;
+        } else if (bounds.hw > 0 || bounds.hh > 0) {
+          const angle = Math.atan2(lastTarget[1] - bounds.cy, lastTarget[0] - bounds.cx);
           toPoint = edgePoint(bounds, angle);
         }
       }
