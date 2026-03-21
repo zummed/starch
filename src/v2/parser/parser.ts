@@ -1,8 +1,8 @@
 import JSON5 from 'json5';
 import type { Node } from '../types/node';
+import { createNode } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { expandTemplates } from '../templates/registry';
-import { resolveStyles } from '../tree/resolve';
 import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
@@ -17,6 +17,22 @@ export interface ParsedScene {
   trackPaths: string[];
 }
 
+/**
+ * Convert style definitions into real nodes with _isStyle: true.
+ * These nodes sit at the top level of the tree and are walked by the
+ * tree walker like any other node, generating animatable track paths.
+ */
+function stylesToNodes(styles: Record<string, any>): Node[] {
+  const nodes: Node[] = [];
+  for (const [name, def] of Object.entries(styles)) {
+    const { style: _parentStyle, ...props } = def;
+    const node = createNode({ id: name, ...props });
+    node._isStyle = true;
+    nodes.push(node);
+  }
+  return nodes;
+}
+
 export function parseScene(input: string): ParsedScene {
   registerBuiltinTemplates();
 
@@ -28,22 +44,23 @@ export function parseScene(input: string): ParsedScene {
   const viewport = raw.viewport;
   const images = raw.images as Record<string, string> | undefined;
 
-  // Expand templates (if any objects use template syntax)
+  // Expand templates
   const expanded = expandTemplates(raw.objects ?? []);
 
-  // Merge styles
-  const styled = Object.keys(styles).length > 0
-    ? resolveStyles(expanded, styles)
-    : expanded;
+  // Convert styles to first-class nodes
+  const styleNodes = stylesToNodes(styles);
 
-  // Validate
-  validateTree(styled, styles);
+  // Combine: style nodes first, then object nodes
+  const allNodes = [...styleNodes, ...expanded];
 
-  // Generate track paths
-  const trackPaths = generateTrackPaths(styled);
+  // Validate (style nodes share namespace with object nodes)
+  validateTree(allNodes);
+
+  // Generate track paths (walks all nodes including style nodes)
+  const trackPaths = generateTrackPaths(allNodes);
 
   return {
-    nodes: styled,
+    nodes: allNodes,
     styles,
     animate,
     background,

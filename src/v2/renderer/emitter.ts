@@ -168,6 +168,22 @@ function emitNode(
 ): void {
   if (!node.visible) return;
 
+  // Style nodes don't render — they just exist in the tree for animation
+  if (node._isStyle) return;
+
+  // Resolve style: look up style node and use its properties as defaults
+  let styleFill: HslColor | undefined;
+  let styleStroke: Stroke | undefined;
+  let styleOpacity: number | undefined;
+  if (node.style) {
+    const styleNode = findNodeById(allRoots, node.style);
+    if (styleNode) {
+      styleFill = styleNode.fill;
+      styleStroke = styleNode.stroke;
+      styleOpacity = styleNode.opacity;
+    }
+  }
+
   // Resolve transform
   let x = node.transform?.x ?? 0;
   let y = node.transform?.y ?? 0;
@@ -189,10 +205,11 @@ function emitNode(
   }
 
   backend.pushTransform(x, y, rotation, scale);
-  backend.pushOpacity(node.opacity ?? 1);
+  backend.pushOpacity(node.opacity ?? styleOpacity ?? 1);
 
-  const fill = node.fill ?? parentFill;
-  const stroke = node.stroke ?? parentStroke;
+  // Priority: own > style > parent
+  const fill = node.fill ?? styleFill ?? parentFill;
+  const stroke = node.stroke ?? styleStroke ?? parentStroke;
   const fillRgba = hslFillToRgba(fill);
   const strokeStyle = strokeToStyle(stroke, node.dash);
 
@@ -256,7 +273,7 @@ export function emitFrame(
   }
 
   const sorted = [...nodes]
-    .filter(n => !n.camera)
+    .filter(n => !n.camera && !n._isStyle)
     .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
 
   for (const root of sorted) {

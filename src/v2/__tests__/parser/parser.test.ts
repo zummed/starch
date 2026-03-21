@@ -14,7 +14,7 @@ describe('parseScene', () => {
     expect(scene.nodes[0].rect!.w).toBe(100);
   });
 
-  it('applies styles to nodes', () => {
+  it('creates style nodes as first-class nodes in the tree', () => {
     const input = `{
       styles: {
         primary: { fill: { h: 210, s: 70, l: 45 } }
@@ -24,7 +24,17 @@ describe('parseScene', () => {
       ]
     }`;
     const scene = parseScene(input);
-    expect(scene.nodes[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+    // Style becomes a real node
+    const styleNode = scene.nodes.find(n => n.id === 'primary');
+    expect(styleNode).toBeDefined();
+    expect(styleNode!._isStyle).toBe(true);
+    expect(styleNode!.fill).toEqual({ h: 210, s: 70, l: 45 });
+    // Object node references the style but doesn't have fill baked in
+    const objNode = scene.nodes.find(n => n.id === 'n1');
+    expect(objNode).toBeDefined();
+    expect(objNode!.style).toBe('primary');
+    // Style generates track paths for animation
+    expect(scene.trackPaths).toContain('primary.fill.h');
   });
 
   it('generates track paths', () => {
@@ -79,8 +89,9 @@ describe('parseScene', () => {
       ]
     }`;
     const scene = parseScene(input);
-    expect(scene.nodes[0].children).toHaveLength(1);
-    expect(scene.nodes[0].children[0].id).toBe('child');
+    const parent = scene.nodes.find(n => n.id === 'parent')!;
+    expect(parent.children).toHaveLength(1);
+    expect(parent.children[0].id).toBe('child');
     expect(scene.trackPaths).toContain('parent.child.fill.h');
   });
 

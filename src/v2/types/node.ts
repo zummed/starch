@@ -158,6 +158,7 @@ export interface Node {
   camera?: { target?: PointRef; zoom?: number; fit?: string[] };
   _ownKeys?: Set<string>;
   _styleKeys?: Set<string>;
+  _isStyle?: boolean;
 }
 
 export function createNode(input: NodeInput): Node {
