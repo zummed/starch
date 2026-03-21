@@ -190,13 +190,13 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       }
     }
 
-    // Clicking on a value (after the colon)
-    if (!ctx.isPropertyName && ctx.currentKey && ctx.path) {
+    // Clicking on a value (after the colon or inside an array)
+    if (!ctx.isPropertyName && ctx.path) {
       const { schemaPath: basePath, rootSchema } = resolveDslPath(ctx.path);
       let schemaPath = basePath;
 
       // Append current key if not already at the end
-      if (!schemaPath.endsWith(ctx.currentKey)) {
+      if (ctx.currentKey && !schemaPath.endsWith(ctx.currentKey)) {
         schemaPath = schemaPath ? `${schemaPath}.${ctx.currentKey}` : ctx.currentKey;
       }
 
@@ -206,14 +206,15 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       const type = detectSchemaType(schema);
       // Show popup for types that have widgets
       if (['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) {
-        const currentValue = extractValueAtCursor(doc, pos, type, ctx.currentKey);
+        const key = ctx.currentKey || schemaPath.split('.').pop() || '';
+        const currentValue = extractValueAtCursor(doc, pos, type, key);
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
           setPopup({
             schemaPath,
             dslPath: ctx.path,
-            key: ctx.currentKey,
+            key: key,
             cursorPos: pos,
             value: currentValue,
             position: { x: coords.left, y: coords.bottom + 4 },
