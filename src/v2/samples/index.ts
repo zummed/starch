@@ -555,22 +555,22 @@ export const v2Samples: V2Sample[] = [
   objects: [
     {
       id: "left",
-      rect: { w: 160, h: 120 },
+      rect: { w: 0, h: 0 },
       fill: { h: 210, s: 30, l: 15 },
       stroke: { h: 210, s: 50, l: 40, width: 1 },
-      layout: { type: "flex", direction: "column", gap: 8 },
+      layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 120, y: 150 }
     },
     {
       id: "right",
-      rect: { w: 160, h: 120 },
+      rect: { w: 0, h: 0 },
       fill: { h: 0, s: 30, l: 15 },
       stroke: { h: 0, s: 50, l: 40, width: 1 },
-      layout: { type: "flex", direction: "column", gap: 8 },
+      layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 350, y: 150 }
     },
     { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 210, s: 60, l: 45 }, slot: "left" },
-    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 120, s: 60, l: 45 }, slot: "left" },
+    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 120, s: 60, l: 45 }, slot: "right" },
     { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 40, s: 80, l: 50 }, slot: "left" }
   ],
   animate: {

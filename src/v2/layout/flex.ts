@@ -127,12 +127,20 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   }
   const maxCross = containerCross > 0 ? containerCross - padding * 2 : Math.max(...sizes.map(s => s.cross));
 
-  // Offset to center-origin: since rects draw centered, the container's
-  // top-left visual corner is at (-containerW/2, -containerH/2)
+  // containerW/containerH hold main/cross axis sizes respectively
+  // (for row: W=width=main, H=height=cross; for column: W=height=main, H=width=cross)
   const containerW = containerMain > 0 ? containerMain : finalContentMain + padding * 2;
   const containerH = containerCross > 0 ? containerCross : maxCross + padding * 2;
-  const offsetMain = isRow ? -containerW / 2 : -containerH / 2;
-  const offsetCross = isRow ? -containerH / 2 : -containerW / 2;
+  const offsetMain = -containerW / 2;
+  const offsetCross = -containerH / 2;
+
+  // Auto-size container rect when dimensions are 0
+  if (container.rect) {
+    const actualW = isRow ? containerW : containerH;
+    const actualH = isRow ? containerH : containerW;
+    if (container.rect.w === 0) container.rect.w = actualW;
+    if (container.rect.h === 0) container.rect.h = actualH;
+  }
 
   const placements: ChildPlacement[] = [];
   for (let i = 0; i < sorted.length; i++) {
