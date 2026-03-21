@@ -200,10 +200,23 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
         schemaPath = schemaPath ? `${schemaPath}.${ctx.currentKey}` : ctx.currentKey;
       }
 
-      const schema = getPropertySchema(schemaPath, rootSchema);
+      let schema = getPropertySchema(schemaPath, rootSchema);
       if (!schema) return;
 
-      const type = detectSchemaType(schema);
+      let type = detectSchemaType(schema);
+
+      // If we're inside a tuple element (e.g., number inside [250, 100]),
+      // check if the parent is a pointref and show that popup instead
+      if (type === 'number' && /\.\d+$/.test(schemaPath)) {
+        const parentPath = schemaPath.replace(/\.\d+$/, '');
+        const parentSchema = getPropertySchema(parentPath, rootSchema);
+        if (parentSchema && detectSchemaType(parentSchema) === 'pointref') {
+          schemaPath = parentPath;
+          schema = parentSchema;
+          type = 'pointref';
+        }
+      }
+
       // Show popup for types that have widgets
       if (['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) {
         const key = ctx.currentKey || schemaPath.split('.').pop() || '';
