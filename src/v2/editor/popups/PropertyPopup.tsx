@@ -57,15 +57,11 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     }
     case 'number': {
       const constraints = getNumberConstraints(schema);
-      const min = constraints?.min ?? 0;
-      const max = constraints?.max ?? 100;
-      const range = max - min;
+      const range = (constraints?.max ?? 100) - (constraints?.min ?? 0);
       const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
       content = (
         <NumberSlider
           value={(value as number) ?? 0}
-          min={min}
-          max={max}
           step={step}
           label={schemaPath.split('.').pop()}
           onChange={onChange}
