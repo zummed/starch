@@ -105,8 +105,10 @@ export function formatValue(value: unknown): string {
   }
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'string') return `"${value}"`;
+  if (Array.isArray(value)) {
+    return `[${value.map(v => formatValue(v)).join(', ')}]`;
+  }
   if (typeof value === 'object' && value !== null) {
-    // HSL color or other small object — inline format
     const entries = Object.entries(value);
     const parts = entries.map(([k, v]) => `${k}: ${formatValue(v)}`);
     return `{ ${parts.join(', ')} }`;

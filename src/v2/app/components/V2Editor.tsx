@@ -314,7 +314,12 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     if (!view) return;
 
     const doc = view.state.doc.toString();
-    const span = findValueSpan(doc, popup.cursorPos, popup.key);
+    let span = findValueSpan(doc, popup.cursorPos, popup.key);
+
+    // For PointRef inside arrays (key is numeric), find the enclosing [...] or "..."
+    if (!span && /^\d+$/.test(popup.key)) {
+      span = findEnclosingValue(doc, popup.cursorPos);
+    }
     if (!span) return;
 
     const replacement = formatValue(newValue);
@@ -360,6 +365,42 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
+/**
+ * Find the enclosing [...] or "..." value around a cursor position.
+ * Used for PointRef values inside arrays where there's no key to search for.
+ */
+function findEnclosingValue(doc: string, pos: number): { from: number; to: number } | null {
+  // Search backward for [ or "
+  let start = pos;
+  let depth = 0;
+  while (start > 0) {
+    start--;
+    if (doc[start] === ']') depth++;
+    if (doc[start] === '[') {
+      if (depth === 0) break;
+      depth--;
+    }
+    if (doc[start] === '"' && depth === 0) {
+      // Find the closing quote
+      const end = doc.indexOf('"', start + 1);
+      if (end >= 0) return { from: start, to: end + 1 };
+      return null;
+    }
+  }
+  if (doc[start] === '[') {
+    // Find matching ]
+    let d = 1;
+    let end = start + 1;
+    while (end < doc.length && d > 0) {
+      if (doc[end] === '[') d++;
+      if (doc[end] === ']') d--;
+      end++;
+    }
+    return { from: start, to: end };
+  }
+  return null;
+}
+
 function extractValueAtCursor(doc: string, pos: number, type: string, key: string): unknown {
   // Use findValueSpan to get the exact text of the value for this key
   const span = findValueSpan(doc, pos, key);
@@ -387,7 +428,6 @@ function extractValueAtCursor(doc: string, pos: number, type: string, key: strin
     return { h: 210, s: 80, l: 50 };
   }
   if (type === 'object') {
-    // Parse key-value pairs from the object text
     const result: Record<string, unknown> = {};
     const kvPattern = /(\w+):\s*(-?\d+\.?\d*|true|false|"[^"]*")/g;
     let m;
@@ -399,6 +439,35 @@ function extractValueAtCursor(doc: string, pos: number, type: string, key: strin
       else result[m[1]] = parseFloat(val);
     }
     return result;
+  }
+  if (type === 'pointref') {
+    // Find the enclosing [...] or "..." around the cursor
+    // Search backward for [ or " and forward for ] or "
+    const region = doc.slice(Math.max(0, pos - 50), Math.min(doc.length, pos + 50));
+    const regionStart = Math.max(0, pos - 50);
+
+    // Try to find a [...] containing the cursor
+    for (let start = pos - regionStart; start >= 0; start--) {
+      if (region[start] === '[') {
+        const end = region.indexOf(']', start);
+        if (end >= 0) {
+          const inner = region.slice(start, end + 1);
+          try {
+            const parsed = JSON.parse(inner);
+            if (Array.isArray(parsed)) return parsed;
+          } catch { /* not valid JSON */ }
+        }
+        break;
+      }
+      if (region[start] === '"') {
+        const end = region.indexOf('"', start + 1);
+        if (end >= 0) {
+          return region.slice(start + 1, end);
+        }
+        break;
+      }
+    }
+    return [0, 0];
   }
   return null;
 }
