@@ -63,6 +63,9 @@ export function applyTrackValues(
           leafPath,
           value,
         );
+      } else {
+        // Create the sub-object if it doesn't exist
+        (current as any)[propKey] = setNestedValue({}, leafPath, value);
       }
     }
   }
