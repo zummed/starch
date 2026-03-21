@@ -78,10 +78,48 @@ export function getPropertySchema(path: string, rootSchema?: z.ZodType): z.ZodTy
     } else if (unwrapped instanceof z.ZodArray) {
       // Numeric index into array → return the element type
       if (/^\d+$/.test(segment)) {
-        current = (unwrapped as any)._def.type;
+        current = (unwrapped as any)._def.element ?? (unwrapped as any)._def.type;
       } else {
         return null;
       }
+    } else if (unwrapped instanceof z.ZodTuple) {
+      // Numeric index into tuple → return the item type at that index
+      if (/^\d+$/.test(segment)) {
+        const items = (unwrapped as any)._def.items as z.ZodType[];
+        const idx = parseInt(segment);
+        if (items && idx < items.length) {
+          current = items[idx];
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    } else if (unwrapped instanceof z.ZodUnion) {
+      // For unions, try each option and return the first that resolves
+      const options = (unwrapped as any)._def.options as z.ZodType[];
+      let found = false;
+      if (options) {
+        for (const opt of options) {
+          const optUnwrapped = unwrap(opt);
+          if (/^\d+$/.test(segment)) {
+            if (optUnwrapped instanceof z.ZodTuple) {
+              const items = (optUnwrapped as any)._def.items as z.ZodType[];
+              const idx = parseInt(segment);
+              if (items && idx < items.length) {
+                current = items[idx];
+                found = true;
+                break;
+              }
+            } else if (optUnwrapped instanceof z.ZodArray) {
+              current = (optUnwrapped as any)._def.type;
+              found = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!found) return null;
     } else if (unwrapped instanceof z.ZodLazy) {
       // Resolve lazy schema and retry
       const resolved = (unwrapped as any)._def.getter();
