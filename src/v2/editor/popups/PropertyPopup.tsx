@@ -17,31 +17,30 @@ interface PropertyPopupProps {
 export function PropertyPopup({ schemaPath, value, position, onChange, onClose }: PropertyPopupProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on click outside — delayed to avoid catching the click that opened us
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Close on click outside — mounted once, uses ref to avoid re-registering
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     };
-    // Add listener on next frame so the opening click doesn't immediately close
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    // Delay so the opening click doesn't immediately close
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handler);
+      document.addEventListener('keydown', keyHandler);
     }, 100);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
     };
-  }, [onClose]);
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, []);  // mount once
 
   const schema = getPropertySchema(schemaPath);
   if (!schema) return null;

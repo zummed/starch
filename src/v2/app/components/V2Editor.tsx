@@ -118,14 +118,20 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     const ctx = getCursorContext(doc, pos);
 
     if (!ctx.isPropertyName && ctx.currentKey && ctx.path) {
-      // Map DSL path to schema path
+      // Map DSL path to schema path — strip top-level DSL keys
       const parts = ctx.path.split('.');
-      let schemaPath = ctx.path;
+      let schemaPath: string;
       if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
+        // objects.0.fill.h → fill.h
         schemaPath = parts.slice(2).join('.');
+      } else if (parts[0] === 'styles' && parts.length >= 2) {
+        // styles.primary.fill.h → fill.h (style properties are node properties)
+        schemaPath = parts.slice(2).join('.');
+      } else {
+        schemaPath = ctx.path;
       }
 
-      // Check if this path ends with the current key already
+      // Append current key if not already at the end
       if (!schemaPath.endsWith(ctx.currentKey)) {
         schemaPath = schemaPath ? `${schemaPath}.${ctx.currentKey}` : ctx.currentKey;
       }
