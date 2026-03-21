@@ -368,26 +368,50 @@ export const v2Samples: V2Sample[] = [
 
   // ─── CONNECTIONS ───────────────────────────────────────────────
   {
-    name: 'connection',
+    name: 'edge-snapping',
     category: 'Connections',
-    description: 'Path with from/to connects two nodes by ID',
+    description: 'Lines snap to object edges, not centers — with gap spacing',
     dsl: `{
   objects: [
     { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 100, y: 150 } },
     { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 120, s: 60, l: 35 }, stroke: { h: 120, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { from: "a", to: "b" }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "line", path: { from: "a", to: "b", gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
   ]
 }`,
   },
   {
-    name: 'connection-bend',
+    name: 'arrow',
     category: 'Connections',
-    description: 'Animate the bend of a connection — positive and negative curves',
+    description: 'Arrow template — smart connection with arrowhead and label',
+    dsl: `{
+  objects: [
+    {
+      id: "a", transform: { x: 100, y: 150 },
+      children: [
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
+        { id: "a.label", text: { content: "Source", size: 12 }, fill: { h: 0, s: 0, l: 90 } }
+      ]
+    },
+    {
+      id: "b", transform: { x: 400, y: 150 },
+      children: [
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { h: 0, s: 70, l: 50, width: 2 } },
+        { id: "b.label", text: { content: "Target", size: 12 }, fill: { h: 0, s: 0, l: 90 } }
+      ]
+    },
+    { template: "arrow", id: "conn", props: { from: "a", to: "b", label: "sends data", colour: { h: 0, s: 0, l: 60 } } }
+  ]
+}`,
+  },
+  {
+    name: 'smooth-bend',
+    category: 'Connections',
+    description: 'Smooth quadratic bend — animate the curve amount',
     dsl: `{
   objects: [
     { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 120, y: 150 } },
     { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { from: "a", to: "b", bend: 0 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "line", path: { from: "a", to: "b", bend: 0, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
   ],
   animate: {
     duration: 4,
@@ -400,6 +424,30 @@ export const v2Samples: V2Sample[] = [
       { time: 4, changes: { "line.path.bend": 0 } }
     ]
   }
+}`,
+  },
+  {
+    name: 'smooth-spline',
+    category: 'Connections',
+    description: 'Smooth Catmull-Rom spline through waypoints',
+    dsl: `{
+  objects: [
+    { id: "a", ellipse: { rx: 20, ry: 20 }, fill: { h: 210, s: 60, l: 45 }, transform: { x: 80, y: 150 } },
+    { id: "b", ellipse: { rx: 20, ry: 20 }, fill: { h: 0, s: 60, l: 45 }, transform: { x: 420, y: 150 } },
+    { id: "line", path: { from: "a", to: "b", route: [[180, 80], [250, 220], [340, 80]], smooth: true, gap: 4 }, stroke: { h: 120, s: 60, l: 50, width: 2 } }
+  ]
+}`,
+  },
+  {
+    name: 'routed-polyline',
+    category: 'Connections',
+    description: 'Polyline routed through waypoints with rounded corners',
+    dsl: `{
+  objects: [
+    { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 80, y: 100 } },
+    { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 420, y: 200 } },
+    { id: "line", path: { from: "a", to: "b", route: [[250, 100], [250, 200]], smooth: false, radius: 15, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+  ]
 }`,
   },
 
