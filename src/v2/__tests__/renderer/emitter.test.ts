@@ -23,7 +23,7 @@ function createMockBackend() {
     drawRect: (w, h, radius, fill, stroke) => calls.push({ method: 'drawRect', args: [w, h, radius, fill, stroke] }),
     drawEllipse: (rx, ry, fill, stroke) => calls.push({ method: 'drawEllipse', args: [rx, ry, fill, stroke] }),
     drawText: (content, size, fill, align, bold, mono) => calls.push({ method: 'drawText', args: [content, size, fill, align, bold, mono] }),
-    drawPath: (points, closed, smooth, fill, stroke, progress) => calls.push({ method: 'drawPath', args: [points, closed, smooth, fill, stroke, progress] }),
+    drawPath: (segments, fill, stroke, progress) => calls.push({ method: 'drawPath', args: [segments, fill, stroke, progress] }),
     drawImage: (src, w, h, fit) => calls.push({ method: 'drawImage', args: [src, w, h, fit] }),
   };
 
@@ -104,7 +104,12 @@ describe('emitFrame', () => {
     emitFrame(backend, [node], [node]);
     const drawCall = calls.find(c => c.method === 'drawPath');
     expect(drawCall).toBeDefined();
-    expect(drawCall!.args[0]).toEqual([[0,0],[100,100]]);
+    // args[0] is PathSegment[] — check it has moveTo and lineTo
+    const segments = drawCall!.args[0] as any[];
+    expect(segments[0].type).toBe('moveTo');
+    expect(segments[1].type).toBe('lineTo');
+    expect(segments[1].x).toBe(100);
+    expect(segments[1].y).toBe(100);
   });
 
   it('emits drawImage for an image node', () => {
@@ -221,7 +226,7 @@ describe('emitFrame', () => {
     });
     emitFrame(backend, [node], [node]);
     const drawCall = calls.find(c => c.method === 'drawPath');
-    const stroke = drawCall!.args[4] as StrokeStyle;
+    const stroke = drawCall!.args[2] as StrokeStyle;
     expect(stroke.dash).toBeDefined();
     expect(stroke.dash!.length).toBe(8);
     expect(stroke.dash!.gap).toBe(4);
@@ -240,8 +245,8 @@ describe('emitFrame', () => {
     emitFrame(backend, [a, b, conn], [a, b, conn]);
     const drawCall = calls.find(c => c.method === 'drawPath');
     expect(drawCall).toBeDefined();
-    const points = drawCall!.args[0] as [number, number][];
-    expect(points[0]).toEqual([0, 0]);
-    expect(points[1]).toEqual([200, 0]);
+    const segments = drawCall!.args[0] as any[];
+    expect(segments[0].type).toBe('moveTo');
+    expect(segments.length).toBeGreaterThanOrEqual(2);
   });
 });

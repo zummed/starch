@@ -1,0 +1,99 @@
+import type { Node, PointRef } from '../../types/node';
+import { createNode } from '../../types/node';
+import { parseColor } from '../../types/color';
+import type { HslColor } from '../../types/properties';
+
+const ARROW_SIZE = 8;
+
+export function arrowTemplate(id: string, props: Record<string, unknown>): Node {
+  const from = props.from as PointRef;
+  const to = props.to as PointRef;
+  const fromAnchor = props.fromAnchor as string | [number, number] | undefined;
+  const toAnchor = props.toAnchor as string | [number, number] | undefined;
+  const smooth = (props.smooth as boolean) ?? false;
+  const bend = props.bend as number | undefined;
+  const route = props.route as PointRef[] | undefined;
+  const radius = props.radius as number | undefined;
+  const closed = (props.closed as boolean) ?? false;
+  const drawProgress = props.drawProgress as number | undefined;
+  const label = props.label as string | undefined;
+  const labelSize = (props.labelSize as number) ?? 11;
+  const arrow = (props.arrow as boolean) ?? true;
+  const arrowStart = (props.arrowStart as boolean) ?? false;
+  const dashed = (props.dashed as boolean) ?? false;
+  const gap = (props.gap as number) ?? 4;
+
+  let stroke: HslColor = { h: 0, s: 0, l: 60 };
+  if (props.colour || props.color) {
+    const raw = (props.colour ?? props.color) as unknown;
+    stroke = typeof raw === 'object' ? raw as HslColor : stroke;
+  }
+  if (props.stroke) {
+    stroke = typeof props.stroke === 'object' ? props.stroke as HslColor : stroke;
+  }
+  const strokeWidth = (props.strokeWidth as number) ?? 2;
+
+  const children: Node[] = [];
+
+  // Route path
+  children.push(createNode({
+    id: `${id}.route`,
+    path: {
+      from, to, smooth, closed,
+      ...(fromAnchor ? { fromAnchor } : {}),
+      ...(toAnchor ? { toAnchor } : {}),
+      ...(bend !== undefined ? { bend } : {}),
+      ...(route ? { route } : {}),
+      ...(radius !== undefined ? { radius } : {}),
+      ...(drawProgress !== undefined ? { drawProgress } : {}),
+      gap,
+      ...(arrow ? { toGap: gap + ARROW_SIZE * 0.7 } : {}),
+      ...(arrowStart ? { fromGap: gap + ARROW_SIZE * 0.7 } : {}),
+    },
+    stroke: { ...stroke, width: strokeWidth },
+    ...(dashed ? { dash: { pattern: 'dashed', length: 8, gap: 4 } } : {}),
+  }));
+
+  // End arrowhead
+  if (arrow) {
+    children.push(createNode({
+      id: `${id}.headEnd`,
+      path: {
+        points: [[-ARROW_SIZE, -ARROW_SIZE / 2], [0, 0], [-ARROW_SIZE, ARROW_SIZE / 2]],
+        closed: true,
+      },
+      fill: stroke,
+      transform: { pathFollow: `${id}.route`, pathProgress: 1.0 },
+    }));
+  }
+
+  // Start arrowhead
+  if (arrowStart) {
+    children.push(createNode({
+      id: `${id}.headStart`,
+      path: {
+        points: [[ARROW_SIZE, -ARROW_SIZE / 2], [0, 0], [ARROW_SIZE, ARROW_SIZE / 2]],
+        closed: true,
+      },
+      fill: stroke,
+      transform: { pathFollow: `${id}.route`, pathProgress: 0.0 },
+    }));
+  }
+
+  // Label
+  if (label) {
+    children.push(createNode({
+      id: `${id}.label`,
+      text: { content: label, size: labelSize, align: 'middle' },
+      fill: { h: 0, s: 0, l: 80 },
+      transform: { pathFollow: `${id}.route`, pathProgress: 0.5 },
+    }));
+  }
+
+  return createNode({
+    id,
+    children,
+    ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
+    ...(props.style ? { style: props.style as string } : {}),
+  });
+}

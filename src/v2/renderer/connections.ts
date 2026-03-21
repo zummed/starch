@@ -70,7 +70,11 @@ export function resolveConnectionPath(
   }
 
   if (path.route && path.route.length > 0) {
-    return [[from.x, from.y], ...path.route, [to.x, to.y]];
+    const resolvedWaypoints = path.route
+      .map(wp => resolveEndpoint(wp, roots))
+      .filter((ep): ep is { x: number; y: number } => ep !== null)
+      .map((ep): [number, number] => [ep.x, ep.y]);
+    return [[from.x, from.y], ...resolvedWaypoints, [to.x, to.y]];
   }
 
   return [[from.x, from.y], [to.x, to.y]];

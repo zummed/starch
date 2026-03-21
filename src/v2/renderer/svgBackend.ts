@@ -2,7 +2,7 @@
  * SVG RenderBackend implementation.
  * Maps draw commands to SVG DOM elements.
  */
-import type { RenderBackend, RendererInfo, RgbaColor, StrokeStyle } from './backend';
+import type { RenderBackend, RendererInfo, RgbaColor, StrokeStyle, PathSegment } from './backend';
 import { rgbaToCSS } from './colorConvert';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -216,20 +216,24 @@ export class SvgRenderBackend implements RenderBackend {
     this._currentGroup().appendChild(el);
   }
 
-  drawPath(points: [number, number][], closed: boolean, smooth: boolean, fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void {
-    let d: string;
-    if (smooth && points.length > 2) {
-      d = catmullRomToSvgPath(points, closed);
-    } else {
-      d = points.map((pt, i) => `${i === 0 ? 'M' : 'L'}${pt[0]},${pt[1]}`).join(' ');
-      if (closed) d += ' Z';
-    }
+  drawPath(segments: PathSegment[], fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void {
+    if (segments.length === 0) return;
 
+    const d = segments.map(seg => {
+      switch (seg.type) {
+        case 'moveTo': return `M${seg.x},${seg.y}`;
+        case 'lineTo': return `L${seg.x},${seg.y}`;
+        case 'cubicTo': return `C${seg.cx1},${seg.cy1} ${seg.cx2},${seg.cy2} ${seg.x},${seg.y}`;
+        case 'quadTo': return `Q${seg.cx},${seg.cy} ${seg.x},${seg.y}`;
+        case 'close': return 'Z';
+      }
+    }).join(' ');
+
+    const hasFill = segments.some(s => s.type === 'close');
     const el = svgEl('path', { d });
-    applyFillStroke(el, closed ? fill : null, stroke);
+    applyFillStroke(el, hasFill ? fill : null, stroke);
 
     if (drawProgress !== undefined && drawProgress < 1) {
-      // Use a large dasharray to clip the path
       const totalLen = 10000;
       el.setAttribute('stroke-dasharray', String(totalLen));
       el.setAttribute('stroke-dashoffset', String(totalLen * (1 - drawProgress)));

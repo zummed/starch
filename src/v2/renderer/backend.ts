@@ -23,6 +23,13 @@ export interface StrokeStyle {
   dash?: { length: number; gap: number; pattern?: string };
 }
 
+export type PathSegment =
+  | { type: 'moveTo'; x: number; y: number }
+  | { type: 'lineTo'; x: number; y: number }
+  | { type: 'cubicTo'; cx1: number; cy1: number; cx2: number; cy2: number; x: number; y: number }
+  | { type: 'quadTo'; cx: number; cy: number; x: number; y: number }
+  | { type: 'close' };
+
 export interface RenderBackend {
   readonly info: RendererInfo;
 
@@ -49,6 +56,6 @@ export interface RenderBackend {
   drawRect(w: number, h: number, radius: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
   drawEllipse(rx: number, ry: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
   drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean): void;
-  drawPath(points: [number, number][], closed: boolean, smooth: boolean, fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void;
+  drawPath(segments: PathSegment[], fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void;
   drawImage(src: string, w: number, h: number, fit: 'contain' | 'cover' | 'fill'): void;
 }

@@ -9,6 +9,7 @@ import { tableTemplate } from './builtins/table';
 import { flowchartNodeTemplate } from './builtins/flowchartNode';
 import { sequenceParticipantTemplate } from './builtins/sequenceParticipant';
 import { stateNodeTemplate } from './builtins/stateNode';
+import { arrowTemplate } from './builtins/arrow';
 
 export function registerBuiltinTemplates(): void {
   registerTemplate('box', boxTemplate);
@@ -21,6 +22,7 @@ export function registerBuiltinTemplates(): void {
   registerTemplate('flowchart-node', flowchartNodeTemplate);
   registerTemplate('sequence-participant', sequenceParticipantTemplate);
   registerTemplate('state-node', stateNodeTemplate);
+  registerTemplate('arrow', arrowTemplate);
 }
 
 export {
@@ -34,4 +36,5 @@ export {
   flowchartNodeTemplate,
   sequenceParticipantTemplate,
   stateNodeTemplate,
+  arrowTemplate,
 };

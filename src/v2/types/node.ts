@@ -42,9 +42,12 @@ export const PathGeomSchema = z.object({
   closed: z.boolean().describe('Close the path').optional(),
   smooth: z.boolean().describe('Catmull-Rom spline').optional(),
   bend: z.number().min(-5).max(5).describe('Curve bend amount').optional(),
-  route: z.array(z.tuple([z.number(), z.number()])).describe('Waypoints').optional(),
+  route: z.array(PointRefSchema).describe('Waypoints (coords, IDs, or ID+offset)').optional(),
   radius: z.number().min(0).describe('Corner radius for routed paths').optional(),
   drawProgress: z.number().min(0).max(1).describe('Draw progress (0-1)').optional(),
+  gap: z.number().min(0).describe('Gap between edge and line endpoint').optional(),
+  fromGap: z.number().min(0).describe('Gap at start endpoint').optional(),
+  toGap: z.number().min(0).describe('Gap at end endpoint').optional(),
 });
 
 export const ImageGeomSchema = z.object({
