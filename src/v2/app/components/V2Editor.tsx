@@ -97,6 +97,12 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     value: unknown;
     position: { x: number; y: number };
   } | null>(null);
+  const popupOpenRef = useRef(false);
+
+  // Keep ref in sync
+  useEffect(() => {
+    popupOpenRef.current = popup !== null;
+  }, [popup]);
 
   // Handle click on editor — detect if we clicked on a value and show popup
   const handleEditorClick = useCallback((view: EditorView, event: MouseEvent) => {
@@ -164,6 +170,8 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       }),
       EditorView.domEventHandlers({
         click: (event, view) => {
+          // Don't trigger popup logic if a popup is already open
+          if (popupOpenRef.current) return false;
           // Delay to let cursor settle
           setTimeout(() => handleEditorClick(view, event), 50);
           return false;

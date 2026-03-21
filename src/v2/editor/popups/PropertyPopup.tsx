@@ -17,15 +17,21 @@ interface PropertyPopupProps {
 export function PropertyPopup({ schemaPath, value, position, onChange, onClose }: PropertyPopupProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
+  // Close on click outside — delayed to avoid catching the click that opened us
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as HTMLElement)) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    // Add listener on next frame so the opening click doesn't immediately close
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handler);
+    };
   }, [onClose]);
 
   // Close on Escape
@@ -101,6 +107,8 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
   return (
     <div
       ref={ref}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
         left: position.x,
