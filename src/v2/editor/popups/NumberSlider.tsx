@@ -74,9 +74,15 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
     const dx = e.clientX - startX.current;
     deflect.current = Math.max(-MAX_DEFLECT, Math.min(MAX_DEFLECT, dx));
 
-    // Visual: move thumb
+    // Visual: move thumb + pulse glow for fine control hint
     if (thumbRef.current) {
       thumbRef.current.style.transform = `translateX(${deflect.current}px)`;
+      const absNorm = Math.abs(deflect.current) / MAX_DEFLECT;
+      // Pulse is strongest at small deflections (fine control) and fades at high speed
+      const pulseIntensity = absNorm > 0.01 ? Math.max(0, 1 - absNorm * 3) : 0;
+      thumbRef.current.style.boxShadow = pulseIntensity > 0
+        ? `0 0 ${4 + pulseIntensity * 6}px rgba(167,139,250,${pulseIntensity * 0.8})`
+        : 'none';
     }
     // Visual: tint track based on deflection intensity
     if (trackRef.current) {
@@ -101,10 +107,11 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
       rafId.current = null;
     }
 
-    // Spring thumb back to center
+    // Spring thumb back to center, clear glow
     if (thumbRef.current) {
-      thumbRef.current.style.transition = 'transform 0.15s ease-out';
+      thumbRef.current.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s';
       thumbRef.current.style.transform = 'translateX(0)';
+      thumbRef.current.style.boxShadow = 'none';
       setTimeout(() => { if (thumbRef.current) thumbRef.current.style.transition = ''; }, 150);
     }
     if (trackRef.current) {
