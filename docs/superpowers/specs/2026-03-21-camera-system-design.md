@@ -30,14 +30,17 @@ camera?: {
 
 The key insight: camera settings resolve into a **rect + transform on the camera node**, just like layouts auto-size containers. This makes all camera transitions smoothly animatable through the existing track system.
 
-### Phase 1 — Track expansion (at timeline build time)
+### Phase 1 — Track expansion (multi-pass, after all other tracks are built)
 
-Same pattern as slot expansion in `timeline.ts`:
+Camera expansion runs as a **second pass** after all non-camera tracks are built, avoiding circular dependencies:
 
-1. At each keyframe boundary, evaluate the camera's `fit`, `target`, `zoom`, and `ratio` values
-2. Compute the corresponding view area (bounding box, centered position, scaled dimensions, ratio-constrained proportions)
-3. Expand into concrete tracks: `cameraId.rect.w`, `cameraId.rect.h`, `cameraId.transform.x`, `cameraId.transform.y`
-4. The track system interpolates these values between keyframes with easing
+1. `buildTimeline()` builds all tracks normally (including slot expansion)
+2. Camera expansion pass: for each keyframe boundary time, evaluate all non-camera tracks to get node positions at that time
+3. Resolve camera `fit`, `target`, `zoom`, and `ratio` at each keyframe time using those evaluated positions
+4. Expand into concrete tracks: `cameraId.rect.w`, `cameraId.rect.h`, `cameraId.transform.x`, `cameraId.transform.y`
+5. The track system interpolates these values between keyframes with easing
+
+**Approximation trade-off**: The camera rect is computed at keyframe times and interpolated between them. If fitted nodes follow non-linear paths between keyframes, the camera rect interpolation is an approximation — it lerps between two snapshots rather than tracking the exact bounding box every frame. This is acceptable for most use cases and avoids per-frame bounding box computation. For frame-accurate tracking, users can add more keyframes.
 
 This means:
 - `fit: ["a", "b"]` changing to `fit: ["c", "d"]` produces a **smooth rect transition**, even though the string array itself steps
@@ -55,20 +58,21 @@ No bounding box computation at render time. The heavy lifting is done once durin
 
 ### Emergent capabilities
 
-Since the camera's view is a standard rect + transform, the following come for free with no additional code:
+Since the camera's view is a standard rect + transform:
 
-- **Rotation**: Rotate the camera node's transform to get a rotated view
-- **Scale**: Animate transform scale independently of zoom
-- **Stretch**: Non-uniform scaling for distortion effects
-- All composable with easing through the existing animation system
+- **Scale**: Animate transform scale independently of zoom — works immediately
+- **Stretch**: Non-uniform scaling for distortion effects — works immediately
+- **Rotation**: Requires renderer support — SVG `viewBox` is axis-aligned, so a rotated camera would need the renderer to wrap content in a counter-rotated `<g>` transform. This is not free but is enabled by the rect-based approach. Deferred to a future enhancement.
 
 ### Edge cases
 
 - **No camera in scene**: Use the default viewport (current behavior)
 - **Camera with no settings**: No rect produced, default viewport used
 - **fit: "all"**: At expansion time, collect all non-camera node IDs
-- **Multiple active cameras**: First active camera wins (document this)
-- **Camera targeting a moving node**: Track expansion evaluates node positions at keyframe times; the interpolated rect follows the motion path smoothly between keyframes
+- **fit changes to empty list**: Falls back to default viewport dimensions for that keyframe
+- **Multiple active cameras**: First active camera in depth-first tree order wins
+- **Camera targeting a moving node**: Track expansion evaluates node positions at keyframe times; interpolation between snapshots is an approximation (see Phase 1 trade-off note)
+- **`target` with `["nodeId", dx, dy]` form**: Resolve node position and add offset — current `computeViewBox` does not handle this form and must be fixed
 
 ## Editor Integration
 
@@ -80,9 +84,9 @@ A button in the preview panel toolbar:
 - Bars update live as the camera ratio animates
 - The SVG remains full-size; bars are purely visual overlay
 
-### Schema-driven editing (no changes needed)
+### Schema-driven editing
 
-`CameraSchema` is already part of `NodeSchema`, so the editor picks up all camera properties automatically:
+`CameraSchema` is part of `NodeSchema`, so the editor picks up camera properties via autocomplete and popups. Note: the `NodeInput` and `Node` interfaces in `node.ts` are hand-coded (not derived from `CameraSchema` via `z.infer`), so they must be updated separately when adding `ratio`, `active`, and the `fit: "all"` union.
 - `target` → existing `PointRefEditor` popup (mode switching between coordinate, node ID, node+offset)
 - `zoom`, `ratio` → jog wheel (number editor)
 - `active` → boolean toggle
@@ -90,10 +94,10 @@ A button in the preview panel toolbar:
 
 ## Files to Modify
 
-1. **`src/v2/types/node.ts`** — Extend `CameraSchema` with `ratio`, `active`, update `fit` to accept `"all"`
-2. **`src/v2/animation/timeline.ts`** — Add camera track expansion (resolve camera settings → rect/transform tracks at keyframe boundaries)
-3. **`src/v2/renderer/camera.ts`** — Simplify `computeViewBox` to read active camera rect/transform. Add `findActiveCamera`. Remove current bounding box computation (moved to track expansion).
-4. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Wire `findActiveCamera` → viewbox from rect/transform each frame
+1. **`src/v2/types/node.ts`** — Extend `CameraSchema` with `ratio`, `active`, update `fit` to `z.union([z.array(z.string()), z.literal("all")])`. Update `NodeInput` and `Node` interfaces to match (they are hand-coded, not derived from `CameraSchema`).
+2. **`src/v2/animation/timeline.ts`** — Add camera track expansion as a second pass after all other tracks (including slot expansion) are built. Resolve camera settings at each keyframe time → rect/transform tracks.
+3. **`src/v2/renderer/camera.ts`** — Simplify `computeViewBox` to read active camera rect/transform. Add `findActiveCamera` (depth-first tree walk, not root-only). Handle `["nodeId", dx, dy]` target form. Remove `lerpViewBox` (dead code — interpolation now handled by track system).
+4. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace root-level `animated.find(n => n.camera)` with `findActiveCamera` (recursive).
 5. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
 
 ## Non-goals
