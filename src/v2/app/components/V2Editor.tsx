@@ -333,9 +333,8 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     const newDoc = view.state.doc.toString();
     onChangeRef.current(newDoc);
 
-    // Update popup state — adjust cursorPos for the length change
-    const delta = replacement.length - (span.to - span.from);
-    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: prev.cursorPos + delta } : null);
+    // Update popup state — place cursor inside the replacement
+    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: span.from + 1 } : null);
   }, [popup]);
 
   return (
@@ -402,6 +401,23 @@ function findEnclosingValue(doc: string, pos: number): { from: number; to: numbe
 }
 
 function extractValueAtCursor(doc: string, pos: number, type: string, key: string): unknown {
+  // For pointref inside arrays, use enclosing value search instead of key-based search
+  if (type === 'pointref' && /^\d+$/.test(key)) {
+    const enclosing = findEnclosingValue(doc, pos);
+    if (enclosing) {
+      const valueText = doc.slice(enclosing.from, enclosing.to).trim();
+      try {
+        const parsed = JSON.parse(valueText);
+        if (Array.isArray(parsed)) return parsed;
+      } catch { /* not JSON */ }
+      // Might be a quoted string
+      if (valueText.startsWith('"') && valueText.endsWith('"')) {
+        return valueText.slice(1, -1);
+      }
+    }
+    return [0, 0];
+  }
+
   // Use findValueSpan to get the exact text of the value for this key
   const span = findValueSpan(doc, pos, key);
   if (!span) return type === 'number' ? 0 : type === 'boolean' ? false : null;
