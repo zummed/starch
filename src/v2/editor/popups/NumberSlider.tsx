@@ -35,10 +35,10 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
     if (!dragging.current) return;
     const d = deflect.current;
     if (d !== 0) {
-      // Quadratic acceleration: further from center = faster
-      const norm = d / MAX_DEFLECT; // -1 to 1
-      const speed = norm * norm * Math.sign(norm);
-      const delta = speed * step * 4;
+      // Exponential ramp: very slow in the first third, then accelerates fast
+      const absNorm = Math.abs(d) / MAX_DEFLECT; // 0 to 1
+      const speed = (Math.pow(10, absNorm * 3) - 1) / 999 * Math.sign(d); // ~0 at start, 1 at full
+      const delta = speed * step * 8;
       const newVal = currentVal.current + delta;
       const dec = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
       const rounded = parseFloat(newVal.toFixed(dec));
