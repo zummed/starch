@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { detectSchemaType, getEnumValues, getNumberConstraints, getPropertySchema } from '../../types/schemaRegistry';
+import { useEffect, useRef, useCallback } from 'react';
+import { detectSchemaType, getEnumValues, getNumberConstraints, getPropertySchema, getAvailableProperties } from '../../types/schemaRegistry';
 import { ColorPicker } from './ColorPicker';
 import { NumberSlider } from './NumberSlider';
 import { EnumDropdown } from './EnumDropdown';
@@ -14,13 +14,46 @@ interface PropertyPopupProps {
   onClose: () => void;
 }
 
+/** Generic compound editor: jog wheel per numeric sub-property */
+function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; value: Record<string, unknown>; onChange: (value: unknown) => void }) {
+  const props = getAvailableProperties(schemaPath);
+  const numericProps = props.filter(p => {
+    const t = detectSchemaType(p.schema);
+    return t === 'number';
+  });
+
+  const handleSubChange = useCallback((key: string, newVal: unknown) => {
+    onChange({ ...value, [key]: newVal });
+  }, [value, onChange]);
+
+  if (numericProps.length === 0) return null;
+
+  return (
+    <div onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      {numericProps.map(prop => {
+        const constraints = getNumberConstraints(prop.schema);
+        const range = (constraints?.max ?? 100) - (constraints?.min ?? 0);
+        const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
+        return (
+          <NumberSlider
+            key={prop.name}
+            value={(value[prop.name] as number) ?? 0}
+            step={step}
+            label={prop.name}
+            onChange={(v) => handleSubChange(prop.name, v)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export function PropertyPopup({ schemaPath, value, position, onChange, onClose }: PropertyPopupProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // Close on click outside — mounted once, uses ref to avoid re-registering
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -30,7 +63,6 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
     };
-    // Delay so the opening click doesn't immediately close
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handler);
       document.addEventListener('keydown', keyHandler);
@@ -40,7 +72,7 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('keydown', keyHandler);
     };
-  }, []);  // mount once
+  }, []);
 
   const schema = getPropertySchema(schemaPath);
   if (!schema) return null;
@@ -97,6 +129,11 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
           </label>
         </div>
       );
+      break;
+    }
+    case 'object': {
+      const objVal = (value as Record<string, unknown>) ?? {};
+      content = <CompoundEditor schemaPath={schemaPath} value={objVal} onChange={onChange} />;
       break;
     }
     default:

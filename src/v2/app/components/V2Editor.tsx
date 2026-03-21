@@ -149,8 +149,8 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
       if (!schema) return;
 
       const type = detectSchemaType(schema);
-      // Only show popup for types that have widgets
-      if (['number', 'color', 'enum', 'boolean'].includes(type)) {
+      // Show popup for types that have widgets (including compound objects)
+      if (['number', 'color', 'enum', 'boolean', 'object'].includes(type)) {
         const currentValue = extractValueAtCursor(doc, pos, type, ctx.currentKey);
 
         const coords = view.coordsAtPos(pos);
