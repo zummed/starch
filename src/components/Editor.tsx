@@ -19,9 +19,13 @@ interface EditorProps {
   parseError?: string | null;
   width?: number;
   onClose?: () => void;
+  /** Override the default v1 linter with a custom one */
+  linterExtension?: any;
+  /** Override the default v1 completions with a custom source */
+  completionSource?: any;
 }
 
-export function Editor({ value, onChange, parseError, width = 360, onClose }: EditorProps) {
+export function Editor({ value, onChange, parseError, width = 360, onClose, linterExtension, completionSource }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -74,10 +78,10 @@ export function Editor({ value, onChange, parseError, width = 360, onClose }: Ed
       keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
       EditorState.tabSize.of(2),
       autocompletion({
-        override: [starchCompletions],
+        override: [completionSource ?? starchCompletions],
         activateOnTyping: true,
       }),
-      starchLinter,
+      linterExtension ?? starchLinter,
       lintGutter(),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !externalUpdate.current) {
