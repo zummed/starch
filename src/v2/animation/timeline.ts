@@ -1,4 +1,6 @@
 import type { AnimConfig, KeyframeBlock, TrackKeyframe, Tracks, EasingName, PropertyChange } from '../types/animation';
+import type { Node } from '../types/node';
+import { computeLayoutPlacements, type LayoutResult } from '../layout/registry';
 
 function isPropertyChange(value: unknown): value is PropertyChange {
   return typeof value === 'object' && value !== null && 'value' in value;
@@ -33,7 +35,36 @@ function expandChanges(
   return result;
 }
 
-export function buildTimeline(config: AnimConfig): Tracks {
+/**
+ * Clone nodes and set a specific slot value on a node.
+ */
+function cloneWithSlot(nodes: Node[], nodeId: string, slotValue: string): Node[] {
+  function cloneNode(n: Node): Node {
+    const clone = { ...n, children: n.children.map(cloneNode) };
+    if (clone.id === nodeId) {
+      clone.slot = slotValue;
+    }
+    return clone;
+  }
+  return nodes.map(cloneNode);
+}
+
+/**
+ * Find a node's layout position for a given slot assignment.
+ */
+function computeSlotPosition(
+  nodes: Node[],
+  nodeId: string,
+  slotValue: string,
+): { x: number; y: number } | null {
+  const cloned = cloneWithSlot(nodes, nodeId, slotValue);
+  const placements = computeLayoutPlacements(cloned);
+  const p = placements.find(r => r.nodeId === nodeId);
+  if (!p) return null;
+  return { x: p.targetX, y: p.targetY };
+}
+
+export function buildTimeline(config: AnimConfig, nodes?: Node[]): Tracks {
   const tracks: Tracks = new Map();
   const globalEasing: EasingName = config.easing ?? 'linear';
   const autoKey = config.autoKey ?? true;
@@ -67,7 +98,6 @@ export function buildTimeline(config: AnimConfig): Tracks {
       }
       const track = tracks.get(path)!;
 
-      // Handle delay: insert hold keyframe at baseTime, actual change at baseTime + delay
       if (block.delay && block.delay > 0) {
         const lastValue = track.length > 0 ? track[track.length - 1].value : value;
         track.push({ time: baseTime, value: lastValue, easing });
@@ -101,6 +131,46 @@ export function buildTimeline(config: AnimConfig): Tracks {
         }
       }
       keyframes.sort((a, b) => a.time - b.time);
+    }
+  }
+
+  // Expand slot tracks into transform.x/y tracks
+  if (nodes) {
+    const slotTracks: string[] = [];
+    for (const [path] of tracks) {
+      if (path.endsWith('.slot')) {
+        slotTracks.push(path);
+      }
+    }
+
+    for (const slotPath of slotTracks) {
+      const nodeId = slotPath.replace(/\.slot$/, '');
+      const slotKeyframes = tracks.get(slotPath)!;
+
+      const xPath = `${nodeId}.transform.x`;
+      const yPath = `${nodeId}.transform.y`;
+
+      if (!tracks.has(xPath)) tracks.set(xPath, []);
+      if (!tracks.has(yPath)) tracks.set(yPath, []);
+
+      const xTrack = tracks.get(xPath)!;
+      const yTrack = tracks.get(yPath)!;
+
+      for (const kf of slotKeyframes) {
+        const slotValue = kf.value as string;
+        const pos = computeSlotPosition(nodes, nodeId, slotValue);
+        if (pos) {
+          xTrack.push({ time: kf.time, value: pos.x, easing: kf.easing });
+          yTrack.push({ time: kf.time, value: pos.y, easing: kf.easing });
+        }
+      }
+
+      // Sort the generated tracks
+      xTrack.sort((a, b) => a.time - b.time);
+      yTrack.sort((a, b) => a.time - b.time);
+
+      // Remove the slot track — it's been expanded
+      tracks.delete(slotPath);
     }
   }
 
