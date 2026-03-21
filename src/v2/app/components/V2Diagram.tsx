@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import type { Node } from '../../types/node';
-import type { AnimConfig, Tracks } from '../../types/animation';
+import type { AnimConfig } from '../../types/animation';
 import type { Chapter } from '../../../core/types';
 import { parseScene, type ParsedScene } from '../../parser/parser';
 import { buildTimeline } from '../../animation/timeline';
@@ -12,22 +11,11 @@ import { absoluteStrategy } from '../../layout/absolute';
 import { computeViewBox, type ViewBox } from '../../renderer/camera';
 import { emitFrame } from '../../renderer/emitter';
 import { SvgRenderBackend } from '../../renderer/svgBackend';
-import type { RenderBackend, RgbaColor } from '../../renderer/backend';
+import type { RenderBackend } from '../../renderer/backend';
 
-// Register layout strategies
+// Register layout strategies (idempotent)
 registerStrategy('flex', flexStrategy);
 registerStrategy('absolute', absoluteStrategy);
-
-export interface V2DiagramHandle {
-  play(): void;
-  pause(): void;
-  seek(time: number): void;
-  time: number;
-  duration: number;
-  playing: boolean;
-  speed: number;
-  chapters: Chapter[];
-}
 
 export interface V2DiagramProps {
   dsl: string;
@@ -41,6 +29,7 @@ export interface V2DiagramProps {
 export function useV2Diagram(props: V2DiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const backendRef = useRef<RenderBackend | null>(null);
+  const mountedRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
 
@@ -74,59 +63,64 @@ export function useV2Diagram(props: V2DiagramProps) {
   // Build timeline (once per DSL change)
   const tracks = useMemo(() => buildTimeline(animConfig), [animConfig]);
 
+  // Store latest values in refs so render() always has current data
+  const sceneRef = useRef(scene);
+  const tracksRef = useRef(tracks);
+  const vpRef = useRef({ w: vpW, h: vpH });
+  const viewportOverrideRef = useRef(props.viewportOverride);
+  sceneRef.current = scene;
+  tracksRef.current = tracks;
+  vpRef.current = { w: vpW, h: vpH };
+  viewportOverrideRef.current = props.viewportOverride;
+
+  // Render function — always reads from refs
+  const render = useCallback((t: number) => {
+    const backend = backendRef.current;
+    if (!backend || !mountedRef.current) return;
+
+    const currentScene = sceneRef.current;
+    const currentTracks = tracksRef.current;
+    const { w, h } = vpRef.current;
+
+    const values = evaluateAllTracks(currentTracks, t);
+    const animated = applyTrackValues(currentScene.nodes, values);
+    runLayout(animated);
+
+    let viewBox: ViewBox | undefined;
+    if (viewportOverrideRef.current) {
+      viewBox = viewportOverrideRef.current;
+    } else {
+      const cameraNode = animated.find(n => n.camera);
+      if (cameraNode) {
+        viewBox = computeViewBox(cameraNode, animated, { x: 0, y: 0, w, h });
+      }
+    }
+
+    emitFrame(backend, animated, animated, viewBox);
+  }, []);
+
   // Mount/unmount backend
   useEffect(() => {
     if (!containerRef.current) return;
     const backend = new SvgRenderBackend();
     backend.mount(containerRef.current);
-    if (scene.background) {
-      if (scene.background === 'transparent' || scene.background === 'none') {
-        backend.setBackground('transparent');
-      } else {
-        // Parse background color (for now, just set via CSS)
-        const svg = containerRef.current.querySelector('svg');
-        if (svg) svg.style.background = scene.background;
-      }
-    }
     backendRef.current = backend;
+    mountedRef.current = true;
+
+    // Initial render
+    render(time);
+
     return () => {
+      mountedRef.current = false;
       backend.destroy();
       backendRef.current = null;
     };
-  }, []); // Only mount once
+  }, []);
 
-  // Render function
-  const render = useCallback((t: number) => {
-    const backend = backendRef.current;
-    if (!backend) return;
-
-    const values = evaluateAllTracks(tracks, t);
-    const animated = applyTrackValues(scene.nodes, values);
-    runLayout(animated);
-
-    // Camera
-    let viewBox: ViewBox | undefined;
-    if (props.viewportOverride) {
-      viewBox = props.viewportOverride;
-    } else {
-      const cameraNode = animated.find(n => n.camera);
-      if (cameraNode) {
-        viewBox = computeViewBox(cameraNode, animated, { x: 0, y: 0, w: vpW, h: vpH });
-      }
-    }
-
-    emitFrame(backend, animated, animated, viewBox);
-  }, [scene.nodes, tracks, vpW, vpH, props.viewportOverride]);
-
-  // Render on time change
+  // Re-render when scene/tracks/time/viewport change
   useEffect(() => {
     render(time);
-  }, [time, render]);
-
-  // Re-render when DSL changes
-  useEffect(() => {
-    render(time);
-  }, [props.dsl]);
+  }, [time, scene, tracks, props.viewportOverride]);
 
   // Playback loop
   useEffect(() => {
@@ -158,17 +152,9 @@ export function useV2Diagram(props: V2DiagramProps) {
     };
   }, [playing, speed, duration, animConfig.loop]);
 
-  // Notify parent of time changes
-  useEffect(() => {
-    props.onTimeUpdate?.(time);
-  }, [time]);
-
   const seek = useCallback((t: number) => {
     setTime(Math.max(0, Math.min(t, duration)));
   }, [duration]);
-
-  const play = useCallback(() => setPlaying(true), []);
-  const pause = useCallback(() => setPlaying(false), []);
 
   return {
     containerRef,
@@ -180,8 +166,8 @@ export function useV2Diagram(props: V2DiagramProps) {
     viewport: viewport ? { width: vpW, height: vpH } : undefined,
     background: scene.background,
     seek,
-    play,
-    pause,
+    play: useCallback(() => setPlaying(true), []),
+    pause: useCallback(() => setPlaying(false), []),
     setPlaying,
     setSpeed,
   };

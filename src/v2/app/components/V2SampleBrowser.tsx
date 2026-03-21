@@ -15,6 +15,7 @@ export function V2SampleBrowser({ activeSampleId, onSelect }: V2SampleBrowserPro
   return (
     <div style={{
       width: 240,
+      height: '100%',
       flexShrink: 0,
       borderRight: '1px solid #1a1d24',
       overflowY: 'auto',

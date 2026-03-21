@@ -284,19 +284,21 @@ export default function App() {
           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 2, fontWeight: 600 }}>v2</span>
         </div>
         <div style={{ display: 'flex', gap: isCompact ? 4 : 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Layout mode toggle */}
+          {/* Layout mode toggle — small icon button */}
           <button
             onClick={toggleLayoutMode}
+            title={layoutMode === 'panel' ? 'Switch to compact view' : 'Switch to full view'}
             style={{
-              padding: btnPad, borderRadius: 6,
-              border: '1px solid #a78bfa',
-              background: 'rgba(167,139,250,0.06)',
-              color: '#a78bfa',
-              fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
+              padding: isCompact ? '8px 10px' : '4px 8px', borderRadius: 6,
+              border: '1px solid #2a2d35',
+              background: '#14161c',
+              color: '#6b7280',
+              fontSize: isCompact ? 16 : 13, fontFamily: FONT, cursor: 'pointer',
               minHeight: isCompact ? 44 : undefined,
+              lineHeight: 1,
             }}
           >
-            {layoutMode === 'panel' ? '☰ Panel' : '⊞ Tab'}
+            {layoutMode === 'panel' ? '⊟' : '⊞'}
           </button>
 
           {!isCompact && (
