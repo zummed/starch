@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import type { Node as StarchNode } from '../../types/node';
 import type { AnimConfig } from '../../types/animation';
 import type { Chapter } from '../../../core/types';
 import { parseScene, type ParsedScene } from '../../parser/parser';
 import { buildTimeline } from '../../animation/timeline';
 import { evaluateAllTracks } from '../../animation/evaluator';
 import { applyTrackValues } from '../../animation/applyTracks';
-import { runLayout, registerStrategy } from '../../layout/registry';
+import { computeLayoutPlacements, applyLayoutPlacements, registerStrategy, type LayoutResult } from '../../layout/registry';
 import { flexStrategy } from '../../layout/flex';
 import { absoluteStrategy } from '../../layout/absolute';
 import { computeViewBox, type ViewBox } from '../../renderer/camera';
@@ -16,6 +17,15 @@ import type { RenderBackend } from '../../renderer/backend';
 // Register layout strategies (idempotent)
 registerStrategy('flex', flexStrategy);
 registerStrategy('absolute', absoluteStrategy);
+
+function findNodeInTree(nodes: StarchNode[], id: string): StarchNode | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const found = findNodeInTree(n.children, id);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 export interface V2DiagramProps {
   dsl: string;
@@ -32,6 +42,8 @@ export function useV2Diagram(props: V2DiagramProps) {
   const mountedRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
+  // Track previous layout positions for smooth slot transitions
+  const layoutCache = useRef<Map<string, { x: number; y: number; slot?: string }>>(new Map());
 
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(props.autoplay ?? false);
@@ -84,7 +96,42 @@ export function useV2Diagram(props: V2DiagramProps) {
 
     const values = evaluateAllTracks(currentTracks, t);
     const animated = applyTrackValues(currentScene.nodes, values);
-    runLayout(animated);
+
+    // Compute layout placements
+    const placements = computeLayoutPlacements(animated);
+
+    // Blend slot member positions for smooth transitions
+    const cache = layoutCache.current;
+    const blended: typeof placements = placements.map(p => {
+      if (!p.isSlotMember) return p;
+
+      const prev = cache.get(p.nodeId);
+      const node = findNodeInTree(animated, p.nodeId);
+      const currentSlot = node?.slot;
+
+      if (prev && prev.slot !== currentSlot) {
+        // Slot just changed — start blending from previous position
+        // Use exponential blend: ~95% in 20 frames
+        const bx = prev.x + (p.targetX - prev.x) * 0.12;
+        const by = prev.y + (p.targetY - prev.y) * 0.12;
+        cache.set(p.nodeId, { x: bx, y: by, slot: currentSlot });
+        return { ...p, targetX: bx, targetY: by };
+      }
+
+      if (prev && (Math.abs(prev.x - p.targetX) > 0.5 || Math.abs(prev.y - p.targetY) > 0.5)) {
+        // Still blending toward target
+        const bx = prev.x + (p.targetX - prev.x) * 0.12;
+        const by = prev.y + (p.targetY - prev.y) * 0.12;
+        cache.set(p.nodeId, { x: bx, y: by, slot: currentSlot });
+        return { ...p, targetX: bx, targetY: by };
+      }
+
+      // At rest — update cache
+      cache.set(p.nodeId, { x: p.targetX, y: p.targetY, slot: currentSlot });
+      return p;
+    });
+
+    applyLayoutPlacements(animated, blended);
 
     let viewBox: ViewBox | undefined;
     if (viewportOverrideRef.current) {
