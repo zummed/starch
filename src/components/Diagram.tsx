@@ -7,16 +7,28 @@ import {
   useImperativeHandle,
   forwardRef,
 } from 'react';
-import type { SceneObject, DiagramHandle, Chapter, AnimConfig, StarchEvent, EasingName } from '../core/types';
+import type { Node } from '../v2/types/node';
+import type { AnimConfig, Tracks } from '../v2/types/animation';
+import type { DiagramHandle, Chapter, StarchEvent } from '../core/types';
 import { Scene } from '../core/Scene';
-import { parseDSL } from '../parser/parser';
-import { buildTimeline } from '../engine/timeline';
-import { extractEffects } from '../engine/effects';
-import { createEvaluator, getActiveChapter } from '../engine/evaluator';
-import { computeRenderOrder } from '../engine/renderOrder';
-import { findCamera, resolveCamera, type ViewBox } from '../engine/camera';
+import { parseScene, type ParsedScene } from '../v2/parser/parser';
+import { buildTimeline } from '../v2/animation/timeline';
+import { evaluateAllTracks } from '../v2/animation/evaluator';
+import { applyTrackValues } from '../v2/animation/applyTracks';
+import { runLayout, registerStrategy } from '../v2/layout/registry';
+import { flexStrategy } from '../v2/layout/flex';
+import { absoluteStrategy } from '../v2/layout/absolute';
+import { computeViewBox, type ViewBox } from '../v2/renderer/camera';
+import { renderTree, type RenderNode } from '../v2/renderer/renderTree';
+import { getActiveChapter } from '../engine/evaluator';
+import { convertOldFormat } from '../v2/parser/compat';
+import JSON5 from 'json5';
 import { SvgCanvas } from '../renderer/svg/SvgCanvas';
-import { createRenderObject } from '../renderer/renderObject';
+import { hslToCSS } from '../v2/renderer/hslToCSS';
+
+// Register layout strategies
+registerStrategy('flex', flexStrategy);
+registerStrategy('absolute', absoluteStrategy);
 
 export interface DiagramProps {
   scene?: Scene;
@@ -29,48 +41,130 @@ export interface DiagramProps {
   onEvent?: (event: StarchEvent) => void;
 }
 
-function useDiagramCore(props: DiagramProps) {
-  const fallback = useRef({
-    objects: {} as Record<string, SceneObject>,
-    animConfig: { duration: 5, loop: true, keyframes: [], chapters: [] } as AnimConfig,
-    styles: {} as Record<string, Record<string, unknown>>,
-  });
+interface ParsedV2 {
+  nodes: Node[];
+  styles: Record<string, any>;
+  animConfig: AnimConfig;
+  background?: string;
+  viewport?: { width: number; height: number };
+}
 
-  const evaluatorRef = useRef(createEvaluator());
+function parseInput(props: DiagramProps): ParsedV2 {
+  const fallback: ParsedV2 = {
+    nodes: [],
+    styles: {},
+    animConfig: { duration: 5, loop: true, keyframes: [], chapters: [] },
+  };
+
+  if (props.dsl) {
+    try {
+      const scene = parseScene(props.dsl);
+      return {
+        nodes: scene.nodes,
+        styles: scene.styles,
+        animConfig: scene.animate ?? fallback.animConfig,
+        background: scene.background,
+        viewport: typeof scene.viewport === 'object' ? scene.viewport as { width: number; height: number } : undefined,
+      };
+    } catch {
+      // Try v1 compat
+      try {
+        const raw = JSON5.parse(props.dsl);
+        const converted = convertOldFormat(raw);
+        const scene = parseScene(JSON.stringify(converted));
+        return {
+          nodes: scene.nodes,
+          styles: scene.styles,
+          animConfig: scene.animate ?? fallback.animConfig,
+          background: scene.background,
+        };
+      } catch {
+        return fallback;
+      }
+    }
+  }
+
+  if (props.scene) {
+    const objects = props.scene.getObjects();
+    const styles = props.scene.getStyles();
+    const animConfig = props.scene.getAnimConfig();
+    const raw = {
+      objects: Object.values(objects).map(obj => ({ type: obj.type, id: obj.id, ...obj.props })),
+      styles,
+      animate: animConfig,
+    };
+    try {
+      const converted = convertOldFormat(raw);
+      const scene = parseScene(JSON.stringify(converted));
+      return {
+        nodes: scene.nodes,
+        styles: scene.styles,
+        animConfig: scene.animate ?? fallback.animConfig,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
+  return fallback;
+}
+
+/** Render a RenderNode tree to React SVG elements */
+function RenderNodeComponent({ node }: { node: RenderNode }): React.ReactElement {
+  const gProps: Record<string, string | number> = {};
+  if (node.groupTransform) gProps.transform = node.groupTransform;
+  if (node.opacity < 1) gProps.opacity = node.opacity;
+
+  return (
+    <g key={node.id} data-id={node.id} {...gProps}>
+      {node.geometry && (() => {
+        const { tag, attrs } = node.geometry;
+        const svgAttrs: Record<string, string | number> = {};
+        for (const [k, v] of Object.entries(attrs)) {
+          // Convert kebab-case to React camelCase for common SVG attrs
+          const reactKey = k === 'stroke-width' ? 'strokeWidth'
+            : k === 'text-anchor' ? 'textAnchor'
+            : k === 'dominant-baseline' ? 'dominantBaseline'
+            : k === 'font-size' ? 'fontSize'
+            : k === 'font-weight' ? 'fontWeight'
+            : k === 'font-family' ? 'fontFamily'
+            : k === 'stroke-dasharray' ? 'strokeDasharray'
+            : k === 'stroke-dashoffset' ? 'strokeDashoffset'
+            : k === 'stroke-linecap' ? 'strokeLinecap'
+            : k;
+          svgAttrs[reactKey] = v;
+        }
+
+        if (tag === 'text') {
+          return <text {...svgAttrs}>{node.textContent}</text>;
+        }
+
+        // React requires self-closing for these
+        const Tag = tag as any;
+        return <Tag {...svgAttrs} />;
+      })()}
+      {node.children.map(child => (
+        <RenderNodeComponent key={child.id} node={child} />
+      ))}
+    </g>
+  );
+}
+
+function useDiagramCore(props: DiagramProps) {
+  const fallbackRef = useRef<ParsedV2 | null>(null);
 
   const parsed = useMemo(() => {
-    try {
-      let result;
-      if (props.scene) {
-        result = {
-          objects: props.scene.getObjects(),
-          animConfig: props.scene.getAnimConfig(),
-          styles: props.scene.getStyles(),
-        };
-      } else if (props.dsl) {
-        result = parseDSL(props.dsl);
-      } else {
-        result = fallback.current;
-      }
-      fallback.current = result;
-      return result;
-    } catch {
-      // Return last valid parse while user is mid-edit
-      return fallback.current;
+    const result = parseInput(props);
+    if (result.nodes.length > 0) {
+      fallbackRef.current = result;
     }
+    return fallbackRef.current ?? result;
   }, [props.scene, props.dsl]);
 
-  const { objects, animConfig } = parsed;
-  const styles = ('styles' in parsed) ? (parsed as { styles?: Record<string, Record<string, unknown>> }).styles ?? {} : {};
-  const diagramName = ('name' in parsed) ? (parsed as { name?: string }).name : undefined;
-  const diagramBackground = ('background' in parsed) ? (parsed as { background?: string }).background : undefined;
-  const diagramViewport = ('viewport' in parsed) ? (parsed as { viewport?: { width: number; height: number } }).viewport : undefined;
-  const tracks = useMemo(() => buildTimeline(animConfig, objects, styles), [animConfig, objects, styles]);
-  const effects = useMemo(() => extractEffects(animConfig), [animConfig]);
-  // Recreate evaluator when effects or styles change
-  useMemo(() => { evaluatorRef.current = createEvaluator(effects, styles); }, [effects, styles]);
+  const { nodes, animConfig, background, viewport } = parsed;
+  const tracks = useMemo(() => buildTimeline(animConfig), [animConfig]);
   const duration = animConfig.duration ?? 5;
-  const chapters = animConfig.chapters;
+  const chapters: Chapter[] = animConfig.chapters?.map(c => ({ id: c.name, name: c.name, title: c.name, time: c.time })) ?? [];
 
   const [time, setTimeState] = useState(0);
   const [playing, setPlaying] = useState(props.autoplay ?? false);
@@ -139,7 +233,6 @@ function useDiagramCore(props: DiagramProps) {
 
   const seek = useCallback(
     (t: number) => {
-      evaluatorRef.current.reset();
       setTimeState(t);
       lastChapterRef.current = getActiveChapter(chapters, t);
     },
@@ -149,103 +242,45 @@ function useDiagramCore(props: DiagramProps) {
   const nextChapter = useCallback(() => {
     const sorted = [...chapters].sort((a, b) => a.time - b.time);
     const next = sorted.find((ch) => ch.time > time + 0.01);
-    if (next) {
-      seek(next.time);
-      setPlaying(true);
-    }
+    if (next) { seek(next.time); setPlaying(true); }
   }, [chapters, time, seek]);
 
   const prevChapter = useCallback(() => {
     const sorted = [...chapters].sort((a, b) => b.time - a.time);
     const prev = sorted.find((ch) => ch.time < time - 0.1);
-    if (prev) {
-      seek(prev.time);
-      setPlaying(true);
-    }
+    if (prev) { seek(prev.time); setPlaying(true); }
   }, [chapters, time, seek]);
 
   const goToChapter = useCallback(
     (id: string) => {
       const ch = chapters.find((c) => c.id === id);
-      if (ch) {
-        seek(ch.time);
-        setPlaying(true);
-      }
+      if (ch) { seek(ch.time); setPlaying(true); }
     },
     [chapters, seek],
   );
 
-  const animatedProps = useMemo(
-    () => evaluatorRef.current(objects, tracks, time),
-    [objects, tracks, time],
-  );
+  // Evaluate animation and build render tree
+  const renderNodes = useMemo(() => {
+    const values = evaluateAllTracks(tracks, time);
+    const animated = applyTrackValues(nodes, values);
+    runLayout(animated);
+    return renderTree(animated);
+  }, [nodes, tracks, time]);
 
-  const renderOrder = useMemo(
-    () => computeRenderOrder(objects, animatedProps),
-    [objects, animatedProps],
-  );
-
-  // Resolve camera viewBox with smooth target blending
-  const vpW = diagramViewport?.width ?? 800;
-  const vpH = diagramViewport?.height ?? 500;
+  // Camera
+  const vpW = viewport?.width ?? 800;
+  const vpH = viewport?.height ?? 500;
   const cameraViewBox: ViewBox | null = useMemo(() => {
-    const cam = findCamera(objects, animatedProps);
-    if (!cam) return null;
-
-    // Find block boundary times for blending camera target transitions
-    const camTracks = Object.keys(tracks).filter(k => k.startsWith(cam.id + '.'));
-    if (camTracks.length > 0) {
-      const allTimes = new Set<number>();
-      for (const k of camTracks) {
-        for (const kf of tracks[k]) allTimes.add(kf.time);
-      }
-      const blockTimes = [...allTimes].sort((a, b) => a - b);
-
-      let prevBlock = 0, nextBlock = blockTimes[blockTimes.length - 1] || 0;
-      for (const bt of blockTimes) {
-        if (bt <= time) prevBlock = bt;
-        if (bt > time) { nextBlock = bt; break; }
-      }
-
-      if (time > prevBlock && time < nextBlock && prevBlock !== nextBlock) {
-        // Compute from/to props at block boundaries
-        const fromResult = evaluatorRef.current(objects, tracks, prevBlock);
-        const toResult = evaluatorRef.current(objects, tracks, nextBlock);
-        const fromCamProps = fromResult[cam.id] || {};
-        const toCamProps = toResult[cam.id] || {};
-        const rawT = (time - prevBlock) / (nextBlock - prevBlock);
-
-        // Find the easing from the camera track keyframe at nextBlock
-        let easing: EasingName = 'easeInOut';
-        for (const k of camTracks) {
-          const kfs = tracks[k];
-          for (const kf of kfs) {
-            if (Math.abs(kf.time - nextBlock) < 0.001 && kf.easing !== 'linear') {
-              easing = kf.easing;
-              break;
-            }
-          }
-          if (easing !== 'easeInOut') break;
-        }
-
-        return resolveCamera(cam.props, animatedProps, objects, vpW, vpH, {
-          fromProps: fromCamProps,
-          toProps: toCamProps,
-          fromAllProps: fromResult,
-          toAllProps: toResult,
-          rawT,
-          easing,
-        });
-      }
-    }
-
-    return resolveCamera(cam.props, animatedProps, objects, vpW, vpH);
-  }, [objects, animatedProps, tracks, time, vpW, vpH]);
+    const values = evaluateAllTracks(tracks, time);
+    const animated = applyTrackValues(nodes, values);
+    const cameraNode = animated.find(n => n.camera);
+    if (!cameraNode) return null;
+    return computeViewBox(cameraNode, animated, { x: 0, y: 0, w: vpW, h: vpH });
+  }, [nodes, tracks, time, vpW, vpH]);
 
   return {
-    name: diagramName,
-    background: diagramBackground,
-    viewport: diagramViewport,
+    background,
+    viewport,
     cameraViewBox,
     time,
     duration,
@@ -253,9 +288,7 @@ function useDiagramCore(props: DiagramProps) {
     speed,
     chapters,
     activeChapter: getActiveChapter(chapters, time),
-    objects,
-    animatedProps,
-    renderOrder,
+    renderNodes,
     pct: duration > 0 ? (time / duration) * 100 : 0,
     seek,
     setPlaying,
@@ -280,7 +313,6 @@ export function useDiagram(props: DiagramProps) {
  */
 export const Diagram = forwardRef<DiagramHandle, DiagramProps>(function Diagram(props, ref) {
   const diagram = useDiagramCore(props);
-  const debug = props.debug ?? false;
 
   useImperativeHandle(
     ref,
@@ -295,14 +327,16 @@ export const Diagram = forwardRef<DiagramHandle, DiagramProps>(function Diagram(
     [diagram.play, diagram.pause, diagram.seek, diagram.nextChapter, diagram.prevChapter, diagram.goToChapter],
   );
 
-  const renderObject = useMemo(
-    () => createRenderObject(diagram.animatedProps, diagram.objects, debug),
-    [diagram.animatedProps, diagram.objects, debug],
-  );
+  const vb = diagram.cameraViewBox;
 
   return (
-    <SvgCanvas>
-      {diagram.renderOrder.map(([id, obj]) => renderObject(id, obj))}
+    <SvgCanvas
+      background={diagram.background}
+      viewBox={vb ? { x: vb.x, y: vb.y, width: vb.w, height: vb.h } : undefined}
+    >
+      {diagram.renderNodes.map(node => (
+        <RenderNodeComponent key={node.id} node={node} />
+      ))}
     </SvgCanvas>
   );
 });
