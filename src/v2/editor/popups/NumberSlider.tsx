@@ -26,6 +26,7 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
   const startX = useRef(0);
   const deflect = useRef(0);
   const currentVal = useRef(value);
+  const accumulator = useRef(0); // accumulates sub-step fractional amounts
   const rafId = useRef<number | null>(null);
 
   useEffect(() => { currentVal.current = value; }, [value]);
@@ -35,15 +36,23 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
     if (!dragging.current) return;
     const d = deflect.current;
     if (d !== 0) {
-      // Exponential ramp: very slow in the first third, then accelerates fast
+      // Exponential ramp: gentle in the first third, fast at full deflection
       const absNorm = Math.abs(d) / MAX_DEFLECT; // 0 to 1
-      const speed = (Math.pow(10, absNorm * 3) - 1) / 999 * Math.sign(d); // ~0 at start, 1 at full
-      const delta = speed * step * 8;
-      const newVal = currentVal.current + delta;
+      const speed = (Math.pow(10, absNorm * 2.5) - 1) / (Math.pow(10, 2.5) - 1); // 0→0, 1→1
+      const delta = speed * step * 6 * Math.sign(d);
+
+      // Accumulate fractional amounts so small deltas still produce changes
+      accumulator.current += delta;
       const dec = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
-      const rounded = parseFloat(newVal.toFixed(dec));
-      currentVal.current = rounded;
-      onChange(rounded);
+      const stepSize = Math.pow(10, -dec); // minimum change we can represent
+      if (Math.abs(accumulator.current) >= stepSize) {
+        const snapped = parseFloat((currentVal.current + accumulator.current).toFixed(dec));
+        if (snapped !== currentVal.current) {
+          currentVal.current = snapped;
+          onChange(snapped);
+        }
+        accumulator.current = 0;
+      }
     }
     rafId.current = requestAnimationFrame(tick);
   }, [step, onChange]);
@@ -54,6 +63,7 @@ export function NumberSlider({ value, step = 1, label, onChange }: NumberSliderP
     dragging.current = true;
     startX.current = e.clientX;
     deflect.current = 0;
+    accumulator.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     rafId.current = requestAnimationFrame(tick);
   }, [tick]);
