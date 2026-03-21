@@ -39,7 +39,7 @@ interface RgbaColor {
 interface StrokeStyle {
   color: RgbaColor;
   width: number;
-  dash?: { length: number; gap: number };
+  dash?: { length: number; gap: number; pattern?: string };
 }
 
 interface RenderBackend {
@@ -68,12 +68,23 @@ interface RenderBackend {
   drawRect(w: number, h: number, radius: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
   drawEllipse(rx: number, ry: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
   drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean): void;
-  drawPath(points: [number, number][], closed: boolean, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
+  drawPath(points: [number, number][], closed: boolean, smooth: boolean, fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void;
   drawImage(src: string, w: number, h: number, fit: 'contain' | 'cover' | 'fill'): void;
 }
 ```
 
-**Color convention**: Colors are passed as RGBA (converted from HSL at the command emission layer). Backends never see HSL — they receive renderer-ready color values.
+**Color convention**: Colors are passed as RGBA with `a` always `1.0`. Opacity is handled entirely by the `pushOpacity`/`popOpacity` stack, not baked into fill/stroke alpha. This avoids double-application in backends (like SVG) where group opacity composes natively.
+
+**Opacity stack contract**: `pushOpacity`/`popOpacity` are always called in matched pairs, one per node. Implementations must maintain an internal multiplicative stack. The composed product at any point is `opacity_1 * opacity_2 * ... * opacity_n` where each value was passed via `pushOpacity`. How the backend applies this product is implementation-specific:
+- SVG: Sets `opacity` attribute on the `<g>` wrapper (SVG composes natively)
+- Canvas2D: Tracks composed value, sets `ctx.globalAlpha` before draws
+- Three.js: Applies to material opacity
+
+**Dash pattern**: `StrokeStyle.dash` includes an optional `pattern` string for backends that support custom dash arrays (e.g., SVG's `stroke-dasharray`). Backends that don't support custom patterns should fall back to using `length` and `gap`.
+
+**Smooth paths**: `drawPath` includes a `smooth` flag. When true, the points should be rendered as a Catmull-Rom spline. Backends that support curves (SVG, Canvas2D) should implement this; backends that don't (ASCII) can fall back to straight segments.
+
+**Draw progress**: `drawPath` includes an optional `drawProgress` (0-1). When set, only the first portion of the path is rendered. SVG implements this via `stroke-dasharray`/`stroke-dashoffset`. Canvas2D can use partial path tracing.
 
 **Future renderers**: Canvas2D, Three.js/WebGL, ASCII. Each just implements this interface.
 
@@ -84,55 +95,114 @@ The bridge between the v2 node tree and any backend. Lives in `src/v2/renderer/e
 **Responsibilities:**
 - Walks the evaluated node tree depth-first
 - Resolves inheritance (fill, stroke from parent chain)
-- Resolves opacity (multiplicative composition via push/pop)
+- Resolves opacity (passes node's own opacity value to pushOpacity; the stack composes multiplicatively)
 - Sorts siblings by depth
 - Skips invisible nodes (but does not skip their animation evaluation — visibility is render-time only)
-- Resolves connection endpoints (from/to object IDs → coordinates)
+- Resolves connection endpoints (from/to object IDs → coordinates, with anchor resolution)
+- Resolves pathFollow/pathProgress transforms
 - Converts HSL colors to RGBA before passing to backend
-- Applies dash patterns
+- Folds node `dash` into `StrokeStyle`
 
-**Algorithm:**
+### emitFrame signature
+
+```ts
+function emitFrame(
+  backend: RenderBackend,
+  nodes: Node[],
+  allRoots: Node[],           // full tree for connection/pathFollow resolution
+  viewBox?: ViewBox,          // pre-computed by caller (V2Diagram)
+): void
+```
+
+The caller (V2Diagram) is responsible for finding the camera node, calling `computeViewBox`, and passing the result. The emitter calls `backend.setViewBox()` if a viewBox is provided, or `backend.clearViewBox()` if not.
+
+### Algorithm
 
 ```
-emitFrame(backend, nodes):
+emitFrame(backend, nodes, allRoots, viewBox?):
   backend.beginFrame()
+  if viewBox:
+    backend.setViewBox(viewBox.x, viewBox.y, viewBox.w, viewBox.h)
+  else:
+    backend.clearViewBox()
   for each root node (sorted by depth, excluding camera nodes):
-    emitNode(backend, node, parentFill, parentStroke)
+    emitNode(backend, node, allRoots, parentFill=undefined, parentStroke=undefined)
   backend.endFrame()
 
-emitNode(backend, node, parentFill, parentStroke):
+emitNode(backend, node, allRoots, parentFill, parentStroke):
   if not visible: return
 
-  resolve transform: x, y, rotation, scale (default 0, 0, 0, 1)
+  resolve transform:
+    if node.transform.pathFollow is set:
+      look up referenced path node in allRoots by ID
+      compute position at node.transform.pathProgress along that path
+      compute tangent rotation if path has direction
+      x, y = resolved position; rotation = tangent angle + node.rotation
+    else:
+      x = node.transform.x ?? 0
+      y = node.transform.y ?? 0
+      rotation = node.transform.rotation ?? 0
+    scale = node.transform.scale ?? 1
   backend.pushTransform(x, y, rotation, scale)
 
-  resolve opacity (own ?? 1)
+  opacity = node.opacity ?? 1
   backend.pushOpacity(opacity)
 
-  resolve fill: own → style → parent (convert HSL → RGBA)
-  resolve stroke: own → style → parent (convert HSL → RGBA + width)
+  resolve fill: node.fill ?? parentFill → hslToRgba (a=1.0)
+  resolve stroke: node.stroke ?? parentStroke → { color: hslToRgba (a=1.0), width }
+
+  fold node.dash into stroke:
+    if node.dash: stroke.dash = { length, gap, pattern }
 
   emit geometry:
     rect    → backend.drawRect(w, h, radius, fill, stroke)
     ellipse → backend.drawEllipse(rx, ry, fill, stroke)
     text    → backend.drawText(content, size, fill, align, bold, mono)
-    path    → resolve points or connection endpoints, backend.drawPath(points, closed, fill, stroke)
+    path:
+      if points: use points directly
+      else if from/to: resolve connection endpoints with anchor resolution
+      backend.drawPath(resolvedPoints, closed, smooth, fill, stroke, drawProgress)
     image   → backend.drawImage(src, w, h, fit)
 
   for each child (sorted by depth):
-    emitNode(backend, child, fill, stroke)
+    emitNode(backend, child, allRoots, fill, stroke)
 
   backend.popOpacity()
   backend.popTransform()
 ```
 
+### Anchor Resolution
+
+When a path has `from`/`to` referencing object IDs with `fromAnchor`/`toAnchor`:
+
+1. Find the target node in `allRoots` by ID
+2. Get the target's world-space position (transform.x, transform.y)
+3. Get the target's bounding box from its geometry (rect.w/h, ellipse.rx/ry, or size.w/h)
+4. Resolve the anchor to an offset:
+   - Named anchors (N, NE, E, etc.) map to edge points on the bounding box
+   - Float anchors [fx, fy] interpolate across the bounding box (0,0 = top-left, 1,1 = bottom-right)
+5. World position = target center + anchor offset
+
+### PathFollow Resolution
+
+When a node has `transform.pathFollow` set:
+
+1. Find the referenced path node in `allRoots` by ID
+2. Get the path's resolved points (either direct points or resolved connection endpoints)
+3. Compute arc-length parameterization of the path
+4. Interpolate position at `transform.pathProgress` (0-1) along the path
+5. Optionally compute tangent direction for rotation (the node rotates to follow the path)
+6. The resolved (x, y) replaces the node's transform.x/y for `pushTransform`
+
 **Key design point**: The emitter is the only code that imports from the node/tree layer. Backends have no knowledge of starch's data model — they are pure drawing implementations.
 
 ## HSL → RGBA Conversion
 
-The emitter converts `HslColor { h, s, l }` to `RgbaColor { r, g, b, a }` before calling backend methods. This conversion happens in a utility function `hslToRgba(hsl: HslColor, opacity?: number): RgbaColor`.
+New utility function: `hslToRgba(hsl: HslColor): RgbaColor`
 
-The `a` channel combines the node's resolved opacity. This way backends receive a single RGBA value per fill/stroke and don't need to handle opacity separately for color rendering (though the `pushOpacity`/`popOpacity` stack is still used for child element composition).
+Converts HSL to RGBA with `a` always `1.0`. Opacity is not baked into the color — it is handled entirely by the `pushOpacity`/`popOpacity` stack. This avoids double-application in SVG (where group `opacity` and fill `rgba` alpha would multiply).
+
+This is net-new code — the existing `hslToCSS` produces CSS strings. `hslToRgba` produces numeric RGBA for the renderer-agnostic interface.
 
 ## SVG Backend
 
@@ -145,18 +215,18 @@ First `RenderBackend` implementation. Maps draw commands to SVG DOM elements.
 - `endFrame()`: No-op (DOM is already live).
 
 **Transform stack:**
-- `pushTransform(x, y, r, s)`: Creates a `<g>` element with `transform="translate(x,y) rotate(r) scale(s)"`. Appends to current parent `<g>`. Pushes onto stack.
+- `pushTransform(x, y, r, s)`: Creates a `<g>` element with `transform="translate(x,y) rotate(r) scale(s)"`. Appends to current parent `<g>`. Pushes onto internal stack.
 - `popTransform()`: Pops from stack, restores previous `<g>` as current parent.
 
 **Opacity stack:**
-- `pushOpacity(opacity)`: Sets `opacity` attribute on the current `<g>`. SVG handles multiplicative composition natively via nested group opacity.
-- `popOpacity()`: No explicit action needed (handled by popTransform since opacity lives on the `<g>` element).
+- `pushOpacity(opacity)`: Sets `opacity` attribute on the current `<g>` (the one created by the most recent `pushTransform`). SVG handles multiplicative composition natively via nested group opacity.
+- `popOpacity()`: No explicit action needed for SVG — the opacity attribute lives on the `<g>` element that `popTransform` will leave. However, implementations must maintain the stack contract (matched push/pop pairs).
 
 **Draw commands:**
 - `drawRect` → appends `<rect>` to current `<g>` with x/y centered
 - `drawEllipse` → appends `<ellipse>` to current `<g>`
 - `drawText` → appends `<text>` with `text-anchor`, `dominant-baseline`, font attributes
-- `drawPath` → appends `<path>` with computed `d` attribute from points
+- `drawPath` → appends `<path>`. When `smooth=true`, converts points to SVG cubic bezier curve commands (Catmull-Rom → Bezier). When `drawProgress` < 1, uses `stroke-dasharray`/`stroke-dashoffset`.
 - `drawImage` → appends `<image>` with `href`, `preserveAspectRatio`
 
 **Colors**: `RgbaColor` → `rgba(r, g, b, a)` CSS strings.
@@ -194,7 +264,7 @@ The core React component. Manages:
 
 1. **Backend lifecycle**: Creates SVG backend on mount, destroys on unmount. Holds a ref to the container div.
 2. **Animation loop**: `requestAnimationFrame` tick → evaluate tracks → apply to tree → run layout → emit frame to backend.
-3. **Camera**: Finds camera node in evaluated tree, computes viewBox, calls `backend.setViewBox()`.
+3. **Camera**: Finds camera node in evaluated tree, computes viewBox via `computeViewBox()`, passes to `emitFrame`.
 4. **Props**: Receives `dsl`, `autoplay`, `speed`, `debug`. Exposes `time`, `duration`, `playing`, `seek`, `play`, `pause`, chapter controls.
 
 ### Pipeline per frame
@@ -204,10 +274,25 @@ DSL string
   → parseScene()           // v2 parser (once, on DSL change)
   → buildTimeline()        // v2 timeline (once, on DSL change)
   → evaluateAllTracks(t)   // per frame
-  → applyTrackValues()     // per frame
-  → runLayout()            // per frame
-  → emitFrame(backend)     // per frame → SVG backend
+  → applyTrackValues()     // per frame (returns cloned tree)
+  → runLayout()            // per frame (mutates the clone — safe because applyTrackValues always produces a fresh copy)
+  → find camera node, computeViewBox()  // per frame
+  → emitFrame(backend, nodes, allRoots, viewBox)  // per frame → SVG backend
 ```
+
+**Static diagrams**: When `ParsedScene.animate` is undefined (no animation block), the timeline and evaluation steps are skipped. The frame renders the static node tree directly: `parseScene → applyTrackValues(nodes, emptyMap) → runLayout → emitFrame`.
+
+**Mutation safety**: `runLayout` mutates nodes in-place (void return). This is safe because it always operates on the cloned tree returned by `applyTrackValues`. The original `ParsedScene.nodes` are never mutated. This dependency is documented here — do not reorder the pipeline steps.
+
+### Camera integration
+
+Camera handling lives in `V2Diagram`, not in the emitter:
+
+1. After `applyTrackValues` + `runLayout`, find any node with `.camera` set
+2. Call `computeViewBox(cameraNode, evaluatedNodes, defaultViewBox)` from `src/v2/renderer/camera.ts`
+3. Pass the result to `emitFrame` as the `viewBox` parameter
+4. The emitter calls `backend.setViewBox()` or `backend.clearViewBox()`
+5. Default viewBox comes from the diagram's `viewport` setting (or 800x500 fallback)
 
 ### App Layout
 
@@ -230,16 +315,22 @@ Carried over from v1:
 - **Viewport ratio**: Toggle aspect ratio preview based on diagram's `viewport` setting
 - **Copy Camera**: Copies current view position as a DSL camera snippet
 
-These all operate by manipulating the viewBox passed to `backend.setViewBox()`.
+These all operate by manipulating the viewBox passed to `emitFrame`.
 
 ### Vite Configuration
 
-New file: `vite.v2.config.ts`
+New file: `vite.v2.config.ts` in project root.
+
+Uses `build.rollupOptions.input` pointing to `src/v2/app/index.html` rather than `root: 'src/v2/app'` — this avoids module resolution problems with imports that cross directory boundaries (e.g., `src/v2/types/color.ts` importing from `../../core/colours`).
 
 ```ts
 export default defineConfig({
-  root: 'src/v2/app',
-  // ...standard React + TypeScript config
+  build: {
+    rollupOptions: {
+      input: 'src/v2/app/index.html',
+    },
+  },
+  // standard React + TypeScript config
 })
 ```
 
@@ -252,16 +343,16 @@ export default defineConfig({
 ## Implementation Phases
 
 ### Phase 1 — RenderBackend interface & color utilities
-Type definitions for `RenderBackend`, `RgbaColor`, `StrokeStyle`, `RendererInfo`. HSL → RGBA conversion utility. Tests for color conversion.
+Type definitions for `RenderBackend`, `RgbaColor`, `StrokeStyle`, `RendererInfo`. `hslToRgba` conversion utility. Tests for color conversion.
 
 ### Phase 2 — Command emitter
-`emitFrame` function that walks the node tree and calls backend methods. Tests using a mock backend that records calls.
+`emitFrame` and `emitNode` functions that walk the node tree and call backend methods. Anchor resolution. PathFollow resolution. Tests using a mock backend that records calls.
 
 ### Phase 3 — SVG backend
-`SvgRenderBackend` implementing the interface. Tests for DOM output.
+`SvgRenderBackend` implementing the interface. Catmull-Rom → Bezier conversion for smooth paths. Draw progress via dasharray. Tests for DOM output.
 
 ### Phase 4 — V2Diagram React component
-Component wrapping the full pipeline (parse → timeline → evaluate → apply → layout → emit). Animation loop. Camera support.
+Component wrapping the full pipeline (parse → timeline → evaluate → apply → layout → camera → emit). Animation loop. Camera support. Static diagram handling.
 
 ### Phase 5 — V2 Dev App
 App shell, sample browser, editor integration, timeline integration, viewport controls. Vite config. `npm run dev:v2`.
