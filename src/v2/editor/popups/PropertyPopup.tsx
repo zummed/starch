@@ -14,23 +14,44 @@ interface PropertyPopupProps {
   onClose: () => void;
 }
 
-/** Generic compound editor: jog wheel per numeric sub-property */
+/** Generic compound editor: auto-detects color fields (h/s/l) and shows color picker for those, jog wheels for the rest */
 function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; value: Record<string, unknown>; onChange: (value: unknown) => void }) {
   const props = getAvailableProperties(schemaPath);
-  const numericProps = props.filter(p => {
-    const t = detectSchemaType(p.schema);
-    return t === 'number';
+  const propNames = props.map(p => p.name);
+
+  // Detect if this object contains h/s/l color fields
+  const hasColor = ['h', 's', 'l'].every(k => propNames.includes(k));
+  const colorKeys = new Set(['h', 's', 'l']);
+
+  // Non-color numeric properties
+  const otherNumericProps = props.filter(p => {
+    if (hasColor && colorKeys.has(p.name)) return false;
+    return detectSchemaType(p.schema) === 'number';
   });
+
+  const handleColorChange = useCallback((color: { h: number; s: number; l: number }) => {
+    onChange({ ...value, ...color });
+  }, [value, onChange]);
 
   const handleSubChange = useCallback((key: string, newVal: unknown) => {
     onChange({ ...value, [key]: newVal });
   }, [value, onChange]);
 
-  if (numericProps.length === 0) return null;
+  if (!hasColor && otherNumericProps.length === 0) return null;
 
   return (
     <div onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-      {numericProps.map(prop => {
+      {hasColor && (
+        <ColorPicker
+          value={{
+            h: (value.h as number) ?? 0,
+            s: (value.s as number) ?? 0,
+            l: (value.l as number) ?? 50,
+          }}
+          onChange={handleColorChange}
+        />
+      )}
+      {otherNumericProps.map(prop => {
         const constraints = getNumberConstraints(prop.schema);
         const range = (constraints?.max ?? 100) - (constraints?.min ?? 0);
         const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
