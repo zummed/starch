@@ -11,8 +11,8 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching } from '@codemirror/language';
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
-import JSON5 from 'json5';
 import { starchTheme, starchHighlight } from '../../../editor/theme';
+import { findValueSpan, formatValue } from '../../editor/textReplace';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
 import { getCursorContext } from '../../editor/cursorPath';
@@ -96,7 +96,9 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
   // Property popup state
   const [popup, setPopup] = useState<{
     schemaPath: string;
-    dslPath: string;  // full path in the JSON5 object (e.g., "objects.0.fill.h")
+    dslPath: string;
+    key: string;       // the property key clicked on (e.g., "h", "radius")
+    cursorPos: number;  // cursor offset in the text, for finding the value span
     value: unknown;
     position: { x: number; y: number };
   } | null>(null);
@@ -142,6 +144,8 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
           setPopup({
             schemaPath,
             dslPath: ctx.path,
+            key: ctx.currentKey,
+            cursorPos: pos,
             value: currentValue,
             position: { x: coords.left, y: coords.bottom + 4 },
           });
@@ -220,31 +224,30 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     }
   }, [value]);
 
-  // Handle popup value change — update JSON5 text at the DSL path
+  // Handle popup value change — surgical text replacement at the value span
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
     const view = viewRef.current;
     if (!view) return;
 
-    try {
-      const doc = view.state.doc.toString();
-      const raw = JSON5.parse(doc);
-      setNestedValue(raw, popup.dslPath.split('.'), newValue);
-      const newText = JSON5.stringify(raw, null, 2);
+    const doc = view.state.doc.toString();
+    const span = findValueSpan(doc, popup.cursorPos, popup.key);
+    if (!span) return;
 
-      externalUpdate.current = true;
-      view.dispatch({
-        changes: { from: 0, to: doc.length, insert: newText },
-      });
-      externalUpdate.current = false;
+    const replacement = formatValue(newValue);
 
-      onChangeRef.current(newText);
+    externalUpdate.current = true;
+    view.dispatch({
+      changes: { from: span.from, to: span.to, insert: replacement },
+    });
+    externalUpdate.current = false;
 
-      // Update popup's own value so the widget reflects the change
-      setPopup(prev => prev ? { ...prev, value: newValue } : null);
-    } catch {
-      // If parse fails, ignore the change
-    }
+    const newDoc = view.state.doc.toString();
+    onChangeRef.current(newDoc);
+
+    // Update popup state — adjust cursorPos for the length change
+    const delta = replacement.length - (span.to - span.from);
+    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: prev.cursorPos + delta } : null);
   }, [popup]);
 
   return (
@@ -273,19 +276,6 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
-
-function setNestedValue(obj: any, keys: string[], value: unknown): void {
-  if (keys.length === 0) return;
-  if (keys.length === 1) {
-    obj[keys[0]] = value;
-    return;
-  }
-  const [head, ...rest] = keys;
-  if (!(head in obj) || typeof obj[head] !== 'object') {
-    obj[head] = {};
-  }
-  setNestedValue(obj[head], rest, value);
-}
 
 function extractValueAtCursor(doc: string, pos: number, type: string): unknown {
   // Simple extraction — look for the value after the colon near the cursor

@@ -58,13 +58,24 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     }
     case 'number': {
       const constraints = getNumberConstraints(schema);
+      const propName = schemaPath.split('.').pop() ?? '';
+      // Sensible max based on property name when schema has no max
+      const inferredMax = constraints?.max ??
+        (['w', 'h', 'x', 'y', 'rx', 'ry'].includes(propName) ? 500 :
+         ['size', 'fontSize'].includes(propName) ? 72 :
+         ['radius', 'gap', 'padding'].includes(propName) ? 50 :
+         ['width'].includes(propName) ? 10 :
+         ['rotation'].includes(propName) ? 360 :
+         200);
+      const step = constraints?.max && constraints.max <= 1 ? 0.01 :
+                   inferredMax <= 10 ? 0.5 : 1;
       content = (
         <NumberSlider
           value={(value as number) ?? 0}
-          min={constraints?.min ?? 0}
-          max={constraints?.max ?? 1000}
-          step={constraints?.max && constraints.max <= 1 ? 0.01 : 1}
-          label={schemaPath.split('.').pop()}
+          min={constraints?.min ?? (propName === 'rotation' ? -360 : 0)}
+          max={inferredMax}
+          step={step}
+          label={propName}
           onChange={onChange}
         />
       );
