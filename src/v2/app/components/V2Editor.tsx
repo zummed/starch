@@ -3,6 +3,7 @@
  * Uses ModelManager, schema-driven completion, v2 linter, and property popups.
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
@@ -235,14 +236,15 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
           fontFamily: FONT,
         }}
       />
-      {popup && (
+      {popup && createPortal(
         <PropertyPopup
           schemaPath={popup.schemaPath}
           value={popup.value}
           position={popup.position}
           onChange={handlePopupChange}
           onClose={() => setPopup(null)}
-        />
+        />,
+        document.body,
       )}
     </div>
   );
