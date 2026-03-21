@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'react';
+
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
 interface NumberSliderProps {
@@ -9,9 +11,13 @@ interface NumberSliderProps {
   onChange: (value: number) => void;
 }
 
+function stop(e: React.SyntheticEvent) {
+  e.stopPropagation();
+}
+
 export function NumberSlider({ value, min = 0, max = 100, step = 1, label, onChange }: NumberSliderProps) {
   return (
-    <div style={{ padding: 8, minWidth: 180 }}>
+    <div style={{ padding: 8, minWidth: 180 }} onMouseDown={stop} onPointerDown={stop}>
       {label && <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, fontFamily: FONT }}>{label}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
@@ -21,7 +27,9 @@ export function NumberSlider({ value, min = 0, max = 100, step = 1, label, onCha
           step={step}
           value={value}
           onChange={(e) => onChange(parseFloat(e.target.value))}
-          style={{ flex: 1 }}
+          onMouseDown={stop}
+          onPointerDown={stop}
+          style={{ flex: 1, cursor: 'pointer' }}
         />
         <input
           type="number"
@@ -30,10 +38,14 @@ export function NumberSlider({ value, min = 0, max = 100, step = 1, label, onCha
           step={step}
           value={value}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          onMouseDown={stop}
+          onPointerDown={stop}
+          onKeyDown={(e) => e.stopPropagation()}
+          onFocus={(e) => e.target.select()}
           style={{
             width: 50, padding: '2px 4px', fontSize: 11, fontFamily: FONT,
             background: '#14161c', border: '1px solid #2a2d35', borderRadius: 4,
-            color: '#e2e5ea', textAlign: 'right',
+            color: '#e2e5ea', textAlign: 'right', outline: 'none',
           }}
         />
       </div>

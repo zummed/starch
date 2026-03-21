@@ -108,6 +108,7 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     <div
       ref={ref}
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
