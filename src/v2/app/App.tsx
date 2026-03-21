@@ -355,6 +355,7 @@ export default function App() {
           {/* Sample browser — slide in/out */}
           <div style={{
             width: showBrowser ? 240 : 0,
+            height: '100%',
             flexShrink: 0, overflow: 'hidden',
             transition: 'width 0.2s ease',
           }}>
@@ -367,6 +368,7 @@ export default function App() {
           {/* Editor panel — slide in/out */}
           <div style={{
             width: showEditor ? editorWidth : 0,
+            height: '100%',
             flexShrink: 0, overflow: 'hidden',
             transition: isDragging ? 'none' : 'width 0.2s ease',
             display: 'flex', flexDirection: 'column',
