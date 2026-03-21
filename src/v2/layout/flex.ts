@@ -127,6 +127,13 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   }
   const maxCross = containerCross > 0 ? containerCross - padding * 2 : Math.max(...sizes.map(s => s.cross));
 
+  // Offset to center-origin: since rects draw centered, the container's
+  // top-left visual corner is at (-containerW/2, -containerH/2)
+  const containerW = containerMain > 0 ? containerMain : finalContentMain + padding * 2;
+  const containerH = containerCross > 0 ? containerCross : maxCross + padding * 2;
+  const offsetMain = isRow ? -containerW / 2 : -containerH / 2;
+  const offsetCross = isRow ? -containerH / 2 : -containerW / 2;
+
   const placements: ChildPlacement[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const child = sorted[i];
@@ -142,10 +149,16 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
       crossPos = padding;
     }
 
+    // Position is the center of the child (rects draw centered)
+    const childMainSize = finalMainSizes[i];
+    const childCrossSize = sizes[i].cross;
+    const mainCenter = mainPositions[i] + childMainSize / 2 + offsetMain;
+    const crossCenter = crossPos + childCrossSize / 2 + offsetCross;
+
     const placement: ChildPlacement = {
       id: child.id,
-      x: isRow ? mainPositions[i] : crossPos,
-      y: isRow ? crossPos : mainPositions[i],
+      x: isRow ? mainCenter : crossCenter,
+      y: isRow ? crossCenter : mainCenter,
     };
 
     // If grow changed size, report it

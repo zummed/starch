@@ -15,9 +15,11 @@ describe('flexStrategy', () => {
     ];
     const placements = flexStrategy(container, children);
     expect(placements).toHaveLength(2);
-    // First child at padding (0), second at 50 + 10 gap = 60
-    expect(placements[0].x).toBe(0);
-    expect(placements[1].x).toBe(60);
+    // Center-origin: container is 300 wide, children start at -150 + child_center
+    // First child center: -150 + 25 = -125
+    // Second child center: -150 + 50 + 10 + 25 = -65
+    expect(placements[0].x).toBe(-125);
+    expect(placements[1].x).toBe(-65);
   });
 
   it('lays out children in a column', () => {
@@ -31,8 +33,10 @@ describe('flexStrategy', () => {
       createNode({ id: 'b', rect: { w: 80, h: 40 } }),
     ];
     const placements = flexStrategy(container, children);
-    expect(placements[0].y).toBe(0);
-    expect(placements[1].y).toBe(45); // 40 + 5 gap
+    // First child center y: -100 + 20 = -80
+    // Second child center y: -100 + 40 + 5 + 20 = -35
+    expect(placements[0].y).toBe(-80);
+    expect(placements[1].y).toBe(-35);
   });
 
   it('respects order hint', () => {
@@ -46,7 +50,6 @@ describe('flexStrategy', () => {
       createNode({ id: 'b', rect: { w: 50, h: 30 }, layoutHint: { order: 1 } }),
     ];
     const placements = flexStrategy(container, children);
-    // b should come first (order 1)
     expect(placements[0].id).toBe('b');
     expect(placements[1].id).toBe('a');
   });
@@ -62,7 +65,7 @@ describe('flexStrategy', () => {
       createNode({ id: 'b', rect: { w: 50, h: 30 }, layoutHint: { grow: 1 } }),
     ];
     const placements = flexStrategy(container, children);
-    // 200 - 100 base = 100 extra, split 50/50
+    // 200 - 100 base = 100 extra, split 50/50 → each 100 wide
     expect(placements[0].w).toBe(100);
     expect(placements[1].w).toBe(100);
   });
@@ -77,8 +80,8 @@ describe('flexStrategy', () => {
       createNode({ id: 'a', rect: { w: 50, h: 30 } }),
     ];
     const placements = flexStrategy(container, children);
-    // 200 - 50 = 150, centered = 75
-    expect(placements[0].x).toBe(75);
+    // Centered: child center at x=0
+    expect(placements[0].x).toBe(0);
   });
 
   it('handles empty children', () => {
@@ -101,7 +104,8 @@ describe('flexStrategy', () => {
       createNode({ id: 'b', ellipse: { rx: 25, ry: 25 } }),
     ];
     const placements = flexStrategy(container, children);
-    // ellipse width = 50, so second at 50 + 10 = 60
-    expect(placements[1].x).toBe(60);
+    // First ellipse center: -150 + 25 = -125
+    // Second ellipse center: -150 + 50 + 10 + 25 = -65
+    expect(placements[1].x).toBe(-65);
   });
 });
