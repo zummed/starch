@@ -216,6 +216,24 @@ function resolveAnchorOnBounds(
   return [bounds.cx + offsets[0] * bounds.hw, bounds.cy + offsets[1] * bounds.hh];
 }
 
+/**
+ * If a point is inside the bounds, push it to the edge along the direction toward the target.
+ */
+function ensureOutsideBounds(
+  point: [number, number],
+  toward: [number, number],
+  bounds: { cx: number; cy: number; hw: number; hh: number; isEllipse: boolean },
+): [number, number] {
+  const dx = Math.abs(point[0] - bounds.cx);
+  const dy = Math.abs(point[1] - bounds.cy);
+  if (dx < bounds.hw && dy < bounds.hh && (bounds.hw > 0 || bounds.hh > 0)) {
+    // Point is inside — snap to edge in the direction of the target
+    const angle = Math.atan2(toward[1] - bounds.cy, toward[0] - bounds.cx);
+    return edgePoint(bounds, angle);
+  }
+  return point;
+}
+
 function applyGap(point: [number, number], toward: [number, number], gap: number): [number, number] {
   const dx = toward[0] - point[0];
   const dy = toward[1] - point[1];
@@ -260,7 +278,9 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
         const bounds = getNodeBounds(fromNode);
         if (path.fromAnchor) {
           const anchor = resolveAnchorOnBounds(path.fromAnchor, bounds);
-          if (anchor) fromPoint = anchor;
+          if (anchor) {
+            fromPoint = ensureOutsideBounds(anchor, firstTarget, bounds);
+          }
         } else if (bounds.hw > 0 || bounds.hh > 0) {
           const angle = Math.atan2(firstTarget[1] - bounds.cy, firstTarget[0] - bounds.cx);
           fromPoint = edgePoint(bounds, angle);
@@ -274,7 +294,9 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
         const bounds = getNodeBounds(toNode);
         if (path.toAnchor) {
           const anchor = resolveAnchorOnBounds(path.toAnchor, bounds);
-          if (anchor) toPoint = anchor;
+          if (anchor) {
+            toPoint = ensureOutsideBounds(anchor, lastTarget, bounds);
+          }
         } else if (bounds.hw > 0 || bounds.hh > 0) {
           const angle = Math.atan2(lastTarget[1] - bounds.cy, lastTarget[0] - bounds.cx);
           toPoint = edgePoint(bounds, angle);
