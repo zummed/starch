@@ -37,38 +37,66 @@ function collectSlotMembers(roots: Node[], containerId: string): Node[] {
   return members;
 }
 
+/** Position cache for smooth slot transitions */
+const positionCache = new Map<string, { x: number; y: number }>();
+const LERP_SPEED = 0.15; // per frame — reaches ~95% in ~20 frames (~0.33s at 60fps)
+
+function lerpTo(current: number, target: number, speed: number): number {
+  return current + (target - current) * speed;
+}
+
 export function runLayout(roots: Node[]): void {
-  // First pass: collect all containers (nodes with layout)
-  // and their members (children + slot references)
   function processNode(node: Node, allRoots: Node[]): void {
     if (node.layout) {
       const strategy = getStrategy(node.layout.type);
       if (strategy) {
-        // Gather layout members: direct children + slot references from anywhere in the tree
         const slotMembers = collectSlotMembers(allRoots, node.id);
         const allMembers = [...node.children, ...slotMembers];
 
         const placements = strategy(node, allMembers);
         for (const placement of placements) {
-          // Find the node — could be a direct child or a slot member
           let target = node.children.find(c => c.id === placement.id);
           if (!target) target = slotMembers.find(c => c.id === placement.id);
           if (target) {
             if (!target.transform) {
               (target as any).transform = {};
             }
-            // For slot members, position is in world space (container transform + offset)
+
+            let targetX: number;
+            let targetY: number;
+
             if (target.slot === node.id) {
-              // Slot member: add container's position to the placement
+              // Slot member: position in world space
               const cx = node.transform?.x ?? 0;
               const cy = node.transform?.y ?? 0;
-              target.transform!.x = cx + placement.x;
-              target.transform!.y = cy + placement.y;
+              targetX = cx + placement.x;
+              targetY = cy + placement.y;
             } else {
-              // Direct child: position is relative to parent
-              target.transform!.x = placement.x;
-              target.transform!.y = placement.y;
+              // Direct child: position relative to parent
+              targetX = placement.x;
+              targetY = placement.y;
             }
+
+            // Smooth transition for slot members
+            if (target.slot) {
+              const cached = positionCache.get(target.id);
+              if (cached) {
+                const smoothX = lerpTo(cached.x, targetX, LERP_SPEED);
+                const smoothY = lerpTo(cached.y, targetY, LERP_SPEED);
+                target.transform!.x = smoothX;
+                target.transform!.y = smoothY;
+                positionCache.set(target.id, { x: smoothX, y: smoothY });
+              } else {
+                // First frame — no cache, set directly
+                target.transform!.x = targetX;
+                target.transform!.y = targetY;
+                positionCache.set(target.id, { x: targetX, y: targetY });
+              }
+            } else {
+              target.transform!.x = targetX;
+              target.transform!.y = targetY;
+            }
+
             if (placement.w !== undefined && target.rect) {
               target.rect.w = placement.w;
             }
