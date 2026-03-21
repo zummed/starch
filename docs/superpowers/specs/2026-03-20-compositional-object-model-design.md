@@ -33,6 +33,7 @@ Every element in a diagram is a **node**. A node has:
 - Optional `layout` declaration (makes it a layout container)
 - Optional `layoutHint` bag (read by parent's layout strategy)
 - Optional `visible` boolean (default true) — controls rendering and hit-testing. Unlike `opacity: 0`, an invisible node does not occupy layout space or receive pointer events.
+- Optional `size: { w, h }` — explicit size for layout purposes. Overrides geometry-derived size. Does not affect rendering (a rect still uses `rect.w`/`rect.h` for drawing). Primarily useful for non-geometric container nodes or text nodes that need to participate in layout. Animatable: `node.size.w`, `node.size.h`.
 
 ### Rendering Primitives
 
@@ -61,6 +62,8 @@ Attached to any node. These are categorized by their inheritance/composition beh
 - **transform**: `{ x, y, rotation, scale, anchor, pathFollow, pathProgress }` — position & orientation relative to parent
 
 A child's transform is composed with its parent's: if parent is at (200, 100) and child has `transform: { x: 70, y: 30 }`, the child renders at world-space (270, 130). A child with no transform defaults to (0, 0) relative to its parent — it does **not** inherit the parent's x/y values. Rotation and scale compose multiplicatively. This mirrors SVG's nested `<g>` transform model.
+
+`anchor` sets the pivot point for rotation and scale. Accepts named anchors (`"center"`, `"N"`, `"NE"`, etc. — same set as connection anchors) or float pairs `[fx, fy]` (0-1 range, relative to the node's bounding box). Default: `"center"`. Named anchors are step-interpolated; float pairs are numerically lerped.
 
 When `pathFollow` is set (a path node ID), `pathProgress` (0-1) determines position along that path. The computed position overrides `x`/`y` at render time. Both `pathFollow` (step-interpolated) and `pathProgress` (numeric lerp) are animatable. On closed paths, progress wraps.
 
@@ -93,8 +96,8 @@ fill: "#3399ff"                         // hex → resolved to HSL
 |---|---|
 | Visual (fill, stroke) | Inherits from parent. Child's explicit value overrides. |
 | Opacity | Composes multiplicatively with parent (SVG-native behavior). Parent 0.5 + child 0.8 = rendered 0.4. |
-| Transform (x, y, rotation, scale, pathFollow, pathProgress) | Composes with parent. Child values are parent-relative. Defaults to identity (0, 0, 0, 1). |
-| Geometry, layout, layoutHint, dash, depth, visible | Node-local. Never inherits. |
+| Transform (x, y, rotation, scale, anchor, pathFollow, pathProgress) | Composes with parent. Child values are parent-relative. Defaults to identity (0, 0, 0, 1, "center"). |
+| Geometry, layout, layoutHint, dash, size, depth, visible | Node-local. Never inherits. |
 
 ## Composition
 
@@ -128,7 +131,7 @@ A "line" is a composition of path + arrowheads + label:
   id: "conn1",
   children: [
     {
-      id: "conn1.path",
+      id: "conn1.route",
       path: { from: "a", to: "b", smooth: true },
       stroke: { h: 0, s: 0, l: 60, width: 2 },
       dash: { pattern: "dashed", length: 8, gap: 4 }
@@ -141,7 +144,7 @@ A "line" is a composition of path + arrowheads + label:
     {
       id: "conn1.label",
       text: { content: "calls", size: 11 },
-      transform: { pathFollow: "conn1.path", pathProgress: 0.5 }
+      transform: { pathFollow: "conn1.route", pathProgress: 0.5 }
     }
   ]
 }
@@ -150,8 +153,8 @@ A "line" is a composition of path + arrowheads + label:
 Sub-elements like arrowheads and line patterns are independently animatable:
 
 - `conn1.arrowEnd.fill.h`
-- `conn1.path.stroke.width`
-- `conn1.path.dash.gap`
+- `conn1.route.stroke.width`
+- `conn1.route.dash.gap`
 - `conn1.label.transform.pathProgress`
 
 ### Dash/Pattern
@@ -193,7 +196,7 @@ Named anchors: `center`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`, `top`, `bot
 
 ### Draw Progress
 
-`drawProgress: number` (0-1) — controls how much of the path is drawn. Animatable for draw-on effects. Track target: `conn1.path.path.drawProgress`.
+`drawProgress: number` (0-1) — controls how much of the path is drawn. Animatable for draw-on effects. Track target: `conn1.route.path.drawProgress` (where `conn1.route` is the node ID and `path` is the geometry field). The `line` built-in template names its path child with a non-`path` ID (e.g., `$.route`) to avoid the awkward `path.path` double-segment in track paths.
 
 ### Path Following
 
@@ -203,7 +206,7 @@ A node can follow a path via its transform:
 {
   id: "traveler",
   ellipse: { rx: 5, ry: 5 },
-  transform: { pathFollow: "conn1.path", pathProgress: 0.5 }
+  transform: { pathFollow: "conn1.route", pathProgress: 0.5 }
 }
 ```
 
@@ -299,6 +302,8 @@ Applied at three levels with cascading priority:
 
 Easing governs the segment *into* the keyframe (the segment from the previous keyframe to this one).
 
+**Note**: The current system has a per-object easing level (between per-block and global). This is intentionally dropped in the new flat dot-notation format. To apply the same easing to all properties of a node, set per-property easing on each — or group related changes into their own keyframe block with block-level easing.
+
 ```js
 keyframes: [
   { time: 0, changes: { "box.transform.x": 0 } },
@@ -327,6 +332,8 @@ Styles are partial nodes. Animating a style property updates the resolved value 
 
 All nodes with `style: "primary"` shift hue together.
 
+**Namespace rule**: Style names and node IDs share a single namespace. A collision (a style and a node with the same name) is a validation error at parse time. This ensures track targets are unambiguous.
+
 ## Layout System
 
 ### Pluggable Strategies
@@ -334,8 +341,11 @@ All nodes with `style: "primary"` shift hue together.
 Layout is a separate pass with a registry of strategies:
 
 ```ts
+type ChildPlacement = { id: string, x: number, y: number, w?: number, h?: number }
 type LayoutStrategy = (node: Node, children: Node[]) => ChildPlacement[]
 ```
+
+The layout pass applies returned placements by setting each child's `transform.x` and `transform.y`. If `w`/`h` are returned (e.g., for `grow`-based sizing), they override the child's geometry dimensions for that frame.
 
 A node declares its layout strategy:
 
@@ -396,7 +406,7 @@ Applied via `style: "styleName"` on any node. Node's own properties override sty
 
 **Determining "explicitly set"**: A property is "explicitly set" if it appears in the node's definition (before style merging). The parser records an `_ownKeys: Set<string>` on each node during initial construction (before style/inheritance merging). Style properties only fill in properties not in `_ownKeys`. At render time, visual inheritance from the parent chain only applies to properties not in `_ownKeys` and not set by a style — own props take priority over styles, which take priority over inheritance.
 
-**Resolution order for composed styles**: Styles are resolved in dependency order (topological sort). If `primary-faded` references `primary`, then `primary` is resolved first. Circular references are a parse error.
+**Resolution order for composed styles**: Styles are resolved in dependency order (topological sort) over the **post-template-expansion** node tree. If `primary-faded` references `primary`, then `primary` is resolved first. Circular references are a parse error. Template expansion may introduce new style references not present in the raw input — the topological sort accounts for these.
 
 ## Templates
 
@@ -450,7 +460,7 @@ Pre-built compositions for Mermaid-style structures: flowchart nodes, sequence d
 
 One universal render function replaces all per-type renderers. At each node:
 
-1. If `visible` is false, skip this node and its children
+1. If `visible` is false, skip rendering this node and its children (but tracks for invisible nodes and their children are still evaluated every frame — visibility is a render-time gate only, so animations continue and pathFollow references remain valid)
 2. Apply `transform` — emit SVG `<g>` with translate/rotate/scale
 3. Resolve inherited visual properties from parent chain
 4. If node has a geometry field, render the corresponding SVG element
@@ -474,7 +484,7 @@ Runs before rendering. Walks the tree, finds nodes with `layout` declarations, i
 3. Expand templates (`$` value substitution)
 4. Merge styles (style properties as defaults, topological resolution order)
 5. Build node tree (parent-child from `children` arrays)
-6. Validate (at most one geometry field per node, no circular style refs, no duplicate IDs, no circular children)
+6. Validate (at most one geometry field per node, no circular style refs, no duplicate IDs, no style/node ID collisions, no circular children)
 7. Generate track targets (walk tree, register every leaf path)
 
 Shape-specific shorthand knowledge moves into template definitions. The parser becomes simpler — tree construction, template expansion, style merging.
