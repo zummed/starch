@@ -75,6 +75,9 @@ export function getPropertySchema(path: string, rootSchema?: z.ZodType): z.ZodTy
       } else {
         return null;
       }
+    } else if (unwrapped instanceof z.ZodRecord) {
+      // Any key into record → return the value type
+      current = (unwrapped as any)._def.valueType ?? (unwrapped as any)._def.type;
     } else if (unwrapped instanceof z.ZodArray) {
       // Numeric index into array → return the element type
       if (/^\d+$/.test(segment)) {
@@ -112,9 +115,19 @@ export function getPropertySchema(path: string, rootSchema?: z.ZodType): z.ZodTy
                 break;
               }
             } else if (optUnwrapped instanceof z.ZodArray) {
-              current = (optUnwrapped as any)._def.type;
+              current = (optUnwrapped as any)._def.element ?? (optUnwrapped as any)._def.type;
               found = true;
               break;
+            }
+          } else {
+            // Try object shape navigation
+            if (optUnwrapped instanceof z.ZodObject) {
+              const shape = (optUnwrapped as z.ZodObject<any>).shape;
+              if (segment in shape) {
+                current = shape[segment];
+                found = true;
+                break;
+              }
             }
           }
         }
@@ -172,7 +185,7 @@ export function getAvailableProperties(path: string, rootSchema?: z.ZodType): Pr
 /**
  * Detect the "type" of a schema for popup selection.
  */
-export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'pointref' | 'unknown';
+export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'record' | 'pointref' | 'unknown';
 
 export function detectSchemaType(schema: z.ZodType): SchemaType {
   const unwrapped = unwrap(schema);
@@ -182,6 +195,7 @@ export function detectSchemaType(schema: z.ZodType): SchemaType {
   if (unwrapped instanceof z.ZodBoolean) return 'boolean';
   if (unwrapped instanceof z.ZodEnum) return 'enum';
   if (unwrapped instanceof z.ZodArray) return 'array';
+  if (unwrapped instanceof z.ZodRecord) return 'record';
 
   if (unwrapped instanceof z.ZodObject) {
     const shape = (unwrapped as z.ZodObject<any>).shape;

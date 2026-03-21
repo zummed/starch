@@ -12,9 +12,17 @@ export const EasingNameSchema = z.enum([
 ]);
 
 export const PropertyChangeSchema = z.object({
-  value: z.unknown().describe('Target value'),
+  value: z.union([z.number(), z.string(), z.boolean()]).describe('Target value'),
   easing: EasingNameSchema.describe('Per-property easing override').optional(),
 });
+
+export const ChangeValueSchema = z.union([
+  z.number().describe('Direct numeric value'),
+  z.string().describe('Direct string value'),
+  z.boolean().describe('Direct boolean value'),
+  PropertyChangeSchema.describe('Value with per-property easing'),
+  z.record(z.string(), z.unknown()).describe('Sub-object shorthand (e.g., fill: { h, s, l })'),
+]);
 
 export const KeyframeBlockSchema = z.object({
   time: z.number().min(0).describe('Absolute time (seconds)'),
@@ -22,7 +30,7 @@ export const KeyframeBlockSchema = z.object({
   delay: z.number().min(0).describe('Delay before this keyframe').optional(),
   easing: EasingNameSchema.describe('Block-level easing').optional(),
   autoKey: z.boolean().describe('Hold values between blocks').optional(),
-  changes: z.record(z.string(), z.unknown()).describe('Property changes'),
+  changes: z.record(z.string(), ChangeValueSchema).describe('Property changes — keys are track paths like "box.fill.h"'),
 });
 
 export const ChapterSchema = z.object({
