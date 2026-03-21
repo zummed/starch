@@ -64,8 +64,8 @@ function hexToHsl(hex: string): [number, number, number] | null {
 // ─── Components ─────────────────────────────────────────────────
 
 interface ColorPickerProps {
-  value: { h: number; s: number; l: number };
-  onChange: (value: { h: number; s: number; l: number }) => void;
+  value: { h: number; s: number; l: number; a?: number };
+  onChange: (value: { h: number; s: number; l: number; a?: number }) => void;
 }
 
 // HSL ↔ HSB conversion for the 2D picker square
@@ -281,28 +281,24 @@ function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; 
   );
 }
 
-/** Jog wheel sliders for H, S, L */
-function SliderTab({ h, s, l, onChange }: { h: number; s: number; l: number; onChange: (h: number, s: number, l: number) => void }) {
-  return (
-    <div onMouseDown={stop} onPointerDown={stop}>
-      <NumberSlider value={h} step={1} label="Hue" onChange={(v) => onChange(v, s, l)} />
-      <NumberSlider value={s} step={1} label="Saturation" onChange={(v) => onChange(h, v, l)} />
-      <NumberSlider value={l} step={1} label="Lightness" onChange={(v) => onChange(h, s, v)} />
-    </div>
-  );
-}
-
 // ─── Main export ────────────────────────────────────────────────
 
 export function ColorPicker({ value, onChange }: ColorPickerProps) {
+  const hasAlpha = value.a !== undefined;
   const [h, setH] = useState(value.h);
   const [s, setS] = useState(value.s);
   const [l, setL] = useState(value.l);
+  const [a, setA] = useState(value.a ?? 1);
 
   const update = useCallback((nh: number, ns: number, nl: number) => {
     setH(nh); setS(ns); setL(nl);
-    onChange({ h: nh, s: ns, l: nl });
-  }, [onChange]);
+    onChange(hasAlpha ? { h: nh, s: ns, l: nl, a } : { h: nh, s: ns, l: nl });
+  }, [onChange, hasAlpha, a]);
+
+  const updateAlpha = useCallback((na: number) => {
+    setA(na);
+    onChange({ h, s, l, a: na });
+  }, [onChange, h, s, l]);
 
   return (
     <TabbedPopup tabs={[
@@ -312,12 +308,26 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
           <div>
             <VisualPicker h={h} s={s} l={l} onChange={update} />
             <FormatInputs h={h} s={s} l={l} onChange={update} />
+            {hasAlpha && (
+              <div style={{ padding: '0 8px 4px' }} onMouseDown={stop} onPointerDown={stop}>
+                <NumberSlider value={a} min={0} max={1} step={0.01} label="Alpha" onChange={updateAlpha} />
+              </div>
+            )}
           </div>
         ),
       },
       {
         label: 'Sliders',
-        content: <SliderTab h={h} s={s} l={l} onChange={update} />,
+        content: (
+          <div onMouseDown={stop} onPointerDown={stop}>
+            <NumberSlider value={h} min={0} max={360} step={1} label="Hue" onChange={(v) => update(v, s, l)} />
+            <NumberSlider value={s} min={0} max={100} step={1} label="Saturation" onChange={(v) => update(h, v, l)} />
+            <NumberSlider value={l} min={0} max={100} step={1} label="Lightness" onChange={(v) => update(h, s, v)} />
+            {hasAlpha && (
+              <NumberSlider value={a} min={0} max={1} step={0.01} label="Alpha" onChange={updateAlpha} />
+            )}
+          </div>
+        ),
       },
     ]} />
   );

@@ -19,9 +19,9 @@ function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; v
   const props = getAvailableProperties(schemaPath);
   const propNames = props.map(p => p.name);
 
-  // Detect if this object contains h/s/l color fields
+  // Detect if this object contains h/s/l color fields (and optionally a)
   const hasColor = ['h', 's', 'l'].every(k => propNames.includes(k));
-  const colorKeys = new Set(['h', 's', 'l']);
+  const colorKeys = new Set(['h', 's', 'l', 'a']);
 
   // Non-color numeric properties
   const otherNumericProps = props.filter(p => {
@@ -47,6 +47,7 @@ function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; v
             h: (value.h as number) ?? 0,
             s: (value.s as number) ?? 0,
             l: (value.l as number) ?? 50,
+            ...(propNames.includes('a') ? { a: (value.a as number) ?? 1 } : {}),
           }}
           onChange={handleColorChange}
         />
@@ -106,9 +107,10 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
   let content: React.ReactNode = null;
 
   switch (type) {
-    case 'color': {
-      const colorVal = (value as { h: number; s: number; l: number }) ?? { h: 210, s: 80, l: 50 };
-      content = <ColorPicker value={colorVal} onChange={onChange} />;
+    case 'color':
+    case 'object': {
+      const objVal = (value as Record<string, unknown>) ?? {};
+      content = <CompoundEditor schemaPath={schemaPath} value={objVal} onChange={onChange} />;
       break;
     }
     case 'number': {
@@ -156,11 +158,6 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
           </label>
         </div>
       );
-      break;
-    }
-    case 'object': {
-      const objVal = (value as Record<string, unknown>) ?? {};
-      content = <CompoundEditor schemaPath={schemaPath} value={objVal} onChange={onChange} />;
       break;
     }
     default:
