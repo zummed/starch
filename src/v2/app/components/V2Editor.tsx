@@ -361,7 +361,6 @@ function extractValueAtCursor(doc: string, pos: number, type: string, key: strin
     return valueText.replace(/^["']|["']$/g, '');
   }
   if (type === 'color') {
-    // Parse the HSL object from the value text
     const hMatch = valueText.match(/h:\s*(-?\d+)/);
     const sMatch = valueText.match(/s:\s*(-?\d+)/);
     const lMatch = valueText.match(/l:\s*(-?\d+)/);
@@ -369,6 +368,20 @@ function extractValueAtCursor(doc: string, pos: number, type: string, key: strin
       return { h: parseInt(hMatch[1]), s: parseInt(sMatch[1]), l: parseInt(lMatch[1]) };
     }
     return { h: 210, s: 80, l: 50 };
+  }
+  if (type === 'object') {
+    // Parse key-value pairs from the object text
+    const result: Record<string, unknown> = {};
+    const kvPattern = /(\w+):\s*(-?\d+\.?\d*|true|false|"[^"]*")/g;
+    let m;
+    while ((m = kvPattern.exec(valueText)) !== null) {
+      const val = m[2];
+      if (val === 'true') result[m[1]] = true;
+      else if (val === 'false') result[m[1]] = false;
+      else if (val.startsWith('"')) result[m[1]] = val.slice(1, -1);
+      else result[m[1]] = parseFloat(val);
+    }
+    return result;
   }
   return null;
 }
