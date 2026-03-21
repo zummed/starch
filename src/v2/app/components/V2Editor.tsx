@@ -118,35 +118,51 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     const ctx = getCursorContext(doc, pos);
 
     // Clicking on a property name (like "fill", "rect") — open compound popup
-    if (ctx.isPropertyName && ctx.prefix && ctx.path) {
-      const parts = ctx.path.split('.');
-      const filtered: string[] = [];
-      let i = 0;
-      if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) i = 2;
-      else if (parts[0] === 'styles' && parts.length >= 2) i = 2;
-      while (i < parts.length) {
-        if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) i += 2;
-        else { filtered.push(parts[i]); i++; }
+    if (ctx.isPropertyName && ctx.path) {
+      // Extract the full word at click position from the text
+      const wordMatch = doc.slice(Math.max(0, pos - 20), pos + 20).match(/[\w]+/g);
+      let clickedWord = '';
+      let searchStart = Math.max(0, pos - 20);
+      for (const word of (wordMatch ?? [])) {
+        const wordStart = doc.indexOf(word, searchStart);
+        const wordEnd = wordStart + word.length;
+        if (pos >= wordStart && pos <= wordEnd) {
+          clickedWord = word;
+          break;
+        }
+        searchStart = wordEnd;
       }
-      // The prefix is the property name being clicked (e.g., "fill")
-      const schemaPath = filtered.length > 0 ? [...filtered, ctx.prefix].join('.') : ctx.prefix;
+      if (!clickedWord) clickedWord = ctx.prefix;
 
-      const schema = getPropertySchema(schemaPath);
-      if (schema) {
-        const type = detectSchemaType(schema);
-        if (['color', 'object'].includes(type)) {
-          const currentValue = extractValueAtCursor(doc, pos, type, ctx.prefix);
-          const coords = view.coordsAtPos(pos);
-          if (coords) {
-            setPopup({
-              schemaPath,
-              dslPath: ctx.path,
-              key: ctx.prefix,
-              cursorPos: pos,
-              value: currentValue,
-              position: { x: coords.left, y: coords.bottom + 4 },
-            });
-            return;
+      if (clickedWord) {
+        const parts = ctx.path.split('.');
+        const filtered: string[] = [];
+        let i = 0;
+        if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) i = 2;
+        else if (parts[0] === 'styles' && parts.length >= 2) i = 2;
+        while (i < parts.length) {
+          if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) i += 2;
+          else { filtered.push(parts[i]); i++; }
+        }
+        const schemaPath = filtered.length > 0 ? [...filtered, clickedWord].join('.') : clickedWord;
+
+        const schema = getPropertySchema(schemaPath);
+        if (schema) {
+          const type = detectSchemaType(schema);
+          if (['color', 'object'].includes(type)) {
+            const currentValue = extractValueAtCursor(doc, pos, type, clickedWord);
+            const coords = view.coordsAtPos(pos);
+            if (coords) {
+              setPopup({
+                schemaPath,
+                dslPath: ctx.path,
+                key: clickedWord,
+                cursorPos: pos,
+                value: currentValue,
+                position: { x: coords.left, y: coords.bottom + 4 },
+              });
+              return;
+            }
           }
         }
       }
