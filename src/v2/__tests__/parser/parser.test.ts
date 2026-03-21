@@ -2,28 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { parseScene } from '../../parser/parser';
 
 describe('parseScene', () => {
-  it('parses a minimal scene with a box template', () => {
+  it('parses a minimal scene with a rect node', () => {
     const input = `{
       objects: [
-        { template: "box", id: "b1", props: { w: 100, h: 60, text: "Hello" } }
+        { id: "b1", rect: { w: 100, h: 60 } }
       ]
     }`;
     const scene = parseScene(input);
     expect(scene.nodes).toHaveLength(1);
     expect(scene.nodes[0].id).toBe('b1');
-    expect(scene.nodes[0].children).toHaveLength(2); // bg + label
-  });
-
-  it('resolves color strings in objects', () => {
-    const input = `{
-      objects: [
-        { template: "box", id: "b1", props: { w: 100, h: 60, colour: "red" } }
-      ]
-    }`;
-    const scene = parseScene(input);
-    const bg = scene.nodes[0].children[0];
-    expect(bg.fill).toBeDefined();
-    expect(bg.fill!.h).toBeCloseTo(0, 0);
+    expect(scene.nodes[0].rect!.w).toBe(100);
   });
 
   it('applies styles to nodes', () => {
@@ -96,17 +84,19 @@ describe('parseScene', () => {
     expect(scene.trackPaths).toContain('parent.child.fill.h');
   });
 
-  it('resolves color strings in styles', () => {
+  it('applies HSL fill directly', () => {
     const input = `{
-      styles: {
-        danger: { fill: "red" }
-      },
       objects: [
-        { id: "n1", style: "danger", rect: { w: 50, h: 50 } }
+        { id: "n1", rect: { w: 50, h: 50 }, fill: { h: 0, s: 100, l: 50 } }
       ]
     }`;
     const scene = parseScene(input);
-    expect(scene.nodes[0].fill).toBeDefined();
-    expect(scene.nodes[0].fill!.h).toBeCloseTo(0, 0);
+    expect(scene.nodes[0].fill).toEqual({ h: 0, s: 100, l: 50 });
+  });
+
+  it('extracts background', () => {
+    const input = `{ background: "#1a1a2e", objects: [] }`;
+    const scene = parseScene(input);
+    expect(scene.background).toBe('#1a1a2e');
   });
 });

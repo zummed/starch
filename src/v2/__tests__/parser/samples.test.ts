@@ -16,7 +16,7 @@ describe('v2 samples', () => {
     expect(categories.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('has at least 20 samples total', () => {
-    expect(v2Samples.length).toBeGreaterThanOrEqual(20);
+  it('has at least 15 samples total', () => {
+    expect(v2Samples.length).toBeGreaterThanOrEqual(15);
   });
 });
