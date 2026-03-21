@@ -321,8 +321,8 @@ function segmentBoundsIntersection(
     const px = a[0] + t * dx;
     const py = a[1] + t * dy;
     if (Math.abs(px - bounds.cx) <= bounds.hw + 0.01 && Math.abs(py - bounds.cy) <= bounds.hh + 0.01) {
-      if (bestT === null) bestT = t;
-      else bestT = t; // take the later one for multiple intersections
+      // Take the largest t — the last exit point from the bounds
+      if (bestT === null || t > bestT) bestT = t;
     }
   }
   return bestT;
