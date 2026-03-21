@@ -77,6 +77,7 @@ export class SvgRenderBackend implements RenderBackend {
   private _bg: SVGRectElement | null = null;
   private _content: SVGGElement | null = null;
   private _groupStack: SVGGElement[] = [];
+  private _opacityStack: number[] = [1];
 
   mount(container: HTMLElement): void {
     this._svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
@@ -107,6 +108,7 @@ export class SvgRenderBackend implements RenderBackend {
       this._content.removeChild(this._content.lastChild);
     }
     this._groupStack = [this._content];
+    this._opacityStack = [1];
   }
 
   endFrame(): void {
@@ -164,14 +166,18 @@ export class SvgRenderBackend implements RenderBackend {
   }
 
   pushOpacity(opacity: number): void {
-    if (opacity < 1) {
-      const g = this._currentGroup();
-      g.setAttribute('opacity', String(opacity));
-    }
+    // Store the resolved opacity — applied to geometry elements, not <g> groups
+    this._opacityStack.push(opacity);
   }
 
   popOpacity(): void {
-    // No-op for SVG — opacity is on the <g> element managed by pushTransform/popTransform
+    if (this._opacityStack.length > 1) {
+      this._opacityStack.pop();
+    }
+  }
+
+  private _currentOpacity(): number {
+    return this._opacityStack[this._opacityStack.length - 1];
   }
 
   drawRect(w: number, h: number, radius: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void {
@@ -183,12 +189,14 @@ export class SvgRenderBackend implements RenderBackend {
       ...(radius > 0 ? { rx: radius, ry: radius } : {}),
     });
     applyFillStroke(el, fill, stroke);
+    this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }
 
   drawEllipse(rx: number, ry: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void {
     const el = svgEl('ellipse', { cx: 0, cy: 0, rx, ry });
     applyFillStroke(el, fill, stroke);
+    this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }
 
@@ -202,6 +210,7 @@ export class SvgRenderBackend implements RenderBackend {
     if (mono) el.setAttribute('font-family', 'monospace');
     el.setAttribute('fill', rgbaToCSS(fill));
     el.textContent = content;
+    this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }
 
@@ -224,6 +233,7 @@ export class SvgRenderBackend implements RenderBackend {
       el.setAttribute('stroke-dashoffset', String(totalLen * (1 - drawProgress)));
     }
 
+    this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }
 
@@ -239,10 +249,18 @@ export class SvgRenderBackend implements RenderBackend {
       fit === 'cover' ? 'xMidYMid slice' :
       fit === 'fill' ? 'none' : 'xMidYMid meet',
     );
+    this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }
 
   private _currentGroup(): SVGGElement {
     return this._groupStack[this._groupStack.length - 1] ?? this._content!;
+  }
+
+  private _applyOpacity(el: SVGElement): void {
+    const opacity = this._currentOpacity();
+    if (opacity < 1) {
+      el.setAttribute('opacity', String(opacity));
+    }
   }
 }

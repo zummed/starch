@@ -165,6 +165,7 @@ function emitNode(
   allRoots: Node[],
   parentFill: HslColor | undefined,
   parentStroke: Stroke | undefined,
+  parentOpacity: number,
 ): void {
   if (!node.visible) return;
 
@@ -205,9 +206,11 @@ function emitNode(
   }
 
   backend.pushTransform(x, y, rotation, scale);
-  backend.pushOpacity(node.opacity ?? styleOpacity ?? 1);
 
-  // Priority: own > style > parent
+  // Priority: own > style > parent (same for all visual properties including opacity)
+  const opacity = node.opacity ?? styleOpacity ?? parentOpacity;
+  backend.pushOpacity(opacity);
+
   const fill = node.fill ?? styleFill ?? parentFill;
   const stroke = node.stroke ?? styleStroke ?? parentStroke;
   const fillRgba = hslFillToRgba(fill);
@@ -251,7 +254,7 @@ function emitNode(
   // Children sorted by depth
   const sorted = [...node.children].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
   for (const child of sorted) {
-    emitNode(backend, child, allRoots, fill, stroke);
+    emitNode(backend, child, allRoots, fill, stroke, opacity);
   }
 
   backend.popOpacity();
@@ -277,7 +280,7 @@ export function emitFrame(
     .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
 
   for (const root of sorted) {
-    emitNode(backend, root, allRoots, undefined, undefined);
+    emitNode(backend, root, allRoots, undefined, undefined, 1);
   }
 
   backend.endFrame();

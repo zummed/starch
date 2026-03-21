@@ -414,27 +414,34 @@ export const v2Samples: V2Sample[] = [
 }`,
   },
   {
-    name: 'opacity-composition',
+    name: 'opacity-inheritance',
     category: 'Inheritance',
-    description: 'Opacity composes multiplicatively — parent 0.5 × child 0.8 = 0.4',
+    description: 'Opacity inherits like fill — child 0.8 overrides parent 0.5, child without opacity inherits 0.5',
     dsl: `{
   objects: [
     {
       id: "parent",
       opacity: 0.5,
-      transform: { x: 200, y: 130 },
+      transform: { x: 120, y: 130 },
       children: [
         {
-          id: "child",
-          rect: { w: 100, h: 100, radius: 8 },
+          id: "inherits",
+          rect: { w: 80, h: 80, radius: 8 },
+          fill: { h: 210, s: 70, l: 50 }
+        },
+        {
+          id: "overrides",
+          rect: { w: 80, h: 80, radius: 8 },
           fill: { h: 210, s: 70, l: 50 },
-          opacity: 0.8
+          opacity: 0.8,
+          transform: { x: 100, y: 0 }
         }
       ]
     },
-    { id: "reference", rect: { w: 100, h: 100, radius: 8 }, fill: { h: 210, s: 70, l: 50 }, transform: { x: 350, y: 130 } },
-    { id: "l1", text: { content: "0.5 × 0.8 = 0.4", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 200, y: 250 } },
-    { id: "l2", text: { content: "full opacity", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 350, y: 250 } }
+    { id: "reference", rect: { w: 80, h: 80, radius: 8 }, fill: { h: 210, s: 70, l: 50 }, transform: { x: 370, y: 130 } },
+    { id: "l1", text: { content: "inherits 0.5", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 120, y: 240 } },
+    { id: "l2", text: { content: "overrides to 0.8", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 220, y: 240 } },
+    { id: "l3", text: { content: "full opacity", size: 10 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 370, y: 240 } }
   ]
 }`,
   },
