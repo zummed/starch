@@ -118,18 +118,27 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     const ctx = getCursorContext(doc, pos);
 
     if (!ctx.isPropertyName && ctx.currentKey && ctx.path) {
-      // Map DSL path to schema path — strip top-level DSL keys
+      // Map DSL path to schema path — strip structural segments to get to node property path
       const parts = ctx.path.split('.');
-      let schemaPath: string;
+      // Strip objects.N, styles.name, and children.N segments
+      const filtered: string[] = [];
+      let i = 0;
+      // Skip top-level key (objects, styles, animate)
       if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
-        // objects.0.fill.h → fill.h
-        schemaPath = parts.slice(2).join('.');
+        i = 2;
       } else if (parts[0] === 'styles' && parts.length >= 2) {
-        // styles.primary.fill.h → fill.h (style properties are node properties)
-        schemaPath = parts.slice(2).join('.');
-      } else {
-        schemaPath = ctx.path;
+        i = 2;
       }
+      // Walk remaining parts, skipping children.N pairs
+      while (i < parts.length) {
+        if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+          i += 2; // skip children.N
+        } else {
+          filtered.push(parts[i]);
+          i++;
+        }
+      }
+      let schemaPath = filtered.join('.');
 
       // Append current key if not already at the end
       if (!schemaPath.endsWith(ctx.currentKey)) {

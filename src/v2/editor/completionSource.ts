@@ -27,19 +27,27 @@ export interface CompletionItem {
  */
 function dslPathToSchemaPath(dslPath: string): string {
   const parts = dslPath.split('.');
+  const filtered: string[] = [];
+  let i = 0;
 
-  // Strip "objects.N" prefix → gives us node-level path
+  // Strip top-level key
   if (parts[0] === 'objects' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
-    return parts.slice(2).join('.');
+    i = 2;
+  } else if (parts[0] === 'styles' && parts.length >= 2) {
+    i = 2;
   }
 
-  // Strip "styles.name" prefix
-  if (parts[0] === 'styles' && parts.length >= 2) {
-    return parts.slice(2).join('.');
+  // Walk remaining parts, skipping children.N pairs
+  while (i < parts.length) {
+    if (parts[i] === 'children' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      i += 2;
+    } else {
+      filtered.push(parts[i]);
+      i++;
+    }
   }
 
-  // "animate" maps to AnimConfig — for now return as-is
-  return dslPath;
+  return filtered.join('.');
 }
 
 /**
