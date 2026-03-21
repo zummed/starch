@@ -438,7 +438,13 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
   let rawPoints: [number, number][] | null = null;
 
   if (path.points && path.points.length > 0) {
-    rawPoints = path.points;
+    // Resolve each point — may be [x,y], "objectId", or ["objectId", dx, dy]
+    const resolved: [number, number][] = [];
+    for (const pt of path.points) {
+      const r = resolvePointRef(pt, allRoots);
+      if (r) resolved.push(r);
+    }
+    rawPoints = resolved.length > 0 ? resolved : null;
   } else if (path.from || path.to) {
     const fromCenter = path.from ? resolvePointRef(path.from, allRoots) : null;
     const toCenter = path.to ? resolvePointRef(path.to, allRoots) : null;

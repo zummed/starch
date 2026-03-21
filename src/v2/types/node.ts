@@ -34,7 +34,7 @@ export const PointRefSchema = z.union([
 ]);
 
 export const PathGeomSchema = z.object({
-  points: z.array(z.tuple([z.number(), z.number()])).describe('Path points').optional(),
+  points: z.array(PointRefSchema).describe('Path points (coords, IDs, or ID+offset)').optional(),
   from: PointRefSchema.describe('Start endpoint').optional(),
   to: PointRefSchema.describe('End endpoint').optional(),
   fromAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Start anchor').optional(),
