@@ -347,6 +347,8 @@ type LayoutStrategy = (node: Node, children: Node[]) => ChildPlacement[]
 
 The layout pass applies returned placements by setting each child's `transform.x` and `transform.y`. If `w`/`h` are returned (e.g., for `grow`-based sizing), they override the child's geometry dimensions for that frame.
 
+**Layout-driven animation**: When layout output changes (due to animated layout params, layout type switching, or children being reordered), the new positions flow through the standard track/easing pipeline. There is no special blending layer — layout-computed positions are target values on transform tracks, and the easing function on the current keyframe segment controls the transition rate. Use `snap` easing for instant repositioning, or any other easing for smooth migration.
+
 A node declares its layout strategy:
 
 ```js
