@@ -1,0 +1,112 @@
+import { describe, it, expect } from 'vitest';
+import { parseScene } from '../../parser/parser';
+
+describe('parseScene', () => {
+  it('parses a minimal scene with a box template', () => {
+    const input = `{
+      objects: [
+        { template: "box", id: "b1", props: { w: 100, h: 60, text: "Hello" } }
+      ]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.nodes).toHaveLength(1);
+    expect(scene.nodes[0].id).toBe('b1');
+    expect(scene.nodes[0].children).toHaveLength(2); // bg + label
+  });
+
+  it('resolves color strings in objects', () => {
+    const input = `{
+      objects: [
+        { template: "box", id: "b1", props: { w: 100, h: 60, colour: "red" } }
+      ]
+    }`;
+    const scene = parseScene(input);
+    const bg = scene.nodes[0].children[0];
+    expect(bg.fill).toBeDefined();
+    expect(bg.fill!.h).toBeCloseTo(0, 0);
+  });
+
+  it('applies styles to nodes', () => {
+    const input = `{
+      styles: {
+        primary: { fill: { h: 210, s: 70, l: 45 } }
+      },
+      objects: [
+        { id: "n1", style: "primary", rect: { w: 100, h: 60 } }
+      ]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.nodes[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+  });
+
+  it('generates track paths', () => {
+    const input = `{
+      objects: [
+        { id: "n1", rect: { w: 100, h: 60 }, fill: { h: 0, s: 100, l: 50 }, transform: { x: 50, y: 50 } }
+      ]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.trackPaths).toContain('n1.fill.h');
+    expect(scene.trackPaths).toContain('n1.transform.x');
+    expect(scene.trackPaths).toContain('n1.rect.w');
+  });
+
+  it('validates and throws on duplicate IDs', () => {
+    const input = `{
+      objects: [
+        { id: "a", rect: { w: 10, h: 10 } },
+        { id: "a", rect: { w: 10, h: 10 } }
+      ]
+    }`;
+    expect(() => parseScene(input)).toThrow(/duplicate/i);
+  });
+
+  it('parses animate config', () => {
+    const input = `{
+      objects: [{ id: "n1", rect: { w: 100, h: 60 } }],
+      animate: {
+        duration: 4,
+        keyframes: [
+          { time: 0, changes: { "n1.rect.w": 100 } },
+          { time: 2, changes: { "n1.rect.w": 200 } }
+        ]
+      }
+    }`;
+    const scene = parseScene(input);
+    expect(scene.animate).toBeDefined();
+    expect(scene.animate!.duration).toBe(4);
+    expect(scene.animate!.keyframes).toHaveLength(2);
+  });
+
+  it('handles nested children', () => {
+    const input = `{
+      objects: [
+        {
+          id: "parent",
+          transform: { x: 100, y: 100 },
+          children: [
+            { id: "child", rect: { w: 50, h: 30 }, fill: { h: 0, s: 100, l: 50 } }
+          ]
+        }
+      ]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.nodes[0].children).toHaveLength(1);
+    expect(scene.nodes[0].children[0].id).toBe('child');
+    expect(scene.trackPaths).toContain('parent.child.fill.h');
+  });
+
+  it('resolves color strings in styles', () => {
+    const input = `{
+      styles: {
+        danger: { fill: "red" }
+      },
+      objects: [
+        { id: "n1", style: "danger", rect: { w: 50, h: 50 } }
+      ]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.nodes[0].fill).toBeDefined();
+    expect(scene.nodes[0].fill!.h).toBeCloseTo(0, 0);
+  });
+});
