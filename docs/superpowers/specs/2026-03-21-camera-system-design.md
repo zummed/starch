@@ -35,8 +35,14 @@ The key insight: camera settings resolve into a **rect + transform on the camera
 Camera expansion runs as a **second pass** after all non-camera tracks are built, avoiding circular dependencies:
 
 1. `buildTimeline()` builds all tracks normally (including slot expansion)
-2. Camera expansion pass: for each keyframe boundary time, evaluate all non-camera tracks to get node positions at that time
-3. Resolve camera `fit`, `target`, `zoom`, and `ratio` at each keyframe time using those evaluated positions
+2. Camera expansion pass: for each keyframe boundary time, use `evaluateAllTracks` and `applyTrackValues` (imported from `evaluator.ts` and `applyTracks.ts`) to get animated node positions at that time
+3. Resolve camera `fit`, `target`, `zoom`, and `ratio` at each keyframe time using those evaluated positions:
+   - **target as `[x, y]`**: Use coordinates directly as camera center
+   - **target as `"nodeId"`**: Look up node's animated position as camera center
+   - **target as `["nodeId", dx, dy]`**: Look up node's animated position, add offset `(x + dx, y + dy)` as camera center
+   - **fit**: Compute bounding box of specified nodes → camera center + dimensions
+   - **zoom**: Scale dimensions by `1/zoom`
+   - **ratio**: Constrain rect proportions — expand the smaller dimension so `w/h === ratio` (letterbox/pillarbox, never clip)
 4. Expand into concrete tracks: `cameraId.rect.w`, `cameraId.rect.h`, `cameraId.transform.x`, `cameraId.transform.y`
 5. The track system interpolates these values between keyframes with easing
 
@@ -49,10 +55,12 @@ This means:
 
 ### Phase 2 — Render (every frame)
 
-`computeViewBox` becomes trivial:
-1. Find the active camera node (walk tree, find nodes with `camera` property, pick first with `active !== false`)
-2. Read the camera node's already-animated `rect` and `transform`
-3. Return that as the viewbox
+`computeViewBox` signature changes from `(cameraNode, roots, defaultViewBox)` to simply reading the active camera's rect + transform:
+
+1. `findActiveCamera(roots)`: walk root-level nodes, find first with `camera` property and `active !== false`
+2. Read the camera node's already-animated `rect` (w, h) and `transform` (x, y, rotation)
+3. Return `{ x: transform.x - rect.w/2, y: transform.y - rect.h/2, w: rect.w, h: rect.h, rotation: transform.rotation }` as the viewbox
+4. If no active camera or no rect on camera, fall back to default viewport
 
 No bounding box computation at render time. The heavy lifting is done once during track expansion.
 
@@ -71,13 +79,13 @@ Since the camera's view is a standard rect + transform:
 
 ### Edge cases
 
+- **Camera nodes must be root-level**: Camera nodes must be declared at the root of the node tree, not nested inside other nodes. This is required because `applyTrackValues` resolves the first ID segment against root nodes only, and `emitFrame` only filters camera nodes at root level. Nested camera nodes would have their expanded tracks silently dropped and would be rendered as visible geometry.
 - **No camera in scene**: Use the default viewport (current behavior)
 - **Camera with no settings**: No rect produced, default viewport used
 - **fit: "all"**: At expansion time, collect all non-camera node IDs
 - **fit changes to empty list**: Falls back to default viewport dimensions for that keyframe
-- **Multiple active cameras**: First active camera in depth-first tree order wins
+- **Multiple active cameras**: First active camera in root-node order wins
 - **Camera targeting a moving node**: Track expansion evaluates node positions at keyframe times; interpolation between snapshots is an approximation (see Phase 1 trade-off note)
-- **`target` with `["nodeId", dx, dy]` form**: Resolve node position and add offset — current `computeViewBox` does not handle this form and must be fixed
 
 ## Editor Integration
 
@@ -99,14 +107,15 @@ A button in the preview panel toolbar:
 
 ## Files to Modify
 
-1. **`src/v2/types/node.ts`** — Extend `CameraSchema` with `ratio`, `active`, update `fit` to `z.union([z.array(z.string()), z.literal("all")])`. Update `NodeInput` and `Node` interfaces to match (they are hand-coded, not derived from `CameraSchema`).
-2. **`src/v2/animation/timeline.ts`** — Add camera track expansion as a second pass after all other tracks (including slot expansion) are built. Resolve camera settings at each keyframe time → rect/transform tracks.
-3. **`src/v2/renderer/camera.ts`** — Simplify `computeViewBox` to read active camera rect/transform (including rotation). Add `findActiveCamera` (depth-first tree walk, not root-only). Handle `["nodeId", dx, dy]` target form. Remove `lerpViewBox` (dead code — interpolation now handled by track system).
-4. **`src/v2/renderer/backend.ts`** — Add optional `rotation` parameter to `setViewBox`
-5. **`src/v2/renderer/svgBackend.ts`** — Apply counter-rotation to `_content` group in `setViewBox`
-6. **`src/v2/renderer/emitter.ts`** — Read camera `transform.rotation` and pass to `setViewBox`
-7. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace root-level `animated.find(n => n.camera)` with `findActiveCamera` (recursive).
-8. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
+1. **`src/v2/types/node.ts`** — Update `CameraSchema` (Zod) with `ratio`, `active`, and `fit` as `z.union([z.array(z.string()), z.literal("all")])`. Update both hand-coded `NodeInput` and `Node` interfaces to match (they do not derive from `CameraSchema`).
+2. **`src/v2/animation/timeline.ts`** — Add camera track expansion as a second pass after all other tracks (including slot expansion) are built. Import `evaluateAllTracks` from `evaluator.ts` and `applyTrackValues` from `applyTracks.ts` to evaluate node positions at each keyframe time.
+3. **`src/v2/renderer/camera.ts`** — Replace `computeViewBox` with new signature that reads camera rect/transform directly (including rotation). Add `findActiveCamera` (root-level scan). Remove `lerpViewBox` (interpolation now handled by track system).
+4. **`src/v2/__tests__/renderer/camera.test.ts`** — Update tests: remove `lerpViewBox` tests, add tests for new `computeViewBox` contract and `findActiveCamera`.
+5. **`src/v2/renderer/backend.ts`** — Add optional `rotation` parameter to `setViewBox`
+6. **`src/v2/renderer/svgBackend.ts`** — Apply counter-rotation to `_content` group in `setViewBox`
+7. **`src/v2/renderer/emitter.ts`** — Read camera `transform.rotation` and pass to `setViewBox`
+8. **`src/v2/app/components/V2Diagram.tsx`** (or equivalent render loop) — Replace `animated.find(n => n.camera)` with `findActiveCamera`.
+9. **Editor toolbar** — Add ratio preview toggle button with CSS overlay
 
 ## Non-goals
 
