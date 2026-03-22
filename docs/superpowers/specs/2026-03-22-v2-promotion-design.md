@@ -65,42 +65,67 @@ All V2 internal imports use relative paths. Since the files move up one director
 - `src/v2/app/components/` files that import from `../../animation/` etc. will now import from the same relative path (unchanged since both caller and callee move up together)
 - The main change is removing any `v2/` segments from paths
 
-### V2Editor.tsx V1 Dependency
+### V1 Dependencies Used by V2
 
-`V2Editor.tsx` imports V1's CodeMirror theme:
-```typescript
-import { starchTheme, starchHighlight } from '../../../editor/theme';
-```
+Three V2 files import from V1 code. These must be resolved before V1 deletion:
 
-This V1 theme file must be preserved and moved into the V2 editor directory, or the theme definitions inlined.
+1. **`V2Editor.tsx`** imports V1's CodeMirror theme:
+   ```typescript
+   import { starchTheme, starchHighlight } from '../../../editor/theme';
+   ```
+   The V1 theme file must be preserved and moved into the V2 editor directory, or the theme definitions inlined.
+
+2. **`V2Diagram.tsx`** imports V1's `Chapter` type:
+   ```typescript
+   import type { Chapter } from '../../../core/types';
+   ```
+   V2 already defines its own `Chapter` type in `src/v2/types/animation.ts`. The V1 `Chapter` (id/time/title/description) differs from V2's (name/time). The import should be switched to V2's type, and the mapping code in `V2Diagram.tsx` updated accordingly.
+
+3. **`App.tsx`** imports V1's `Timeline` component:
+   ```typescript
+   import { Timeline } from '../../components/Timeline';
+   ```
+   The `Timeline` component must be preserved and moved into the V2 app directory. It also imports V1's `Chapter` type and accesses `ch.id` and `ch.title` fields — these must be updated to use V2's `Chapter` type (`ch.name` replaces both `ch.id` and `ch.title`).
 
 ### Build Configuration
 
 - `vite.v2.config.ts` becomes the main `vite.config.ts`
-- Update root/entry paths to reflect the flattened structure
+- Update root from `src/v2/app` to `src/app`
 - The existing `vite.config.ts` (V1 library build) is replaced
+- Update output directory from `dist-v2` to `dist` (or `dist-app`)
+- Update `index.html` script src to match the new vite root
+- Remove the unused `@` alias (no V2 code uses it)
 
 ### package.json
 
-- Remove V1-specific scripts (`dev`, `build`, `build:app`)
+- Remove V1-specific scripts (`dev`, `build`, `build:app`, `build:all`, `build:embed`)
 - Promote V2 scripts to be the defaults:
   - `dev:v2` → `dev`
   - `build:v2` → `build`
 - Update `exports` and `main` fields to point to V2 output
+- Remove the `./embed` export (V1 artifact)
+- Remove dead dependencies: `prismjs`, `@types/prismjs`, `vite-plugin-dts` (V1-only)
 - Do NOT bump version (release pipeline handles this)
+
+### CI Workflows
+
+- `.github/workflows/deploy-pages.yml` — update `npm run build:app` to the new build command and output directory
+- `.github/workflows/release.yml` — update `npm run build` and remove `npm run build:embed` (no V2 embed equivalent)
 
 ## Order of Operations
 
 1. Delete the backward-compat layer (`compat.ts` + test)
-2. Preserve the V1 editor theme (copy into V2 editor before deletion)
-3. Delete all V1 source files and directories
-4. Delete V1 entry points and root `index.html`
-5. `git mv` each V2 directory from `src/v2/` to `src/`
-6. `git mv` the V2 app's `index.html` to root
-7. Fix all import paths across the codebase
-8. Update build configs (`vite.v2.config.ts` → `vite.config.ts`, delete V1 configs)
-9. Update `package.json` scripts and exports
-10. Run tests to verify nothing broke
+2. Preserve V1 files needed by V2 (editor theme, Timeline component) — copy into V2 directories before deletion
+3. Update V2 files that import V1 code (`V2Diagram.tsx` → use V2 `Chapter` type, `App.tsx` → import preserved Timeline, `V2Editor.tsx` → import preserved theme)
+4. Delete all V1 source files and directories
+5. Delete V1 entry points and root `index.html`
+6. `git mv` each V2 directory from `src/v2/` to `src/`
+7. `git mv` the V2 app's `index.html` to root, update script src path
+8. Fix all import paths across the codebase
+9. Update build configs (`vite.v2.config.ts` → `vite.config.ts`, delete V1 configs, update output dir)
+10. Update `package.json` scripts, exports, and remove dead dependencies
+11. Update CI workflows (deploy-pages.yml, release.yml)
+12. Run tests to verify nothing broke
 
 ## Out of Scope
 
