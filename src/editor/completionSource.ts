@@ -9,6 +9,7 @@ import {
   detectSchemaType,
   getEnumValues,
   AnimConfigSchema,
+  DocumentSchema,
 } from '../types/schemaRegistry';
 
 export interface CompletionItem {
@@ -41,6 +42,9 @@ function dslPathToSchemaContext(dslPath: string): SchemaContext {
   } else if (parts[0] === 'animate') {
     i = 1; // AnimConfigSchema
     rootSchema = AnimConfigSchema;
+  } else if (parts.length === 1 && parts[0] === '') {
+    // Root level — use DocumentSchema
+    rootSchema = DocumentSchema;
   }
 
   // Walk remaining parts, skipping children.N pairs

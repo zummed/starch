@@ -266,6 +266,23 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
   return result;
 }
 
+/**
+ * Top-level document schema for completion at the root level.
+ */
+export const DocumentSchema = z.object({
+  name: z.string().describe('Document name (shown as tab label)').optional(),
+  description: z.string().describe('Document description (metadata)').optional(),
+  objects: z.array(z.lazy(() => NodeSchema)).describe('Top-level scene objects').optional(),
+  styles: z.record(z.string(), z.unknown()).describe('Named style definitions').optional(),
+  animate: AnimConfigSchema.describe('Animation configuration').optional(),
+  background: z.string().describe('Background color (CSS color string)').optional(),
+  viewport: z.union([
+    z.string(),
+    z.object({ width: z.number(), height: z.number() }),
+  ]).describe('Viewport dimensions').optional(),
+  images: z.record(z.string(), z.string()).describe('Named image sources (id → URL)').optional(),
+});
+
 export {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
   LayoutSchema, LayoutHintSchema,
