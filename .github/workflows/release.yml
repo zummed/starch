@@ -29,11 +29,5 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build library and embed
-        run: npm run build && npm run build:embed
-
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
+      - name: Build
+        run: npm run build

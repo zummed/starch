@@ -30,12 +30,12 @@ jobs:
       - run: npm ci
 
       - name: Build playground
-        run: npm run build:app
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist-app
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
