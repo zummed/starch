@@ -1,21 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import dts from 'vite-plugin-dts';
+import path from 'path';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    dts({ include: ['src'], exclude: ['src/main.tsx', 'src/App.tsx', 'src/embed.ts'] }),
-  ],
+  plugins: [react()],
+  root: 'src/app',
+  base: './',
   build: {
-    lib: {
-      entry: 'src/index.ts',
-      name: 'Starch',
-      fileName: 'starch',
-      formats: ['es'],
-    },
-    rollupOptions: {
-      external: [/^@codemirror\//, /^@lezer\//],
+    outDir: path.resolve(__dirname, 'dist'),
+    emptyOutDir: true,
+  },
+  server: {
+    port: 5174,
+    fs: {
+      allow: [path.resolve(__dirname)],
     },
   },
 });
