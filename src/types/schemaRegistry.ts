@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema, SizeSchema,
+  LayoutSchema, LayoutHintSchema,
 } from './properties';
 import {
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
@@ -32,7 +32,6 @@ const PROPERTY_CATEGORIES: Record<string, PropertyDescriptor['category']> = {
   transform: 'transform',
   depth: 'visual',
   dash: 'visual',
-  size: 'layout',
   layout: 'layout',
   layoutHint: 'layout',
   style: 'meta',
@@ -269,7 +268,7 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
 
 export {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema, SizeSchema,
+  LayoutSchema, LayoutHintSchema,
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
   ImageGeomSchema, CameraSchema, NodeSchema,
   AnimConfigSchema, KeyframeBlockSchema, ChapterSchema, EasingNameSchema,

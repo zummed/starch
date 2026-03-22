@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema, SizeSchema,
+  LayoutSchema, LayoutHintSchema,
 } from './properties';
-import type { HslColor, Stroke, Transform, Dash, Layout, LayoutHint, Size } from './properties';
+import type { HslColor, Stroke, Transform, Dash, Layout, LayoutHint } from './properties';
 
 // ─── Geometry Schemas ───────────────────────────────────────────
 
@@ -58,10 +58,17 @@ export const ImageGeomSchema = z.object({
   h: z.number().min(0).describe('Height'),
 });
 
+export const CameraLookSchema = z.union([
+  z.literal('all').describe('Fit all non-camera objects'),
+  z.string().describe('Target a node by ID'),
+  z.tuple([z.number(), z.number()]).describe('Target coordinates [x, y]'),
+  z.tuple([z.string(), z.number(), z.number()]).describe('Target node with offset [id, dx, dy]'),
+  z.array(z.string()).describe('Fit to specific node IDs'),
+]);
+
 export const CameraSchema = z.object({
-  target: PointRefSchema.describe('Camera target').optional(),
+  look: CameraLookSchema.describe('Camera look target — "all", node ID, [x,y], [id,dx,dy], or array of IDs to fit').optional(),
   zoom: z.number().min(0).describe('Zoom level').optional(),
-  fit: z.union([z.array(z.string()), z.literal('all')]).describe('Fit to object IDs or "all"').optional(),
   ratio: z.number().min(0).describe('Aspect ratio (width/height)').optional(),
   active: z.boolean().describe('Whether this camera is active').optional(),
 });
@@ -91,7 +98,6 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   // Non-inheritable
   depth: z.number().describe('Z-order depth').optional(),
   dash: DashSchema.describe('Dash pattern').optional(),
-  size: SizeSchema.describe('Explicit size for layout').optional(),
   layout: LayoutSchema.describe('Layout strategy').optional(),
   layoutHint: LayoutHintSchema.describe('Layout hints for parent strategy').optional(),
   slot: z.string().describe('Container ID for layout membership — animatable to move between containers').optional(),
@@ -132,12 +138,12 @@ export interface NodeInput {
   transform?: Transform;
   depth?: number;
   dash?: Dash;
-  size?: Size;
+
   layout?: Layout;
   layoutHint?: LayoutHint;
   slot?: string;
   style?: string;
-  camera?: { target?: PointRef; zoom?: number; fit?: string[] | 'all'; ratio?: number; active?: boolean };
+  camera?: { look?: PointRef | string[] | 'all'; zoom?: number; ratio?: number; active?: boolean };
   template?: string;
   props?: Record<string, unknown>;
 }
@@ -158,12 +164,12 @@ export interface Node {
   transform?: Transform;
   depth?: number;
   dash?: Dash;
-  size?: Size;
+
   layout?: Layout;
   layoutHint?: LayoutHint;
   slot?: string;
   style?: string;
-  camera?: { target?: PointRef; zoom?: number; fit?: string[] | 'all'; ratio?: number; active?: boolean };
+  camera?: { look?: PointRef | string[] | 'all'; zoom?: number; ratio?: number; active?: boolean };
   _ownKeys?: Set<string>;
   _styleKeys?: Set<string>;
   _isStyle?: boolean;

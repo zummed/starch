@@ -8,6 +8,7 @@ interface TimelineProps {
   playing: boolean;
   speed: number;
   chapters?: Chapter[];
+  keyframeTimes?: number[];
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
   onRestart: () => void;
@@ -20,6 +21,7 @@ export function Timeline({
   playing,
   speed,
   chapters = [],
+  keyframeTimes = [],
   onSeek,
   onTogglePlay,
   onRestart,
@@ -62,6 +64,38 @@ export function Timeline({
           <polygon points="10,0 3,6 10,12" fill="currentColor"/>
         </svg>
       </button>
+      {keyframeTimes.length > 0 && (<>
+        <button
+          className="ctrl-btn"
+          title="Previous keyframe"
+          onClick={() => {
+            const prev = [...keyframeTimes].reverse().find(t => t < time - 0.01);
+            onSeek(prev ?? keyframeTimes[0]);
+          }}
+          style={ctrlBtnStyle(false)}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <polygon points="6,0 0,6 6,12" fill="currentColor"/>
+            <rect x="7" y="2" width="1.5" height="8" rx="0.5" fill="currentColor"/>
+            <polygon points="12,2 8,6 12,10" fill="currentColor"/>
+          </svg>
+        </button>
+        <button
+          className="ctrl-btn"
+          title="Next keyframe"
+          onClick={() => {
+            const next = keyframeTimes.find(t => t > time + 0.01);
+            onSeek(next ?? keyframeTimes[keyframeTimes.length - 1]);
+          }}
+          style={ctrlBtnStyle(false)}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <polygon points="0,2 4,6 0,10" fill="currentColor"/>
+            <rect x="3.5" y="2" width="1.5" height="8" rx="0.5" fill="currentColor"/>
+            <polygon points="6,0 12,6 6,12" fill="currentColor"/>
+          </svg>
+        </button>
+      </>)}
       <div style={{ flex: 1, position: 'relative', height: 20, display: 'flex', alignItems: 'center' }}>
         <input
           type="range"

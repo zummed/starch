@@ -101,9 +101,6 @@ export function getNodeBounds(node: Node): { cx: number; cy: number; hw: number;
   if (node.image) {
     return { cx, cy, hw: node.image.w / 2, hh: node.image.h / 2, isEllipse: false };
   }
-  if (node.size) {
-    return { cx, cy, hw: node.size.w / 2, hh: node.size.h / 2, isEllipse: false };
-  }
   // Composition: find bounds from children's geometry
   if (node.children.length > 0) {
     let maxHw = 0, maxHh = 0;

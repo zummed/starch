@@ -101,16 +101,6 @@ describe('generateTrackPaths', () => {
     expect(paths).toContain('p1.dash.pattern');
   });
 
-  it('generates paths for size sub-object', () => {
-    const node = createNode({
-      id: 'c1',
-      size: { w: 200, h: 100 },
-    });
-    const paths = generateTrackPaths([node]);
-    expect(paths).toContain('c1.size.w');
-    expect(paths).toContain('c1.size.h');
-  });
-
   it('generates paths for visible and depth when explicitly set', () => {
     const node = createNode({
       id: 'n1',

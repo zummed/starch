@@ -45,11 +45,6 @@ export const LayoutSchema = z.object({
 
 export const LayoutHintSchema = z.record(z.string(), z.union([z.number(), z.string(), z.boolean()]));
 
-export const SizeSchema = z.object({
-  w: z.number().min(0).describe('Width'),
-  h: z.number().min(0).describe('Height'),
-});
-
 // ─── Derived Types ──────────────────────────────────────────────
 
 export type HslColor = z.infer<typeof HslColorSchema>;
@@ -58,4 +53,3 @@ export type Transform = z.infer<typeof TransformSchema>;
 export type Dash = z.infer<typeof DashSchema>;
 export type Layout = z.infer<typeof LayoutSchema>;
 export type LayoutHint = z.infer<typeof LayoutHintSchema>;
-export type Size = z.infer<typeof SizeSchema>;

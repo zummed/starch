@@ -4,10 +4,7 @@ import type { Node } from '../types/node';
 function getNodeSize(node: Node, isRow: boolean): { main: number; cross: number } {
   let w = 0, h = 0;
 
-  if (node.size) {
-    w = node.size.w;
-    h = node.size.h;
-  } else if (node.rect) {
+  if (node.rect) {
     w = node.rect.w;
     h = node.rect.h;
   } else if (node.ellipse) {
@@ -64,8 +61,6 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   let containerMain = 0;
   if (container.rect) {
     containerMain = (isRow ? container.rect.w : container.rect.h) || 0;
-  } else if (container.size) {
-    containerMain = isRow ? container.size.w : container.size.h;
   }
   const availableMain = containerMain > 0 ? containerMain - padding * 2 : contentMain;
   const extraSpace = availableMain - contentMain;
@@ -122,8 +117,6 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   let containerCross = 0;
   if (container.rect) {
     containerCross = (isRow ? container.rect.h : container.rect.w) || 0;
-  } else if (container.size) {
-    containerCross = isRow ? container.size.h : container.size.w;
   }
   const maxCross = containerCross > 0 ? containerCross - padding * 2 : Math.max(...sizes.map(s => s.cross));
 

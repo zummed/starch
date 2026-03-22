@@ -53,7 +53,6 @@ export default function App() {
   const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
   const [debugMode, setDebugMode] = useState(false);
   const [previewRatio, setPreviewRatio] = useState(false);
-  const [fitAll, setFitAll] = useState(false);
   const [fixedCamera, setFixedCamera] = useState(false);
   const [panZoom, setPanZoom] = useState<{ x: number; y: number; zoom: number } | null>(null);
   const [editorWidth, setEditorWidth] = useState(initialPrefs.current.editorWidth);
@@ -61,6 +60,8 @@ export default function App() {
   const [activeSampleId, setActiveSampleId] = useState<string | null>(v2Samples[0]?.name || null);
   const dragging = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState<{ w: number; h: number } | null>(null);
 
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
   useEffect(() => {
@@ -75,6 +76,18 @@ export default function App() {
   useEffect(() => {
     savePrefs({ layoutMode: userLayoutMode, showBrowser, showEditor, editorWidth });
   }, [userLayoutMode, showBrowser, showEditor, editorWidth]);
+
+  // Track canvas area dimensions for ratio preview
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setCanvasSize({ w: width, h: height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const isCompact = layoutMode === 'tab';
 
@@ -98,12 +111,6 @@ export default function App() {
     viewportOverride: fixedCamera ? viewportOverride : null,
   });
 
-  const lastDslRef = useRef(activeDsl);
-  if (lastDslRef.current !== activeDsl) {
-    lastDslRef.current = activeDsl;
-    requestAnimationFrame(() => diagram.seek(diagram.duration));
-  }
-
   const updateTabDsl = useCallback((dsl: string) => {
     setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl } : t));
   }, [activeTabId]);
@@ -118,7 +125,8 @@ export default function App() {
     });
     setActiveTabId('sample');
     setActiveSampleId(sample.name);
-  }, []);
+    requestAnimationFrame(() => diagram.seek(diagram.duration));
+  }, [diagram]);
 
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabId++);
@@ -147,9 +155,30 @@ export default function App() {
   const btnPad = isCompact ? '8px 14px' : '4px 10px';
   const btnSize = isCompact ? 12 : 11;
 
+  // Compute fitted container dimensions for ratio preview
+  const ratioContainerStyle = (() => {
+    if (!previewRatio || !diagram.cameraRatio || !canvasSize) {
+      return { width: '100%', height: '100%' } as const;
+    }
+    const { w: pw, h: ph } = canvasSize;
+    const r = diagram.cameraRatio;
+    let cw: number, ch: number;
+    if (pw / ph > r) {
+      // Parent is wider than ratio — constrain by height
+      ch = ph;
+      cw = ph * r;
+    } else {
+      // Parent is taller than ratio — constrain by width
+      cw = pw;
+      ch = pw / r;
+    }
+    return { width: cw, height: ch, border: '1px solid rgba(167, 139, 250, 0.5)', borderRadius: 4 } as const;
+  })();
+
   // Shared canvas content (used by both layouts)
   const canvasContent = (
     <div
+      ref={canvasRef}
       style={{
         width: '100%', height: '100%', position: 'relative', overflow: 'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -170,7 +199,7 @@ export default function App() {
         const newViewW = vpW / newZoom;
         const newViewH = vpH / newZoom;
         setPanZoom({ x: worldX + newViewW * (0.5 - mx), y: worldY + newViewH * (0.5 - my), zoom: newZoom });
-        setFitAll(false);
+
         if (!fixedCamera) setFixedCamera(true);
       }}
       onMouseDown={(e) => {
@@ -192,11 +221,11 @@ export default function App() {
         document.body.style.cursor = 'grabbing';
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
-        setFitAll(false);
+
         if (!fixedCamera) setFixedCamera(true);
       }}
     >
-      <div ref={diagram.containerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={diagram.containerRef} style={ratioContainerStyle} />
     </div>
   );
 
@@ -207,12 +236,13 @@ export default function App() {
       playing={diagram.playing}
       speed={diagram.speed}
       chapters={diagram.chapters}
+      keyframeTimes={diagram.keyframeTimes}
       onSeek={(t) => { diagram.seek(t); diagram.setPlaying(false); }}
       onTogglePlay={() => {
         if (!diagram.playing && diagram.time >= diagram.duration - 0.01) diagram.seek(0);
         diagram.setPlaying(!diagram.playing);
       }}
-      onRestart={() => { diagram.seek(0); diagram.setPlaying(true); }}
+      onRestart={() => { diagram.seek(0); diagram.setPlaying(false); }}
       onSpeedChange={diagram.setSpeed}
     />
   );
@@ -307,9 +337,9 @@ export default function App() {
               {[
                 { label: 'Samples', active: showBrowser, onClick: () => setShowBrowser(!showBrowser) },
                 { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
-                { label: 'Fit All', active: fitAll, onClick: () => { setFitAll(!fitAll); setPanZoom(null); if (!fitAll && !fixedCamera) setFixedCamera(true); } },
-                { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); setFitAll(false); } } },
-                { label: 'Ratio', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
+                { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
+                { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
+                { label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
                 { label: showEditor ? 'Hide' : 'Edit', active: false, onClick: () => { const next = !showEditor; setShowEditor(next); if (!next) setShowBrowser(false); } },
               ].map(btn => (
                 <button

@@ -23,7 +23,6 @@ function getNodeBounds(node: Node): { x: number; y: number; w: number; h: number
   let w = 0, h = 0;
   if (node.rect) { w = node.rect.w; h = node.rect.h; }
   else if (node.ellipse) { w = node.ellipse.rx * 2; h = node.ellipse.ry * 2; }
-  else if (node.size) { w = node.size.w; h = node.size.h; }
   return { x: px - w / 2, y: py - h / 2, w, h };
 }
 
@@ -52,49 +51,51 @@ export function resolveCameraView(
   let vw = defaultViewBox.w;
   let vh = defaultViewBox.h;
 
-  // Fit: compute bounding box of specified nodes
-  const fitIds = cam.fit;
-  if (fitIds) {
-    const ids = fitIds === 'all'
-      ? allNodes.filter(n => !n.camera).map(n => n.id)
-      : fitIds;
+  // Resolve look: unified camera target/fit
+  const look = cam.look;
+  if (look) {
+    if (look === 'all' || (Array.isArray(look) && look.length > 0 && look.every(v => typeof v === 'string'))) {
+      // Fit mode: "all" or array of node IDs
+      const ids = look === 'all'
+        ? allNodes.filter(n => !n.camera).map(n => n.id)
+        : look as string[];
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const id of ids) {
-      const node = findNodeById(allNodes, id);
-      if (!node) continue;
-      const b = getNodeBounds(node);
-      minX = Math.min(minX, b.x);
-      minY = Math.min(minY, b.y);
-      maxX = Math.max(maxX, b.x + b.w);
-      maxY = Math.max(maxY, b.y + b.h);
-    }
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const id of ids) {
+        const node = findNodeById(allNodes, id);
+        if (!node) continue;
+        const b = getNodeBounds(node);
+        minX = Math.min(minX, b.x);
+        minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.w);
+        maxY = Math.max(maxY, b.y + b.h);
+      }
 
-    if (minX !== Infinity) {
-      const margin = 20;
-      cx = (minX + maxX) / 2;
-      cy = (minY + maxY) / 2;
-      vw = (maxX - minX) + margin * 2;
-      vh = (maxY - minY) + margin * 2;
-    }
-  } else if (cam.target) {
-    // Target: resolve PointRef to center coordinates
-    const target = cam.target;
-    if (typeof target === 'string') {
-      const node = findNodeById(allNodes, target);
+      if (minX !== Infinity) {
+        const margin = 20;
+        cx = (minX + maxX) / 2;
+        cy = (minY + maxY) / 2;
+        vw = (maxX - minX) + margin * 2;
+        vh = (maxY - minY) + margin * 2;
+      }
+    } else if (typeof look === 'string') {
+      // Target mode: single node ID
+      const node = findNodeById(allNodes, look);
       if (node) {
         cx = node.transform?.x ?? 0;
         cy = node.transform?.y ?? 0;
       }
-    } else if (Array.isArray(target)) {
-      if (typeof target[0] === 'number') {
-        cx = target[0] as number;
-        cy = target[1] as number;
-      } else if (typeof target[0] === 'string') {
-        const node = findNodeById(allNodes, target[0]);
+    } else if (Array.isArray(look)) {
+      if (typeof look[0] === 'number') {
+        // Target mode: [x, y] coordinates
+        cx = look[0] as number;
+        cy = look[1] as number;
+      } else if (typeof look[0] === 'string') {
+        // Target mode: ["nodeId", dx, dy] offset
+        const node = findNodeById(allNodes, look[0] as string);
         if (node) {
-          cx = (node.transform?.x ?? 0) + (target[1] as number);
-          cy = (node.transform?.y ?? 0) + (target[2] as number);
+          cx = (node.transform?.x ?? 0) + (look[1] as number);
+          cy = (node.transform?.y ?? 0) + (look[2] as number);
         }
       }
     }
