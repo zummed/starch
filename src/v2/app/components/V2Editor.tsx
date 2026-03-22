@@ -11,7 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching } from '@codemirror/language';
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
-import { starchTheme, starchHighlight } from '../../../editor/theme';
+import { starchTheme, starchHighlight } from '../../editor/theme';
 import { findValueSpan, formatValue } from '../../editor/textReplace';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
