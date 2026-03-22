@@ -1,66 +1,66 @@
 import { describe, it, expect } from 'vitest';
-import { computeViewBox, lerpViewBox, type ViewBox } from '../../renderer/camera';
+import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
 import { createNode } from '../../types/node';
 
 const defaultVB: ViewBox = { x: 0, y: 0, w: 800, h: 600 };
 
-describe('computeViewBox', () => {
-  it('returns default when no camera', () => {
-    expect(computeViewBox(undefined, [], defaultVB)).toEqual(defaultVB);
+describe('findActiveCamera', () => {
+  it('returns undefined when no camera nodes', () => {
+    const box = createNode({ id: 'box', rect: { w: 50, h: 50 } });
+    expect(findActiveCamera([box])).toBeUndefined();
   });
 
-  it('zooms around center', () => {
+  it('finds a camera node', () => {
+    const cam = createNode({ id: 'cam', camera: { zoom: 1 } });
+    const box = createNode({ id: 'box', rect: { w: 50, h: 50 } });
+    expect(findActiveCamera([box, cam])?.id).toBe('cam');
+  });
+
+  it('returns first active camera when multiple exist', () => {
+    const cam1 = createNode({ id: 'cam1', camera: { zoom: 1, active: true } });
+    const cam2 = createNode({ id: 'cam2', camera: { zoom: 2, active: true } });
+    expect(findActiveCamera([cam1, cam2])?.id).toBe('cam1');
+  });
+
+  it('skips inactive cameras', () => {
+    const cam1 = createNode({ id: 'cam1', camera: { zoom: 1, active: false } });
+    const cam2 = createNode({ id: 'cam2', camera: { zoom: 2 } });
+    expect(findActiveCamera([cam1, cam2])?.id).toBe('cam2');
+  });
+});
+
+describe('computeViewBox', () => {
+  it('returns default when no camera', () => {
+    expect(computeViewBox(undefined, defaultVB)).toEqual(defaultVB);
+  });
+
+  it('reads rect and transform from camera node', () => {
     const cam = createNode({
       id: 'cam',
-      camera: { zoom: 2 },
+      camera: { zoom: 1 },
+      rect: { w: 400, h: 300 },
+      transform: { x: 200, y: 150 },
     });
-    const vb = computeViewBox(cam, [], defaultVB);
+    const vb = computeViewBox(cam, defaultVB);
+    expect(vb.x).toBe(0);    // 200 - 400/2
+    expect(vb.y).toBe(0);    // 150 - 300/2
     expect(vb.w).toBe(400);
     expect(vb.h).toBe(300);
   });
 
-  it('targets a specific node', () => {
-    const target = createNode({ id: 'box', transform: { x: 200, y: 150 } });
+  it('returns default when camera has no rect', () => {
+    const cam = createNode({ id: 'cam', camera: { zoom: 1 } });
+    expect(computeViewBox(cam, defaultVB)).toEqual(defaultVB);
+  });
+
+  it('includes rotation from transform', () => {
     const cam = createNode({
       id: 'cam',
-      camera: { target: 'box', zoom: 1 },
+      camera: { zoom: 1 },
+      rect: { w: 800, h: 600 },
+      transform: { x: 400, y: 300, rotation: 45 },
     });
-    const vb = computeViewBox(cam, [target], defaultVB);
-    expect(vb.x).toBe(200 - 400);
-    expect(vb.y).toBe(150 - 300);
-  });
-
-  it('fits to multiple objects', () => {
-    const a = createNode({ id: 'a', transform: { x: 0, y: 0 }, rect: { w: 50, h: 50 } });
-    const b = createNode({ id: 'b', transform: { x: 200, y: 200 }, rect: { w: 50, h: 50 } });
-    const cam = createNode({
-      id: 'cam',
-      camera: { fit: ['a', 'b'], zoom: 1 },
-    });
-    const vb = computeViewBox(cam, [a, b], defaultVB);
-    // Should encompass both nodes
-    expect(vb.x).toBeLessThan(0);
-    expect(vb.w).toBeGreaterThan(200);
-  });
-});
-
-describe('lerpViewBox', () => {
-  it('interpolates between two viewboxes', () => {
-    const a: ViewBox = { x: 0, y: 0, w: 100, h: 100 };
-    const b: ViewBox = { x: 100, y: 100, w: 200, h: 200 };
-    const mid = lerpViewBox(a, b, 0.5);
-    expect(mid).toEqual({ x: 50, y: 50, w: 150, h: 150 });
-  });
-
-  it('returns a at t=0', () => {
-    const a: ViewBox = { x: 10, y: 20, w: 30, h: 40 };
-    const b: ViewBox = { x: 50, y: 60, w: 70, h: 80 };
-    expect(lerpViewBox(a, b, 0)).toEqual(a);
-  });
-
-  it('returns b at t=1', () => {
-    const a: ViewBox = { x: 10, y: 20, w: 30, h: 40 };
-    const b: ViewBox = { x: 50, y: 60, w: 70, h: 80 };
-    expect(lerpViewBox(a, b, 1)).toEqual(b);
+    const vb = computeViewBox(cam, defaultVB);
+    expect(vb.rotation).toBe(45);
   });
 });
