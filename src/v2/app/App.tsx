@@ -197,6 +197,13 @@ export default function App() {
       }}
     >
       <div ref={diagram.containerRef} style={{ width: '100%', height: '100%' }} />
+      {previewRatio && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          border: '2px solid rgba(167, 139, 250, 0.4)',
+          boxShadow: 'inset 0 0 20px rgba(167, 139, 250, 0.1)',
+        }} />
+      )}
     </div>
   );
 
@@ -309,6 +316,7 @@ export default function App() {
                 { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
                 { label: 'Fit All', active: fitAll, onClick: () => { setFitAll(!fitAll); setPanZoom(null); if (!fitAll && !fixedCamera) setFixedCamera(true); } },
                 { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); setFitAll(false); } } },
+                { label: 'Ratio', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
                 { label: showEditor ? 'Hide' : 'Edit', active: false, onClick: () => { const next = !showEditor; setShowEditor(next); if (!next) setShowBrowser(false); } },
               ].map(btn => (
                 <button
