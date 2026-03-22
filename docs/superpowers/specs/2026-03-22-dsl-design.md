@@ -6,7 +6,7 @@ A compact, human-readable syntax for authoring Starch diagrams. JSON5 remains th
 
 - **Approachable**: non-technical users can read and write diagrams without knowing JSON
 - **Complete**: every JSON5 feature is expressible in the DSL (with inline `{...}` JSON as a fallback for edge cases)
-- **Bidirectional**: mechanical, lossless conversion between DSL and JSON5
+- **Bidirectional**: mechanical, data-lossless conversion between DSL and JSON5 (formatting choices like inline vs block or `..` shortcuts are not preserved across round-trips, but all data is)
 - **Same editor intelligence**: autocomplete, property popups, hover descriptions, and linting work identically in both views
 - **Embeddable**: the DSL makes inline editing viable in contexts where raw JSON would be intimidating (docs, blogs, presentations)
 
@@ -28,6 +28,16 @@ Every node follows the pattern:
 id: geometry [inline-props...] [at position]
 ```
 
+### Identifiers
+
+Node IDs must match `[a-zA-Z_][a-zA-Z0-9_]*`. Dots are not allowed in IDs (dots are the path separator).
+
+**Reserved words** — the following cannot be used as unquoted IDs: `style`, `template`, `animate`, `chapter`, `images`, `name`, `description`, `background`, `viewport`, `layout`, `fill`, `stroke`, `at`, `rect`, `ellipse`, `text`, `path`, `image`, `camera`.
+
+If a reserved word must be used as an ID, quote it: `"at": rect 100x50`.
+
+**Bare-keyword booleans** (`bold`, `mono`, `closed`, `smooth`, `active`, `loop`, `autoKey`, `visible`) and **property-name keywords** (`opacity`, `depth`, `dash`, `slot`) are **not** reserved as IDs. These are disambiguated by context: a node declaration always has `:` after the ID (e.g., `bold: rect 100x50`), while a bare keyword or property appears without `:` as part of a property list. The parser uses the `:` to distinguish ID declarations from property keywords.
+
 ### Geometry Shorthands
 
 | DSL | JSON5 |
@@ -35,29 +45,35 @@ id: geometry [inline-props...] [at position]
 | `rect 160x100` | `rect: { w: 160, h: 100 }` |
 | `ellipse 8x8` | `ellipse: { rx: 8, ry: 8 }` |
 | `text "Hello"` | `text: { content: "Hello" }` |
-| `image "photo.png"` | `image: { src: "photo.png" }` |
+| `image "photo.png" 200x150` | `image: { src: "photo.png", w: 200, h: 150 }` |
 | `camera` | `camera: {}` |
 | *(no geometry)* | *(group/container node)* |
 
-A node with no geometry keyword is a container (ID with properties and/or children).
+A node with no geometry keyword is a container (ID with properties and/or children). A bare `id:` with nothing after the colon is a valid empty container.
 
 ### Inline Properties
 
 Properties follow the geometry on the same line, parsed left to right:
 
 ```
-box: rect 160x100 radius=8 @primary fill 210 70 45 opacity=0.8 bold at 200,150
+box: rect 160x100 radius=8 @primary fill 210 70 45 opacity=0.8 at 200,150
 ```
 
 Rules:
 
-- **Geometry** is always first after the `:`
+- **Geometry** is always first after the `:`. Geometry-specific optional properties follow immediately as `key=value`:
+  - rect: `radius=8`
+  - text: `size=14`, `lineHeight=1.5`, `align=middle`, `bold`, `mono`
+  - image: `fit=cover`, `padding=10`
+  - path (explicit points): `closed`, `smooth`
+  - camera: `look=all`, `zoom=1.5`, `ratio=1.78`, `active` (see Camera section)
 - **`@name`** — style reference (maps to `style: "name"`)
-- **`fill H S L`** — three bare numbers after `fill` are HSL. Also accepts named colors (`fill white`), hex (`fill #3B82F6`), and alpha (`fill 210 70 45 a=0.5`)
-- **`stroke H S L`** — same as fill, with optional `width=N`
-- **`at x,y`** — position (maps to `transform: { x, y }`). Partial form: `at y=-20`
-- **`key=value`** — any named property: `radius=8`, `opacity=0.8`, `scale=2`, `rotation=45`, `depth=3`, `slot=container`, `size=14`, `align=middle`
-- **Bare keywords** — booleans: `bold`, `mono`, `closed`, `smooth`, `loop`, `active`, `visible=false`
+- **`fill H S L`** — exactly three bare numbers after `fill` are consumed as HSL (hue, saturation, lightness). Named sub-properties follow as `key=value`: `fill 210 70 45 a=0.5`. Also accepts named colors (`fill white`) and hex (`fill #3B82F6`). After consuming the color (3 numbers + optional sub-props, or 1 named color/hex), parsing continues with top-level properties.
+- **`stroke H S L`** — same as fill, with optional `width=N` and `a=N` sub-properties: `stroke 210 80 30 width=2 a=0.8`
+- **`at x,y`** — position (maps to `transform: { x, y }`). Partial form: `at y=-20`. Additional transform properties: `rotation=45`, `scale=2`, `anchor=(50,50)` or `anchor=center`, `pathFollow=railId`, `pathProgress=0.5`. All transform properties map to fields within `transform: { ... }` in JSON.
+- **`dash=PATTERN`** — inline shorthand setting only the pattern: `dash=dashed`, `dash=dotted`, `dash=solid`. The `=` is required for inline use. Bare `dash` without `=` inline is a parse error (use block form for the full `dash PATTERN length=N gap=N` syntax).
+- **`key=value`** — any named property: `radius=8`, `opacity=0.8`, `depth=3`, `slot=container`, `visible=false`
+- **Bare keywords** — booleans: `bold`, `mono`, `closed`, `smooth`, `active`. Negated with `=false`: `visible=false`, `active=false`
 
 ### Block Properties
 
@@ -69,7 +85,16 @@ card: rect 160x100 at 200,150
   fill 210 70 45
   stroke 210 80 30 width=2
   @primary
+  dash dashed length=10 gap=5
 ```
+
+The `dash` block form allows setting all three fields: `dash PATTERN` with optional `length=N` and `gap=N`.
+
+| DSL | JSON5 |
+|-----|-------|
+| `dash dashed` | `dash: { pattern: "dashed" }` |
+| `dash dashed length=10 gap=5` | `dash: { pattern: "dashed", length: 10, gap: 5 }` |
+| `dash=dotted` (inline shorthand) | `dash: { pattern: "dotted" }` |
 
 This is equivalent to the inline form. The choice is the author's formatting preference.
 
@@ -82,6 +107,8 @@ card: rect 160x100 at 200,150
   title: text "Hello" size=14 bold fill white at y=-20
   badge: ellipse 8x8 fill 120 70 45 at 55,-30
 ```
+
+Children are distinguished from block properties by the presence of `:` after the identifier. A line like `title: text "Hello"` is a child node; a line like `fill 210 70 45` is a block property.
 
 ### Flat References
 
@@ -97,14 +124,19 @@ card.badge.fill: 120 70 45
 card.title.fill: white
 ```
 
+A line starting with a dotted path (e.g., `card.badge.fill:`) is always a flat reference, never a node declaration (since node IDs cannot contain dots).
+
 ### Connections (Arrow Syntax)
 
-Connections use `->` between PointRefs. The unified `route` model replaces the old `from`/`to`/`route` separation:
+Connections use `->` between PointRefs. The unified `route` model replaces the old `from`/`to`/`route` separation (see Path Model Change section):
 
 ```
 link: a -> b stroke 0 0 60 width=2
 link: a -> b bend=1.5 gap=4
 link: a -> (250,100) -> (250,200) -> b smooth radius=15
+link: a -> b fromAnchor=right toAnchor=left
+link: a -> b gap=4
+link: a -> b fromGap=4 toGap=8
 ```
 
 Each entry in the route is a PointRef:
@@ -118,23 +150,59 @@ Each entry in the route is a PointRef:
 | `a -> (250,100) -> b` | `path: { route: ["a", [250,100], "b"] }` |
 | `a -> ("b", 0, -30)` | `path: { route: ["a", ["b", 0, -30]] }` |
 
-Path modifiers (`bend`, `smooth`, `radius`, `gap`, `fromGap`, `toGap`, `drawProgress`, `fromAnchor`, `toAnchor`, `closed`) remain as separate named properties.
+Path modifiers as named properties:
+
+| DSL | JSON5 |
+|-----|-------|
+| `bend=1.5` | `bend: 1.5` |
+| `smooth` | `smooth: true` |
+| `radius=15` | `radius: 15` |
+| `gap=4` | `gap: 4` |
+| `fromGap=4 toGap=8` | `fromGap: 4, toGap: 8` |
+| `drawProgress=0.5` | `drawProgress: 0.5` |
+| `fromAnchor=right` | `fromAnchor: "right"` |
+| `toAnchor=(50,50)` | `toAnchor: [50, 50]` |
 
 ### Explicit Point Paths
+
+Paths with explicit coordinate points use the `points` field (distinct from `route` which is for connections between PointRefs):
 
 ```
 triangle: path (0,-40) (40,30) (-40,30) closed fill 280 60 45
 zigzag: path (0,0) (30,-30) (60,0) (90,-30) stroke 40 90 50 width=2
 ```
 
+| DSL | JSON5 |
+|-----|-------|
+| `path (0,-40) (40,30) (-40,30)` | `path: { points: [[0,-40], [40,30], [-40,30]] }` |
+| `path (0,-40) (40,30) closed smooth` | `path: { points: [...], closed: true, smooth: true }` |
+
+The distinction: `->` syntax produces `route` (PointRef array, for connections). Bare coordinate list produces `points` (coordinate array, for shapes). These are mutually exclusive on a single path node.
+
 ### Camera
 
 ```
 cam: camera look=all zoom=1.5
-cam: camera look="nodeId" zoom=2 ratio=1.78
+cam: camera look="nodeId" zoom=2 ratio=1.78 active
 cam: camera look=(300,200) zoom=1.5
 cam: camera look=("b", 0, -100)
+cam: camera look=("a", "b", "c") zoom=1
+cam: camera look="nodeId" active=false
 ```
+
+| DSL | JSON5 |
+|-----|-------|
+| `look=all` | `camera: { look: "all" }` |
+| `look="nodeId"` | `camera: { look: "nodeId" }` |
+| `look=(300,200)` | `camera: { look: [300, 200] }` |
+| `look=("b", 0, -100)` | `camera: { look: ["b", 0, -100] }` |
+| `look=("a", "b", "c")` | `camera: { look: ["a", "b", "c"] }` |
+| `active` | `camera: { active: true }` |
+| `active=false` | `camera: { active: false }` |
+
+### Strings
+
+String literals use double quotes. Standard escape sequences are supported: `\"`, `\\`, `\n`, `\t`. Unicode escapes: `\u{1F600}`. Multi-line strings are not supported; use `\n` for line breaks within text content.
 
 ### Comments
 
@@ -148,7 +216,10 @@ Any property value can be an inline JSON literal:
 
 ```
 card: rect 160x100 layout={ type: "flex", direction: "row", gap: 10 }
+card: rect 160x100 layoutHint={ grow: 1, shrink: 0 }
 ```
+
+This is the fallback for any property shape not covered by a dedicated DSL form. The JSON literal is parsed and embedded verbatim in the output.
 
 ---
 
@@ -208,6 +279,14 @@ row: rect 400x80 at 200,150
 
 The `layout` keyword takes: `flex|absolute|grid|circular`, then optional `row|column`, then named params.
 
+### Layout Hints
+
+Per-node layout configuration uses `key=value` or the JSON escape hatch:
+
+```
+item: rect 80x50 slot=container layoutHint={ grow: 1, shrink: 0, basis: 100 }
+```
+
 ### Slots
 
 Items reference their container:
@@ -235,13 +314,33 @@ myCard: Card("Hello", color=0) at 200,150
 otherCard: Card("World") at 400,150
 ```
 
-`$param` references template parameters. Defaults are supported. Maps to existing `template`/`props` JSON fields.
+`$param` references template parameters. Defaults are supported.
+
+JSON mapping:
+
+| DSL | JSON5 |
+|-----|-------|
+| `myCard: Card("Hello", color=0) at 200,150` | `{ id: "myCard", template: "Card", props: { title: "Hello", color: 0 }, transform: { x: 200, y: 150 } }` |
 
 ---
 
 ## Section 3: Animation Syntax
 
-Three forms that all merge into a single timeline.
+Three forms that all merge into a single timeline. Scoped blocks and flat (unscoped) entries can be freely interleaved within the same `animate` block.
+
+### Global Animation Properties
+
+```
+animate 3s loop easing=easeInOut autoKey
+animate 6s easing=easeInOutCubic
+```
+
+| DSL | JSON5 |
+|-----|-------|
+| `animate 3s` | `animate: { duration: 3 }` |
+| `loop` | `loop: true` |
+| `easing=easeInOut` | `easing: "easeInOut"` |
+| `autoKey` | `autoKey: true` |
 
 ### Form 1: Flat Timeline
 
@@ -269,7 +368,7 @@ animate 3s loop easing=easeInOut
     1.5  opacity: 1
 ```
 
-Forms 1 and 2 are the same grammar; Form 1 is Form 2 without a scope prefix.
+Forms 1 and 2 are the same grammar; Form 1 is Form 2 without a scope prefix. A scope block is identified by an identifier followed by `:` with no timestamp prefix. A keyframe entry always starts with a numeric timestamp or `+`.
 
 ### Form 3: Inline on Node
 
@@ -308,11 +407,25 @@ animate 6s
   +1.0  box..x: 400 easing=easeOut    // = 3.0
 ```
 
-`+` prefix maps to the existing `plus` field.
+`+` prefix maps to the existing `plus` field. Negative relative offsets are not supported; use absolute times.
+
+### Per-Keyframe Properties
+
+```
+animate 6s
+  0.0  box..x: 100 delay=0.5
+  1.0  box..x: 400 easing=easeOut autoKey=false
+```
+
+| DSL | JSON5 |
+|-----|-------|
+| `delay=0.5` | `delay: 0.5` (on the keyframe block) |
+| `easing=bounce` | `easing: "bounce"` (on the keyframe block) |
+| `autoKey=false` | `autoKey: false` (on the keyframe block) |
 
 ### Multi-Line Keyframes
 
-A single timestamp can span multiple lines. Continuation lines without a timestamp belong to the previous time:
+A single timestamp can span multiple lines. Continuation lines are identified by being indented further than the timestamp line and not starting with a timestamp or scope identifier:
 
 ```
 animate 6s loop
@@ -348,17 +461,35 @@ animate 6s
   2.0  box..x: 400
 ```
 
+### Keyframe Values
+
+Values after the `:` in keyframe entries follow these rules:
+
+- **Numbers**: bare numeric literals: `fill.h: 180`, `opacity: 0.5`
+- **Strings**: quoted: `camera.look: "nodeId"`, `slot: "container"`
+- **Known enums**: accepted unquoted when unambiguous in context: `camera.look: all` (equivalent to `camera.look: "all"`)
+- **Coordinates**: tuple syntax: `camera.look: (300,200)`, `camera.look: ("b", -60, 0)`
+- **Booleans**: `camera.active: true`, `camera.active: false`
+- **Sub-objects**: use the JSON escape hatch: `fill: { h: 210, s: 70, l: 45 }` (for keyframes that set an entire sub-object at once)
+
 ### Effects
 
-Fire-and-forget visual modifiers. Bare ID + effect name, no colon:
+Fire-and-forget visual modifiers. Distinguished from property changes by the absence of `:` — the line has `timestamp  target effectName` with no colon:
 
 ```
 animate 6s
   1.5  card pulse
-  2.0  badge flash
+  2.0  badge flash amplitude=2 duration=0.5
   3.0  box shake
   4.0  title glow
 ```
+
+Effect parameters follow as `key=value`:
+
+| DSL | JSON5 |
+|-----|-------|
+| `1.5  card pulse` | `{ time: 1.5, changes: { "card": "pulse" } }` |
+| `2.0  badge flash amplitude=2 duration=0.5` | `{ time: 2.0, changes: { "badge": { effect: "flash", amplitude: 2, duration: 0.5 } } }` |
 
 ---
 
@@ -377,22 +508,37 @@ The generator walks the parsed node tree and emits DSL text:
 | `rect: { w: 160, h: 100 }` | `rect 160x100` |
 | `ellipse: { rx: 8, ry: 8 }` | `ellipse 8x8` |
 | `text: { content: "Hello", size: 14, bold: true }` | `text "Hello" size=14 bold` |
+| `image: { src: "photo.png", w: 200, h: 150 }` | `image "photo.png" 200x150` |
+| `image: { src: "photo.png", w: 200, h: 150, fit: "cover" }` | `image "photo.png" 200x150 fit=cover` |
 | `fill: { h: 210, s: 70, l: 45 }` | `fill 210 70 45` (or named color if match) |
 | `fill: { h: 0, s: 0, l: 100 }` | `fill white` |
+| `fill: { h: 210, s: 70, l: 45, a: 0.5 }` | `fill 210 70 45 a=0.5` |
 | `stroke: { h: 210, s: 80, l: 30, width: 2 }` | `stroke 210 80 30 width=2` |
+| `stroke: { h: 210, s: 80, l: 30, width: 2, a: 0.8 }` | `stroke 210 80 30 width=2 a=0.8` |
 | `transform: { x: 200, y: 150 }` | `at 200,150` |
 | `transform: { y: -20 }` | `at y=-20` |
+| `transform: { x: 200, y: 150, rotation: 45 }` | `at 200,150 rotation=45` |
+| `transform: { x: 200, y: 150, scale: 2 }` | `at 200,150 scale=2` |
+| `transform: { pathFollow: "rail", pathProgress: 0.5 }` | `pathFollow=rail pathProgress=0.5` |
+| `transform: { anchor: [50, 50] }` | `anchor=(50,50)` |
+| `transform: { anchor: "center" }` | `anchor=center` |
 | `style: "primary"` | `@primary` |
 | `path: { route: ["a", "b"] }` | `a -> b` |
 | `path: { route: ["a", [250,100], "b"] }` | `a -> (250,100) -> b` |
+| `path: { points: [[0,-40], [40,30], [-40,30]] }` | `path (0,-40) (40,30) (-40,30)` |
+| `dash: { pattern: "dashed" }` | `dash=dashed` |
+| `dash: { pattern: "dashed", length: 10, gap: 5 }` | `dash dashed length=10 gap=5` |
 | `layout: { type: "flex", direction: "row", gap: 10 }` | `layout flex row gap=10` |
+| `text: { content: "Hello", lineHeight: 1.5 }` | `text "Hello" lineHeight=1.5` |
+| `camera: { look: ["a", "b", "c"], zoom: 1 }` | `camera look=("a","b","c") zoom=1` |
 
 Rendering heuristics:
 
-- **Inline vs block**: nodes with 4 or fewer properties render inline; more complex nodes use block form with properties on separate lines. Per-node overrides stored in tab metadata.
+- **Inline vs block**: nodes with 4 or fewer properties render inline; more complex nodes use block form with properties on separate lines. Per-node overrides stored in tab metadata (map of node ID to `"inline"` or `"block"`).
 - **Colors**: check named color table first (`white`, `black`, `red`...), then emit `H S L`.
 - **Animation paths**: emit full paths by default. Authors can manually shorten to `..` form.
 - **Children**: indented under parent.
+- **Long lines**: if an inline node exceeds ~120 characters, prefer block form regardless of property count.
 
 ### DSL -> JSON (Parsing)
 
@@ -405,7 +551,7 @@ Each DSL construct deterministically produces one JSON shape (same mapping table
 
 ### Format Detection
 
-Heuristic on load/paste: content starting with `{` is JSON5, otherwise DSL.
+Heuristic on load/paste: first non-whitespace character is `{` → JSON5, otherwise → DSL. Empty input defaults to DSL.
 
 ---
 
@@ -456,6 +602,8 @@ When the user edits in the DSL view:
 4. Surgical JSON text patches applied to JSON5 source (preserving JSON formatting).
 5. DSL view re-renders from updated JSON.
 
+**Cursor stability**: after re-rendering the DSL view, the cursor must be mapped back to the equivalent position in the new DSL text. This is achieved by tracking the JSON path at the cursor position before the edit, then finding that path's position in the re-rendered DSL. This is a non-trivial implementation challenge; if exact cursor positioning proves unreliable, a fallback is to preserve the cursor's line and column offset.
+
 For popup edits (ColorPicker, NumberSlider, etc.):
 
 1. Cursor position in DSL view resolves to a JSON path (e.g., `objects[2].fill.h`).
@@ -475,6 +623,8 @@ Same schema-driven completions as JSON, adapted to DSL grammar:
 - After `->` — suggest node IDs
 - In `animate` blocks — suggest track paths with `..` shortcut options
 - After `easing=` — suggest easing names
+- After `look=` — suggest `all`, node IDs, or coordinate syntax
+- After `dash=` — suggest `dashed`, `dotted`, `solid`
 
 Completions are driven by the same schema registry. The difference is only in what text gets inserted (DSL tokens vs JSON keys/values).
 
@@ -501,6 +651,7 @@ DSL-specific lint errors show inline:
 - Ambiguous `..` paths
 - Unknown node IDs in connections/animations
 - Schema validation (out of range, wrong type)
+- Reserved word used as unquoted ID
 
 JSON linting continues unchanged in JSON view.
 
@@ -508,7 +659,7 @@ JSON linting continues unchanged in JSON view.
 
 When loading or pasting DSL from outside:
 
-1. Detect format (starts with `{` = JSON5, otherwise = DSL).
+1. Detect format (first non-whitespace character is `{` → JSON5, otherwise → DSL).
 2. If DSL: parse to JSON, store JSON as source.
 3. User sees it in whichever view they have active.
 
@@ -571,7 +722,7 @@ The DSL makes embedded editing viable. Raw JSON5 would be intimidating to a casu
 
 ## Path Model Change: Unified Route
 
-As part of this work, the path model is simplified. The separate `from`, `to`, and `route` attributes are unified into a single `route` array of PointRefs.
+As part of this work, the path model is simplified. The separate `from`, `to`, and `route` attributes are unified into a single `route` array of PointRefs. The existing `points` field remains for explicit coordinate-only shape paths.
 
 ### Before (v2 current)
 
@@ -590,9 +741,41 @@ Each entry is a PointRef:
 - Tuple `[x, y]`: coordinates (`[250, 100]`)
 - Tuple `[id, dx, dy]`: node + offset (`["b", 0, -30]`)
 
-First and last entries are endpoints; everything in between is waypoints. All existing path modifiers (`bend`, `smooth`, `radius`, `gap`, `fromGap`, `toGap`, `drawProgress`, `fromAnchor`, `toAnchor`, `closed`) remain as separate properties.
+First and last entries are endpoints; everything in between is waypoints.
+
+### Points vs Route
+
+- **`route`**: for connections between PointRefs (can include node IDs, coordinates, offsets). Used with `->` arrow syntax in DSL.
+- **`points`**: for explicit coordinate-only shape paths (triangles, zigzags, freeform shapes). Used with bare coordinate syntax in DSL.
+
+These are mutually exclusive on a single path node. All existing path modifiers (`bend`, `smooth`, `radius`, `gap`, `fromGap`, `toGap`, `drawProgress`, `fromAnchor`, `toAnchor`, `closed`) remain as separate properties.
 
 The parser can accept the old `from`/`to` form and normalize during a transition period.
+
+**JSON-to-DSL rendering of legacy paths**: when the JSON source uses old-style `from`/`to` fields, the DSL renderer normalizes them into arrow syntax (e.g., `{ from: "a", to: "b" }` renders as `a -> b`). The underlying JSON is not modified until the user edits in DSL view, at which point the normalized `route` form is written back.
+
+**Schema changes required**: the following schema fields will be updated to add defaults or become optional as part of this work:
+- `StrokeSchema.width`: add `.default(1)` (most strokes use width=1, omitting it in DSL is natural)
+- `DashSchema.length` and `DashSchema.gap`: add `.optional()` (only `pattern` is meaningful when omitted)
+- `TextGeomSchema.size`: add `.default(14)` (reasonable default for text)
+- `PathGeomSchema.points`: tighten from `PointRefSchema` to `z.tuple([z.number(), z.number()])` (explicit point paths are coordinate-only; node IDs belong in `route`)
+
+---
+
+## Indentation Rules
+
+The DSL uses **2-space indentation** (consistent with the project's existing style).
+
+- **Level 0**: document metadata, styles, top-level nodes, top-level `animate` block
+- **Level 1** (2 spaces): children of top-level nodes, block properties of top-level nodes, style properties, keyframe entries in `animate`
+- **Level 2** (4 spaces): grandchildren, block properties of children, keyframe entries in scoped blocks
+- **And so on** for deeper nesting.
+
+**Continuation lines** (multi-line keyframes) are indented to align with the content after the timestamp on the preceding line. The parser recognizes these because they:
+1. Do not start with a numeric timestamp or `+`
+2. Are indented further than the timestamp line's indent level (aligned with the track path, not the timestamp)
+
+Note: continuation lines *do* contain `:` (for property changes like `cam..zoom: 1`). They are distinguished from scope blocks because scope blocks appear at the standard indent level with an identifier and `:` but no value.
 
 ---
 
@@ -634,13 +817,13 @@ animate 8s loop easing=easeInOutCubic
   chapter "Data Flow" at 5
 
   cam:
-    0.0  camera.look: all
+    0.0  camera.look: "all"
          camera.zoom: 1
     2.0  camera.look: "api"
          camera.zoom: 2.5
     5.0  camera.look: ("db", -60, 0)
          camera.zoom: 2
-    8.0  camera.look: all
+    8.0  camera.look: "all"
          camera.zoom: 1
 
   conn1:
