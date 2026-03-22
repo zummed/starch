@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabLayout } from './components/TabLayout';
-import { Timeline } from '../../components/Timeline';
+import { Timeline } from './components/Timeline';
 import { V2Editor } from './components/V2Editor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';

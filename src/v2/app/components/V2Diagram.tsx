@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import type { AnimConfig } from '../../types/animation';
-import type { Chapter } from '../../../core/types';
+import type { Chapter } from '../../types/animation';
 import { parseScene, type ParsedScene } from '../../parser/parser';
 import { buildTimeline } from '../../animation/timeline';
 import { evaluateAllTracks } from '../../animation/evaluator';
@@ -56,7 +56,7 @@ export function useV2Diagram(props: V2DiagramProps) {
 
   const animConfig: AnimConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [] };
   const duration = animConfig.duration ?? 5;
-  const chapters: Chapter[] = animConfig.chapters?.map(c => ({ id: c.name, name: c.name, title: c.name, time: c.time })) ?? [];
+  const chapters: Chapter[] = animConfig.chapters ?? [];
   const viewport = scene.viewport;
   const vpW = typeof viewport === 'object' && viewport ? (viewport as { width: number }).width ?? 800 : 800;
   const vpH = typeof viewport === 'object' && viewport ? (viewport as { height: number }).height ?? 500 : 500;
