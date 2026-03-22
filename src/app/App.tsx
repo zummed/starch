@@ -204,6 +204,38 @@ export default function App() {
     });
   }, [activeTabId]);
 
+  const saveTabToFile = useCallback(() => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+    const raw = diagram.name;
+    const name = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/[^\w\s-]/g, '_') : 'untitled';
+    const blob = new Blob([tab.dsl], { type: 'application/json5' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name + '.json5';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [tabs, activeTabId, diagram.name]);
+
+  const loadFileToTab = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json5,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          updateTabDsl(reader.result);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [updateTabDsl]);
+
   const toggleLayoutMode = useCallback(() => {
     const next: LayoutMode = layoutMode === 'panel' ? 'tab' : 'panel';
     setUserLayoutMode(next);
@@ -328,6 +360,30 @@ export default function App() {
         ))}
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
       </div>
+      {activeTab.closable && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
+          borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
+        }}>
+          {[
+            { label: 'Save', onClick: saveTabToFile },
+            { label: 'Load', onClick: loadFileToTab },
+            { label: 'Close', onClick: () => closeTab(activeTabId) },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              onClick={btn.onClick}
+              style={{
+                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+                border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <V2Editor value={activeDsl} onChange={updateTabDsl} />
       </div>
