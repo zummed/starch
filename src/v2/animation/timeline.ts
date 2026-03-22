@@ -3,6 +3,9 @@ import type { Node } from '../types/node';
 import { computeLayoutPlacements, registerStrategy, getStrategy } from '../layout/registry';
 import { flexStrategy } from '../layout/flex';
 import { absoluteStrategy } from '../layout/absolute';
+import { evaluateAllTracks } from './evaluator';
+import { applyTrackValues } from './applyTracks';
+import { resolveCameraView } from './cameraExpansion';
 
 // Ensure layout strategies are available for slot expansion
 function ensureStrategies(): void {
@@ -225,6 +228,75 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
       const hPath = `${cId}.rect.h`;
       if (!tracks.has(wPath)) tracks.set(wPath, wKfs);
       if (!tracks.has(hPath)) tracks.set(hPath, hKfs);
+    }
+  }
+
+  // ── Camera track expansion (second pass) ──────────────────────────
+  // Camera settings resolve into rect + transform tracks. This runs after
+  // all other tracks are built so we can evaluate node positions at each
+  // keyframe time.
+  if (nodes) {
+    const cameraNodes = nodes.filter(n => n.camera);
+    if (cameraNodes.length > 0) {
+      const defaultVB = { x: 0, y: 0, w: 800, h: 600 };
+
+      for (const camNode of cameraNodes) {
+        const camPrefix = `${camNode.id}.camera.`;
+        const hasCamTracks = [...tracks.keys()].some(k => k.startsWith(camPrefix));
+        if (!hasCamTracks && !camNode.camera) continue;
+
+        // Collect keyframe times only from this camera's own tracks
+        const camTrackEntries = [...tracks.entries()].filter(([k]) => k.startsWith(camPrefix));
+        const allTimes = new Set<number>();
+        for (const [, kfs] of camTrackEntries) {
+          for (const kf of kfs) allTimes.add(kf.time);
+        }
+        const sortedTimes = [...allTimes].sort((a, b) => a - b);
+
+        const xPath = `${camNode.id}.transform.x`;
+        const yPath = `${camNode.id}.transform.y`;
+        const wPath = `${camNode.id}.rect.w`;
+        const hPath = `${camNode.id}.rect.h`;
+
+        const xKfs: TrackKeyframe[] = [];
+        const yKfs: TrackKeyframe[] = [];
+        const wKfs: TrackKeyframe[] = [];
+        const hKfs: TrackKeyframe[] = [];
+
+        for (const time of sortedTimes) {
+          // Evaluate all tracks at this time to get animated node positions
+          const values = evaluateAllTracks(tracks, time);
+          const animated = applyTrackValues(nodes, values);
+
+          // Find the camera node in the animated tree and resolve its view
+          const animatedCam = animated.find(n => n.id === camNode.id);
+          if (!animatedCam) continue;
+
+          const view = resolveCameraView(animatedCam, animated, defaultVB);
+
+          // Find the easing at this time from camera tracks
+          let easing: EasingName = globalEasing;
+          for (const [, kfs] of camTrackEntries) {
+            const kf = kfs.find(k => Math.abs(k.time - time) < 0.001);
+            if (kf) { easing = kf.easing; break; }
+          }
+
+          xKfs.push({ time, value: view.x, easing });
+          yKfs.push({ time, value: view.y, easing });
+          wKfs.push({ time, value: view.w, easing });
+          hKfs.push({ time, value: view.h, easing });
+        }
+
+        // Write camera-derived tracks. These overwrite any manually authored
+        // cam.transform.x/y or cam.rect.w/h tracks — camera nodes' rect and
+        // position are fully managed by the camera system.
+        if (xKfs.length > 0) {
+          tracks.set(xPath, xKfs);
+          tracks.set(yPath, yKfs);
+          tracks.set(wPath, wKfs);
+          tracks.set(hPath, hKfs);
+        }
+      }
     }
   }
 
