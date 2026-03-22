@@ -61,7 +61,9 @@ export const ImageGeomSchema = z.object({
 export const CameraSchema = z.object({
   target: PointRefSchema.describe('Camera target').optional(),
   zoom: z.number().min(0).describe('Zoom level').optional(),
-  fit: z.array(z.string()).describe('Fit to object IDs').optional(),
+  fit: z.union([z.array(z.string()), z.literal('all')]).describe('Fit to object IDs or "all"').optional(),
+  ratio: z.number().min(0).describe('Aspect ratio (width/height)').optional(),
+  active: z.boolean().describe('Whether this camera is active').optional(),
 });
 
 // ─── Node Schema ────────────────────────────────────────────────
@@ -135,7 +137,7 @@ export interface NodeInput {
   layoutHint?: LayoutHint;
   slot?: string;
   style?: string;
-  camera?: { target?: PointRef; zoom?: number; fit?: string[] };
+  camera?: { target?: PointRef; zoom?: number; fit?: string[] | 'all'; ratio?: number; active?: boolean };
   template?: string;
   props?: Record<string, unknown>;
 }
@@ -161,7 +163,7 @@ export interface Node {
   layoutHint?: LayoutHint;
   slot?: string;
   style?: string;
-  camera?: { target?: PointRef; zoom?: number; fit?: string[] };
+  camera?: { target?: PointRef; zoom?: number; fit?: string[] | 'all'; ratio?: number; active?: boolean };
   _ownKeys?: Set<string>;
   _styleKeys?: Set<string>;
   _isStyle?: boolean;
