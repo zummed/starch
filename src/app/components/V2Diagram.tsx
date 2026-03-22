@@ -3,7 +3,7 @@ import type { AnimConfig } from '../../types/animation';
 import type { Chapter } from '../../types/animation';
 import { parseScene, type ParsedScene } from '../../parser/parser';
 import { buildTimeline } from '../../animation/timeline';
-import { evaluateAllTracks } from '../../animation/evaluator';
+import { evaluateAllTracks, evaluateTrack } from '../../animation/evaluator';
 import { applyTrackValues } from '../../animation/applyTracks';
 import { runLayout, registerStrategy } from '../../layout/registry';
 import { flexStrategy } from '../../layout/flex';
@@ -63,16 +63,23 @@ export function useV2Diagram(props: V2DiagramProps) {
   }, [animConfig.keyframes, duration]);
   const viewport = scene.viewport;
 
-  // Expose camera ratio for preview container constraint
-  const cameraRatio = useMemo(() => {
-    const cam = findActiveCamera(scene.nodes);
-    return cam?.camera?.ratio ?? null;
-  }, [scene.nodes]);
   const vpW = typeof viewport === 'object' && viewport ? (viewport as { width: number }).width ?? 800 : 800;
   const vpH = typeof viewport === 'object' && viewport ? (viewport as { height: number }).height ?? 500 : 500;
 
   // Build timeline (once per DSL change) — pass nodes so slot tracks get expanded
   const { tracks, animatedSlotNodeIds } = useMemo(() => buildTimeline(animConfig, scene.nodes), [animConfig, scene.nodes]);
+
+  // Expose camera ratio for preview container constraint (animated)
+  const cameraRatio = useMemo(() => {
+    const cam = findActiveCamera(scene.nodes);
+    if (!cam) return null;
+    const ratioTrack = tracks.get(`${cam.id}.camera.ratio`);
+    if (ratioTrack) {
+      const v = evaluateTrack(ratioTrack, time);
+      return typeof v === 'number' ? v : cam.camera?.ratio ?? null;
+    }
+    return cam.camera?.ratio ?? null;
+  }, [scene.nodes, tracks, time]);
 
   // Auto-fit viewBox: when no camera, compute bounds across all keyframe times
   const autoFitViewBox = useMemo((): ViewBox | null => {
