@@ -284,6 +284,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     keyframeTimes,
     viewport: viewport ? { width: vpW, height: vpH } : undefined,
     background: scene.background,
+    name: scene.name,
     cameraRatio,
     computeFitAll,
     seek,
