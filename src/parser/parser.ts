@@ -8,6 +8,8 @@ import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
 
 export interface ParsedScene {
+  name?: string;
+  description?: string;
   nodes: Node[];
   styles: Record<string, any>;
   animate?: AnimConfig;
@@ -38,6 +40,8 @@ export function parseScene(input: string): ParsedScene {
 
   const raw = JSON5.parse(input);
 
+  const name = typeof raw.name === 'string' ? raw.name : undefined;
+  const description = typeof raw.description === 'string' ? raw.description : undefined;
   const styles = raw.styles ?? {};
   const animate = raw.animate as AnimConfig | undefined;
   const background = raw.background as string | undefined;
@@ -60,6 +64,8 @@ export function parseScene(input: string): ParsedScene {
   const trackPaths = generateTrackPaths(allNodes);
 
   return {
+    name,
+    description,
     nodes: allNodes,
     styles,
     animate,

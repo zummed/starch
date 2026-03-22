@@ -110,4 +110,22 @@ describe('parseScene', () => {
     const scene = parseScene(input);
     expect(scene.background).toBe('#1a1a2e');
   });
+
+  it('extracts name and description', () => {
+    const input = `{
+      name: "My Diagram",
+      description: "A test diagram",
+      objects: [{ id: "n1", rect: { w: 10, h: 10 } }]
+    }`;
+    const scene = parseScene(input);
+    expect(scene.name).toBe('My Diagram');
+    expect(scene.description).toBe('A test diagram');
+  });
+
+  it('returns undefined name and description when absent', () => {
+    const input = `{ objects: [{ id: "n1", rect: { w: 10, h: 10 } }] }`;
+    const scene = parseScene(input);
+    expect(scene.name).toBeUndefined();
+    expect(scene.description).toBeUndefined();
+  });
 });
