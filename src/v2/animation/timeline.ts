@@ -240,17 +240,27 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
     if (cameraNodes.length > 0) {
       const defaultVB = { x: 0, y: 0, w: 800, h: 600 };
 
+      // Collect all unique keyframe times across the entire timeline
+      const globalTimes = new Set<number>();
+      for (const [, kfs] of tracks) {
+        for (const kf of kfs) globalTimes.add(kf.time);
+      }
+      // Always include t=0 so static cameras get a rect
+      globalTimes.add(0);
+
       for (const camNode of cameraNodes) {
         const camPrefix = `${camNode.id}.camera.`;
         const hasCamTracks = [...tracks.keys()].some(k => k.startsWith(camPrefix));
         if (!hasCamTracks && !camNode.camera) continue;
 
-        // Collect keyframe times only from this camera's own tracks
         const camTrackEntries = [...tracks.entries()].filter(([k]) => k.startsWith(camPrefix));
-        const allTimes = new Set<number>();
-        for (const [, kfs] of camTrackEntries) {
-          for (const kf of kfs) allTimes.add(kf.time);
-        }
+
+        // Use camera track times when available, otherwise use all keyframe
+        // times so the camera re-evaluates when referenced nodes move
+        // (e.g. camera following a moving target)
+        const allTimes = hasCamTracks
+          ? new Set(camTrackEntries.flatMap(([, kfs]) => kfs.map(kf => kf.time)))
+          : globalTimes;
         const sortedTimes = [...allTimes].sort((a, b) => a - b);
 
         const xPath = `${camNode.id}.transform.x`;
