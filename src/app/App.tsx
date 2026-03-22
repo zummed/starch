@@ -10,6 +10,7 @@ import type { ViewBox } from '../renderer/camera';
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
 const PREFS_KEY = 'starch-v2-prefs';
+const TABS_KEY = 'starch-tabs';
 
 type LayoutMode = 'panel' | 'tab';
 
@@ -20,7 +21,30 @@ interface EditorTab {
   closable: boolean;
 }
 
-let nextTabId = 1;
+interface StoredTabs {
+  tabs: { id: string; label: string; dsl: string }[];
+  activeTabId: string;
+  nextTabId: number;
+}
+
+function loadStoredTabs(): StoredTabs | null {
+  try {
+    const stored = localStorage.getItem(TABS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed.tabs) && parsed.tabs.length > 0) return parsed as StoredTabs;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: number) {
+  try {
+    const userTabs = tabs.filter(t => t.id !== 'sample').map(({ id, label, dsl }) => ({ id, label, dsl }));
+    const data: StoredTabs = { tabs: userTabs, activeTabId, nextTabId };
+    localStorage.setItem(TABS_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
 
 function detectDefaultMode(): LayoutMode {
   if (typeof window === 'undefined') return 'panel';
@@ -45,10 +69,24 @@ export default function App() {
   const [autoMode, setAutoMode] = useState<LayoutMode>(detectDefaultMode);
   const layoutMode = userLayoutMode ?? autoMode;
 
-  const [tabs, setTabs] = useState<EditorTab[]>([
-    { id: 'sample', label: 'Sample', dsl: DEFAULT_DSL, closable: false },
-  ]);
-  const [activeTabId, setActiveTabId] = useState('sample');
+  const storedTabs = useRef(loadStoredTabs());
+  const nextTabIdRef = useRef(storedTabs.current?.nextTabId ?? 1);
+
+  const [tabs, setTabs] = useState<EditorTab[]>(() => {
+    const sampleTab: EditorTab = { id: 'sample', label: 'Sample', dsl: DEFAULT_DSL, closable: false };
+    const stored = storedTabs.current;
+    if (!stored || stored.tabs.length === 0) return [sampleTab];
+    const restored = stored.tabs.map(t => ({ ...t, closable: true }));
+    return [sampleTab, ...restored];
+  });
+  const [activeTabId, setActiveTabId] = useState(() => {
+    const stored = storedTabs.current;
+    if (stored?.activeTabId) {
+      const exists = stored.activeTabId === 'sample' || stored.tabs.some(t => t.id === stored.activeTabId);
+      if (exists) return stored.activeTabId;
+    }
+    return 'sample';
+  });
   const [showEditor, setShowEditor] = useState(layoutMode === 'panel' ? initialPrefs.current.showEditor : true);
   const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
   const [debugMode, setDebugMode] = useState(false);
@@ -76,6 +114,16 @@ export default function App() {
   useEffect(() => {
     savePrefs({ layoutMode: userLayoutMode, showBrowser, showEditor, editorWidth });
   }, [userLayoutMode, showBrowser, showEditor, editorWidth]);
+
+  // Persist user tabs (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveStoredTabs(tabs, activeTabId, nextTabIdRef.current);
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [tabs, activeTabId]);
 
   // Track canvas area dimensions for ratio preview
   useEffect(() => {
@@ -131,7 +179,7 @@ export default function App() {
       if (existing) {
         return prev.map(t => t.id === 'sample' ? { ...t, dsl: sample.dsl } : t);
       }
-      return [{ id: 'sample', label: 'Sample', dsl: sample.dsl, closable: true }, ...prev];
+      return [{ id: 'sample', label: 'Sample', dsl: sample.dsl, closable: false }, ...prev];
     });
     setActiveTabId('sample');
     setActiveSampleId(sample.name);
@@ -139,7 +187,7 @@ export default function App() {
   }, [diagram]);
 
   const addTab = useCallback(() => {
-    const id = 'tab-' + (nextTabId++);
+    const id = 'tab-' + (nextTabIdRef.current++);
     setTabs(prev => [...prev, {
       id, label: 'Untitled',
       dsl: '{\n  objects: [],\n  animate: {\n    duration: 3,\n    loop: true,\n    keyframes: [],\n  },\n}',
