@@ -213,7 +213,7 @@ export function emitFrame(
   backend.beginFrame();
 
   if (viewBox) {
-    backend.setViewBox(viewBox.x, viewBox.y, viewBox.w, viewBox.h);
+    backend.setViewBox(viewBox.x, viewBox.y, viewBox.w, viewBox.h, viewBox.rotation);
   } else {
     backend.clearViewBox();
   }

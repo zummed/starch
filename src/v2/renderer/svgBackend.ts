@@ -117,14 +117,21 @@ export class SvgRenderBackend implements RenderBackend {
     // No-op for SVG — DOM is already live
   }
 
-  setViewBox(x: number, y: number, w: number, h: number): void {
-    if (!this._svg || !this._bg) return;
+  setViewBox(x: number, y: number, w: number, h: number, rotation?: number): void {
+    if (!this._svg || !this._bg || !this._content) return;
     this._svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
     this._svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     this._bg.setAttribute('x', String(x));
     this._bg.setAttribute('y', String(y));
     this._bg.setAttribute('width', String(w));
     this._bg.setAttribute('height', String(h));
+    if (rotation) {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      this._content.setAttribute('transform', `rotate(${-rotation}, ${cx}, ${cy})`);
+    } else {
+      this._content.removeAttribute('transform');
+    }
   }
 
   clearViewBox(): void {
@@ -135,6 +142,7 @@ export class SvgRenderBackend implements RenderBackend {
     this._bg.setAttribute('y', '0');
     this._bg.setAttribute('width', '100%');
     this._bg.setAttribute('height', '100%');
+    this._content?.removeAttribute('transform');
   }
 
   setBackground(color: RgbaColor | 'transparent'): void {

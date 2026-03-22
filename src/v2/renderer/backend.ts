@@ -40,7 +40,7 @@ export interface RenderBackend {
   endFrame(): void;
 
   // Viewport
-  setViewBox(x: number, y: number, w: number, h: number): void;
+  setViewBox(x: number, y: number, w: number, h: number, rotation?: number): void;
   clearViewBox(): void;
   setBackground(color: RgbaColor | 'transparent'): void;
 
