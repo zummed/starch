@@ -583,6 +583,206 @@ export const v2Samples: V2Sample[] = [
   }
 }`,
   },
+
+  // ─── Camera ──────────────────────────────────────────────────────
+  {
+    name: 'camera-target',
+    category: 'Camera',
+    description: 'Camera targeting coordinates, node IDs, and node+offset',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { target: [300, 200], zoom: 1.5 } },
+    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: { h: 200, s: 70, l: 50 }, transform: { x: 100, y: 200 } },
+    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: { h: 340, s: 70, l: 50 }, transform: { x: 500, y: 200 } },
+    { id: "label_a", text: { content: "A", size: 14 }, fill: { h: 0, s: 0, l: 90 }, transform: { x: 100, y: 200 } },
+    { id: "label_b", text: { content: "B", size: 14 }, fill: { h: 0, s: 0, l: 90 }, transform: { x: 500, y: 200 } }
+  ],
+  animate: {
+    duration: 6,
+    loop: true,
+    easing: "easeInOut",
+    keyframes: [
+      { time: 0, changes: { "cam.camera.target": [300, 200] } },
+      { time: 1.5, changes: { "cam.camera.target": "a" } },
+      { time: 3, changes: { "cam.camera.target": "b" } },
+      { time: 4.5, changes: { "cam.camera.target": ["b", 0, -100] } },
+      { time: 6, changes: { "cam.camera.target": [300, 200] } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-zoom',
+    category: 'Camera',
+    description: 'Zoom in and out with easing',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { target: [300, 200], zoom: 1 } },
+    { id: "outer", rect: { w: 400, h: 300, radius: 12 }, stroke: { h: 210, s: 50, l: 40, width: 2 }, transform: { x: 300, y: 200 } },
+    { id: "inner", rect: { w: 120, h: 80, radius: 8 }, fill: { h: 160, s: 60, l: 45 }, transform: { x: 300, y: 200 } },
+    { id: "dot", ellipse: { rx: 10, ry: 10 }, fill: { h: 40, s: 80, l: 55 }, transform: { x: 300, y: 200 } }
+  ],
+  animate: {
+    duration: 4,
+    loop: true,
+    easing: "easeInOutCubic",
+    keyframes: [
+      { time: 0, changes: { "cam.camera.zoom": 1 } },
+      { time: 2, changes: { "cam.camera.zoom": 4 } },
+      { time: 4, changes: { "cam.camera.zoom": 1 } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-fit',
+    category: 'Camera',
+    description: 'Fit specific nodes or all nodes in view',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { fit: "all" } },
+    { id: "a", rect: { w: 60, h: 60, radius: 6 }, fill: { h: 0, s: 65, l: 50 }, transform: { x: 50, y: 100 } },
+    { id: "b", rect: { w: 60, h: 60, radius: 6 }, fill: { h: 120, s: 65, l: 45 }, transform: { x: 300, y: 50 } },
+    { id: "c", rect: { w: 60, h: 60, radius: 6 }, fill: { h: 240, s: 65, l: 50 }, transform: { x: 550, y: 300 } }
+  ],
+  animate: {
+    duration: 8,
+    loop: true,
+    easing: "easeInOut",
+    keyframes: [
+      { time: 0, changes: { "cam.camera.fit": "all" } },
+      { time: 2, changes: { "cam.camera.fit": ["a"] } },
+      { time: 4, changes: { "cam.camera.fit": ["a", "b"] } },
+      { time: 6, changes: { "cam.camera.fit": ["c"] } },
+      { time: 8, changes: { "cam.camera.fit": "all" } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-follow',
+    category: 'Camera',
+    description: 'Camera tracks a moving object',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { target: "mover", zoom: 2 } },
+    { id: "mover", ellipse: { rx: 15, ry: 15 }, fill: { h: 40, s: 80, l: 55 }, transform: { x: 50, y: 200 } },
+    { id: "track", rect: { w: 600, h: 4, radius: 2 }, fill: { h: 0, s: 0, l: 20 }, transform: { x: 300, y: 200 } },
+    { id: "post1", rect: { w: 4, h: 30 }, fill: { h: 0, s: 0, l: 25 }, transform: { x: 100, y: 200 } },
+    { id: "post2", rect: { w: 4, h: 30 }, fill: { h: 0, s: 0, l: 25 }, transform: { x: 300, y: 200 } },
+    { id: "post3", rect: { w: 4, h: 30 }, fill: { h: 0, s: 0, l: 25 }, transform: { x: 500, y: 200 } }
+  ],
+  animate: {
+    duration: 4,
+    loop: true,
+    easing: "easeInOut",
+    keyframes: [
+      { time: 0, changes: { "mover.transform.x": 50 } },
+      { time: 2, changes: { "mover.transform.x": 550 } },
+      { time: 4, changes: { "mover.transform.x": 50 } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-ratio',
+    category: 'Camera',
+    description: 'Animated aspect ratio — letterbox transition',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { target: [300, 200], zoom: 1.2, ratio: 1.78 } },
+    { id: "scene", rect: { w: 500, h: 350, radius: 10 }, stroke: { h: 270, s: 40, l: 35, width: 1 }, transform: { x: 300, y: 200 } },
+    { id: "actor", rect: { w: 40, h: 60, radius: 4 }, fill: { h: 30, s: 70, l: 50 }, transform: { x: 300, y: 220 } }
+  ],
+  animate: {
+    duration: 6,
+    loop: true,
+    easing: "easeInOutCubic",
+    keyframes: [
+      { time: 0, changes: { "cam.camera.ratio": 1.78 } },
+      { time: 3, changes: { "cam.camera.ratio": 2.35 } },
+      { time: 6, changes: { "cam.camera.ratio": 1.78 } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-rotation',
+    category: 'Camera',
+    description: 'Rotating camera view with easing',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { target: [300, 200], zoom: 1.5 }, transform: { rotation: 0 } },
+    { id: "center", ellipse: { rx: 20, ry: 20 }, fill: { h: 50, s: 80, l: 55 }, transform: { x: 300, y: 200 } },
+    { id: "n", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 0, s: 60, l: 50 }, transform: { x: 300, y: 100 } },
+    { id: "e", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 90, s: 60, l: 45 }, transform: { x: 400, y: 200 } },
+    { id: "s", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 180, s: 60, l: 45 }, transform: { x: 300, y: 300 } },
+    { id: "w", rect: { w: 30, h: 30, radius: 4 }, fill: { h: 270, s: 60, l: 50 }, transform: { x: 200, y: 200 } }
+  ],
+  animate: {
+    duration: 6,
+    loop: true,
+    easing: "easeInOutCubic",
+    keyframes: [
+      { time: 0, changes: { "cam.transform.rotation": 0 } },
+      { time: 3, changes: { "cam.transform.rotation": 180 } },
+      { time: 6, changes: { "cam.transform.rotation": 360 } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-switch',
+    category: 'Camera',
+    description: 'Switching between multiple cameras (cut transitions)',
+    dsl: `{
+  objects: [
+    { id: "cam1", camera: { target: "a", zoom: 2, active: true } },
+    { id: "cam2", camera: { target: "b", zoom: 2, active: false } },
+    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: { h: 200, s: 70, l: 50 }, transform: { x: 100, y: 200 } },
+    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: { h: 340, s: 70, l: 50 }, transform: { x: 500, y: 200 } },
+    { id: "la", text: { content: "Cam 1", size: 10 }, fill: { h: 0, s: 0, l: 70 }, transform: { x: 100, y: 250 } },
+    { id: "lb", text: { content: "Cam 2", size: 10 }, fill: { h: 0, s: 0, l: 70 }, transform: { x: 500, y: 250 } }
+  ],
+  animate: {
+    duration: 4,
+    loop: true,
+    keyframes: [
+      { time: 0, changes: { "cam1.camera.active": true, "cam2.camera.active": false } },
+      { time: 2, changes: { "cam1.camera.active": false, "cam2.camera.active": true } },
+      { time: 4, changes: { "cam1.camera.active": true, "cam2.camera.active": false } }
+    ]
+  }
+}`,
+  },
+  {
+    name: 'camera-combined',
+    category: 'Camera',
+    description: 'Cinematic sequence — target, zoom, fit, ratio, and rotation combined',
+    dsl: `{
+  objects: [
+    { id: "cam", camera: { fit: "all", zoom: 1, ratio: 1.78 }, transform: { rotation: 0 } },
+    { id: "hero", rect: { w: 60, h: 60, radius: 30 }, fill: { h: 40, s: 80, l: 55 }, transform: { x: 100, y: 200 } },
+    { id: "villain", rect: { w: 60, h: 60, radius: 8 }, fill: { h: 0, s: 80, l: 40 }, transform: { x: 500, y: 200 } },
+    { id: "stage", rect: { w: 600, h: 300, radius: 12 }, stroke: { h: 0, s: 0, l: 20, width: 1 }, transform: { x: 300, y: 200 } }
+  ],
+  animate: {
+    duration: 12,
+    loop: true,
+    easing: "easeInOutCubic",
+    keyframes: [
+      { time: 0, changes: { "cam.camera.fit": "all", "cam.camera.ratio": 1.78 } },
+      { time: 2, changes: { "cam.camera.fit": ["hero"], "cam.camera.zoom": 2 } },
+      { time: 4, changes: { "cam.camera.target": "villain", "cam.camera.zoom": 2.5 } },
+      { time: 5, changes: { "cam.transform.rotation": 5 } },
+      { time: 6, changes: { "cam.transform.rotation": -5 } },
+      { time: 7, changes: { "cam.transform.rotation": 0, "cam.camera.ratio": 2.35 } },
+      { time: 9, changes: { "cam.camera.fit": "all", "cam.camera.zoom": 1, "cam.camera.ratio": 1.78 } },
+      { time: 12, changes: { "cam.camera.fit": "all" } }
+    ]
+  }
+}`,
+  },
 ];
 
 export function getV2SampleCategories(): string[] {
