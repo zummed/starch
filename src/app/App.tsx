@@ -366,9 +366,8 @@ export default function App() {
           borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
         }}>
           {[
-            { label: 'Save', onClick: saveTabToFile },
             { label: 'Load', onClick: loadFileToTab },
-            { label: 'Close', onClick: () => closeTab(activeTabId) },
+            { label: 'Save', onClick: saveTabToFile },
           ].map(btn => (
             <button
               key={btn.label}
@@ -382,6 +381,17 @@ export default function App() {
               {btn.label}
             </button>
           ))}
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => closeTab(activeTabId)}
+            style={{
+              padding: '3px 6px', borderRadius: 4, fontSize: 11, fontFamily: FONT,
+              border: '1px solid #2a2d35', background: '#14161c', color: '#ef4444',
+              cursor: 'pointer', lineHeight: 1,
+            }}
+          >
+            ✕
+          </button>
         </div>
       )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
