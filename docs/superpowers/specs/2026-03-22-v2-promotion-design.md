@@ -54,7 +54,7 @@ All contents of `src/v2/` move up one level to `src/`:
 | `src/v2/types/` | `src/types/` |
 | `src/v2/__tests__/` | `src/__tests__/` |
 
-The `src/v2/app/index.html` becomes the root `/index.html`.
+The `src/v2/app/index.html` stays in `src/app/` after the move (Vite `root` points there). Only the title is updated.
 
 ## What Gets Updated
 
@@ -102,7 +102,7 @@ Three V2 files import from V1 code. These must be resolved before V1 deletion:
 - Promote V2 scripts to be the defaults:
   - `dev:v2` → `dev`
   - `build:v2` → `build`
-- Update `exports` and `main` fields to point to V2 output
+- Remove `exports`, `main`, `module`, `types`, and `files` fields (no library build in V2 — app-only for now)
 - Remove the `./embed` export (V1 artifact)
 - Remove dead dependencies: `prismjs`, `@types/prismjs`, `vite-plugin-dts` (V1-only)
 - Do NOT bump version (release pipeline handles this)
@@ -120,7 +120,7 @@ Three V2 files import from V1 code. These must be resolved before V1 deletion:
 4. Delete all V1 source files and directories
 5. Delete V1 entry points and root `index.html`
 6. `git mv` each V2 directory from `src/v2/` to `src/`
-7. `git mv` the V2 app's `index.html` to root, update script src path
+7. Update `index.html` title in `src/app/`
 8. Fix all import paths across the codebase
 9. Update build configs (`vite.v2.config.ts` → `vite.config.ts`, delete V1 configs, update output dir)
 10. Update `package.json` scripts, exports, and remove dead dependencies
