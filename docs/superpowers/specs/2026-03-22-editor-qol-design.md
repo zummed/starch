@@ -1,8 +1,8 @@
-# Editor Quality-of-Life: Name/Description Fields & Tab Persistence
+# Editor Quality-of-Life: Name/Description Fields, Tab Persistence & Editor Toolbar
 
 ## Summary
 
-Add optional top-level `name` and `description` fields to the DSL format, use `name` to drive editor tab labels, and persist user-created tabs to localStorage so work survives reloads.
+Add optional top-level `name` and `description` fields to the DSL format, use `name` to drive editor tab labels, persist user-created tabs to localStorage, and add a toolbar to the editor panel with load, save, and close buttons.
 
 ## 1. DSL Schema Changes
 
@@ -44,11 +44,12 @@ When a user-created tab's DSL parses successfully and contains a `name` field, t
 
 ### Mechanism
 
-- `useV2Diagram` already calls `parseScene()` on each DSL change and exposes the result.
-- `ParsedScene.name` is exposed from the hook (or read by App after parsing).
-- App compares the parsed name to the current tab label and updates if different.
+- `useV2Diagram` already calls `parseScene()` on each DSL change. The hook must be updated to expose `name` — it currently does not return it.
+- App reads the exposed `name` and updates the active tab's label if it differs.
 - Only applies to user-created tabs (closable tabs). The "Sample" tab label stays fixed.
-- When `name` is absent or empty, the tab label falls back to `"Untitled"`.
+- When `name` is absent, empty, or whitespace-only, the tab label falls back to `"Untitled"`.
+- Tab labels are truncated to 30 characters for display to prevent tab bar overflow.
+- On parse failure, the tab label retains its current value (the fallback scene preserves the last successful parse, so the name naturally stays stable).
 
 ### Data flow
 
@@ -65,14 +66,14 @@ User-created tabs are persisted to localStorage so work is not lost between relo
 
 - Key: `starch-tabs`
 - Value: JSON object with:
-  - `tabs`: array of `{ id, label, dsl }` (only user-created/closable tabs)
+  - `tabs`: array of `{ id, label, dsl }` (only user-created/closable tabs, filtered by `id !== 'sample'`)
   - `activeTabId`: the last active tab ID
   - `nextTabId`: counter to avoid ID collisions after reload
 
 ### Save triggers
 
 - On every tab state change: create, close, switch, DSL update, label update.
-- Debounced write (e.g. 500ms) to avoid excessive localStorage writes during typing.
+- Debounced write using `useRef`-based `setTimeout`/`clearTimeout` pattern (500ms). No external dependency needed.
 
 ### Load behavior
 
@@ -80,10 +81,14 @@ User-created tabs are persisted to localStorage so work is not lost between relo
 - Restore user-created tabs with `closable: true`.
 - The "Sample" tab is always created fresh from `DEFAULT_DSL` (never persisted).
 - Restore `activeTabId` if the referenced tab still exists, otherwise default to "sample".
-- Restore `nextTabId` counter.
+- Restore `nextTabId` counter via a `useRef` initialized from localStorage (not the current module-level `let`, which resets on HMR).
 - If no stored tabs or parse error, fall back to current behavior (single "sample" tab).
 
-### Tab structure reminder
+### Fix: `handleSampleClick` closable inconsistency
+
+Currently `handleSampleClick` re-creates the sample tab with `closable: true` when it doesn't exist. This must be fixed to always use `closable: false` so the sample tab is never accidentally persisted.
+
+### Tab structure
 
 ```typescript
 interface EditorTab {
@@ -94,17 +99,56 @@ interface EditorTab {
 }
 ```
 
-## 4. Non-goals
+## 4. Editor Toolbar
+
+A small toolbar row between the tab bar and the CodeMirror editor, visible when a user-created tab is active. Contains three buttons: **Save**, **Load**, and **Close**.
+
+### Save button
+
+- Triggers a browser file download of the active tab's DSL content.
+- Filename: the raw (un-truncated) `name` field sanitized for filesystem + `.json5`, or `untitled.json5` if no name. Sanitization: replace characters matching `/[^\w\s-]/g` with underscores.
+- Uses the standard `<a download>` + `Blob` + `URL.createObjectURL` pattern. Revoke the object URL after triggering the download.
+
+### Load button
+
+- Opens a file picker (hidden `<input type="file" accept=".json5,.json">` created dynamically per click) to load a `.json5` or `.json` file.
+- Reads the file content via `FileReader.readAsText()` and replaces the active tab's DSL.
+- After load, a successful parse will update the tab label from the `name` field automatically.
+- If the loaded file fails to parse, the standard parse-failure fallback applies (tab label unchanged, last successful scene preserved).
+
+### Close button
+
+- Closes the active tab (same as the existing `closeTab` logic).
+- Only shown for closable tabs (user-created tabs, not "sample").
+- The toolbar provides the close affordance rather than individual tab close buttons, reducing accidental tab closure.
+
+### Layout
+
+```
+┌─────────────────────────────────────────┐
+│ [Sample] [My Diagram] [+]              │  ← tab bar (no close buttons)
+├─────────────────────────────────────────┤
+│ 💾 Save   📂 Load   ✕ Close            │  ← toolbar (user tabs only)
+├─────────────────────────────────────────┤
+│                                         │
+│         CodeMirror editor               │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+Buttons styled consistently with the existing header buttons (small, monospace, `#14161c` background, `#2a2d35` border). Text-only labels, no emoji — the diagram above is illustrative only.
+
+## 5. Non-goals
 
 - `description` is not displayed in the UI — it's metadata inside the document only.
 - No tab renaming UI — the name comes from the DSL.
 - No IndexedDB — localStorage is sufficient.
-- No cloud sync or export/import.
+- No cloud sync.
 
-## 5. Files to modify
+## 6. Files to modify
 
 | File | Change |
 |------|--------|
 | `src/parser/parser.ts` | Extract `name` and `description` into `ParsedScene` |
-| `src/app/App.tsx` | Tab label sync from parsed name, tab persistence (save/load), debounced writes |
-| `src/app/components/V2Diagram.tsx` | Expose `ParsedScene.name` from the hook |
+| `src/app/components/V2Diagram.tsx` | Expose `name: scene.name` from the hook return object (parallels existing `background: scene.background`) |
+| `src/app/App.tsx` | Tab label sync, tab persistence (save/load to localStorage), debounced writes, `nextTabId` as `useRef`, fix `handleSampleClick` closable, editor toolbar with save/load/close buttons |
