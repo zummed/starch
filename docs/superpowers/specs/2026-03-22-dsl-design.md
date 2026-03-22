@@ -466,11 +466,12 @@ animate 6s
 Values after the `:` in keyframe entries follow these rules:
 
 - **Numbers**: bare numeric literals: `fill.h: 180`, `opacity: 0.5`
-- **Strings**: quoted: `camera.look: "nodeId"`, `slot: "container"`
-- **Known enums**: accepted unquoted when unambiguous in context: `camera.look: all` (equivalent to `camera.look: "all"`)
-- **Coordinates**: tuple syntax: `camera.look: (300,200)`, `camera.look: ("b", -60, 0)`
+- **Strings**: bare identifiers: `camera.look: all`, `slot: container`, `camera.look: nodeId`. Quotes are optional and only needed if the value contains spaces or special characters: `text.content: "hello world"`.
+- **Coordinates**: tuple syntax: `camera.look: (300,200)`, `camera.look: (b, -60, 0)`
 - **Booleans**: `camera.active: true`, `camera.active: false`
 - **Sub-objects**: use the JSON escape hatch: `fill: { h: 210, s: 70, l: 45 }` (for keyframes that set an entire sub-object at once)
+
+The parser distinguishes types by the first character: digit/`-` → number, `(` → tuple, `{` → object, `true`/`false` → boolean, `"` → quoted string, anything else → bare string.
 
 ### Effects
 
@@ -817,13 +818,13 @@ animate 8s loop easing=easeInOutCubic
   chapter "Data Flow" at 5
 
   cam:
-    0.0  camera.look: "all"
+    0.0  camera.look: all
          camera.zoom: 1
     2.0  camera.look: "api"
          camera.zoom: 2.5
     5.0  camera.look: ("db", -60, 0)
          camera.zoom: 2
-    8.0  camera.look: "all"
+    8.0  camera.look: all
          camera.zoom: 1
 
   conn1:
