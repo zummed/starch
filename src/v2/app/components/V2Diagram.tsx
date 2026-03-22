@@ -8,7 +8,7 @@ import { applyTrackValues } from '../../animation/applyTracks';
 import { runLayout, registerStrategy } from '../../layout/registry';
 import { flexStrategy } from '../../layout/flex';
 import { absoluteStrategy } from '../../layout/absolute';
-import { computeViewBox, type ViewBox } from '../../renderer/camera';
+import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
 import { emitFrame } from '../../renderer/emitter';
 import { SvgRenderBackend } from '../../renderer/svgBackend';
 import type { RenderBackend } from '../../renderer/backend';
@@ -93,9 +93,9 @@ export function useV2Diagram(props: V2DiagramProps) {
     if (viewportOverrideRef.current) {
       viewBox = viewportOverrideRef.current;
     } else {
-      const cameraNode = animated.find(n => n.camera);
+      const cameraNode = findActiveCamera(animated);
       if (cameraNode) {
-        viewBox = computeViewBox(cameraNode, animated, { x: 0, y: 0, w, h });
+        viewBox = computeViewBox(cameraNode, { x: 0, y: 0, w, h });
       }
     }
 
