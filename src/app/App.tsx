@@ -111,6 +111,16 @@ export default function App() {
     viewportOverride: fixedCamera ? viewportOverride : null,
   });
 
+  // Sync parsed name to tab label (user tabs only)
+  useEffect(() => {
+    if (!activeTab.closable) return;
+    const raw = diagram.name;
+    const name = typeof raw === 'string' && raw.trim() ? raw.trim() : 'Untitled';
+    if (name !== activeTab.label) {
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, label: name } : t));
+    }
+  }, [diagram.name, activeTab.closable, activeTab.label, activeTabId]);
+
   const updateTabDsl = useCallback((dsl: string) => {
     setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl } : t));
   }, [activeTabId]);
@@ -265,7 +275,7 @@ export default function App() {
               whiteSpace: 'nowrap', userSelect: 'none',
             }}
           >
-            {tab.label}
+            {tab.label.length > 30 ? tab.label.slice(0, 30) + '...' : tab.label}
           </div>
         ))}
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
