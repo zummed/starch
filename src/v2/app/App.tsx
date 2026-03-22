@@ -197,13 +197,6 @@ export default function App() {
       }}
     >
       <div ref={diagram.containerRef} style={{ width: '100%', height: '100%' }} />
-      {previewRatio && (
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          border: '2px solid rgba(167, 139, 250, 0.4)',
-          boxShadow: 'inset 0 0 20px rgba(167, 139, 250, 0.1)',
-        }} />
-      )}
     </div>
   );
 
