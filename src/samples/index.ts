@@ -191,7 +191,7 @@ export const v2Samples: V2Sample[] = [
         { id: "b.label", text: { content: "Target", size: 12, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
     },
-    { id: "line", path: { from: "a", to: "b" }, stroke: { h: 0, s: 0, l: 60, width: 2 } },
+    { id: "line", path: { route: ["a", "b"] }, stroke: { h: 0, s: 0, l: 60, width: 2 } },
     { id: "lineLabel", text: { content: "sends data", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { x: 250, y: 130 } }
   ]
 }`,
@@ -375,7 +375,7 @@ export const v2Samples: V2Sample[] = [
   objects: [
     { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 100, y: 150 } },
     { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 120, s: 60, l: 35 }, stroke: { h: 120, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { from: "a", to: "b", gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "line", path: { route: ["a", "b"], gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
   ]
 }`,
   },
@@ -411,7 +411,7 @@ export const v2Samples: V2Sample[] = [
   objects: [
     { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 120, y: 150 } },
     { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { from: "a", to: "b", bend: 0, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "line", path: { route: ["a", "b"], bend: 0, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
   ],
   animate: {
     duration: 4,
@@ -434,7 +434,7 @@ export const v2Samples: V2Sample[] = [
   objects: [
     { id: "a", ellipse: { rx: 20, ry: 20 }, fill: { h: 210, s: 60, l: 45 }, transform: { x: 80, y: 150 } },
     { id: "b", ellipse: { rx: 20, ry: 20 }, fill: { h: 0, s: 60, l: 45 }, transform: { x: 420, y: 150 } },
-    { id: "line", path: { from: "a", to: "b", route: [[180, 80], [250, 220], [340, 80]], smooth: true, gap: 4 }, stroke: { h: 120, s: 60, l: 50, width: 2 } }
+    { id: "line", path: { route: ["a", [180, 80], [250, 220], [340, 80], "b"], smooth: true, gap: 4 }, stroke: { h: 120, s: 60, l: 50, width: 2 } }
   ]
 }`,
   },
@@ -446,7 +446,7 @@ export const v2Samples: V2Sample[] = [
   objects: [
     { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 80, y: 100 } },
     { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 420, y: 200 } },
-    { id: "line", path: { from: "a", to: "b", route: [[250, 100], [250, 200]], smooth: false, radius: 15, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "line", path: { route: ["a", [250, 100], [250, 200], "b"], smooth: false, radius: 15, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
   ]
 }`,
   },
