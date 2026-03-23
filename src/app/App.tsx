@@ -20,10 +20,11 @@ interface EditorTab {
   dsl: string;
   closable: boolean;
   viewFormat?: 'json5' | 'dsl';
+  nodeFormats?: Record<string, 'inline' | 'block'>;
 }
 
 interface StoredTabs {
-  tabs: { id: string; label: string; dsl: string; viewFormat?: 'json5' | 'dsl' }[];
+  tabs: { id: string; label: string; dsl: string; viewFormat?: 'json5' | 'dsl'; nodeFormats?: Record<string, 'inline' | 'block'> }[];
   activeTabId: string;
   nextTabId: number;
 }
@@ -41,7 +42,7 @@ function loadStoredTabs(): StoredTabs | null {
 
 function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: number) {
   try {
-    const userTabs = tabs.filter(t => t.id !== 'sample').map(({ id, label, dsl, viewFormat }) => ({ id, label, dsl, viewFormat }));
+    const userTabs = tabs.filter(t => t.id !== 'sample').map(({ id, label, dsl, viewFormat, nodeFormats }) => ({ id, label, dsl, viewFormat, nodeFormats }));
     const data: StoredTabs = { tabs: userTabs, activeTabId, nextTabId };
     localStorage.setItem(TABS_KEY, JSON.stringify(data));
   } catch { /* ignore */ }
@@ -403,6 +404,12 @@ export default function App() {
           onViewFormatChange={(format) => {
             setTabs(prev => prev.map(t =>
               t.id === activeTabId ? { ...t, viewFormat: format } : t
+            ));
+          }}
+          nodeFormats={activeTab.nodeFormats}
+          onNodeFormatsChange={(formats) => {
+            setTabs(prev => prev.map(t =>
+              t.id === activeTabId ? { ...t, nodeFormats: formats } : t
             ));
           }}
         />

@@ -5,8 +5,8 @@
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, hoverTooltip, type Tooltip } from '@codemirror/view';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, hoverTooltip, type Tooltip, GutterMarker, gutter } from '@codemirror/view';
+import { EditorState, Compartment, type Extension, StateField, StateEffect, RangeSet } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching } from '@codemirror/language';
@@ -241,6 +241,71 @@ function createHoverTooltipSource(formatRef: { current: 'json5' | 'dsl' }) {
   }, { hoverTime: 400 });
 }
 
+// ─── DSL Node Inline/Block Toggle Gutter ─────────────────────────
+
+const NODE_LINE_RE = /^(\s*)(\w+)\s*:/;
+
+/** Detect node lines in DSL text and return line numbers + node IDs. */
+function findNodeLines(text: string): Array<{ lineNum: number; nodeId: string; indent: number }> {
+  const lines = text.split('\n');
+  const result: Array<{ lineNum: number; nodeId: string; indent: number }> = [];
+  const DOC_KW = new Set(['name', 'description', 'background', 'viewport', 'images', 'style', 'animate']);
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(NODE_LINE_RE);
+    if (m && !DOC_KW.has(m[2])) {
+      result.push({ lineNum: i + 1, nodeId: m[2], indent: m[1].length });
+    }
+  }
+  return result;
+}
+
+class NodeToggleMarker extends GutterMarker {
+  constructor(readonly nodeId: string, readonly isBlock: boolean) {
+    super();
+  }
+  toDOM() {
+    const span = document.createElement('span');
+    span.style.cssText = 'cursor: pointer; font-size: 10px; color: #4a4f59; user-select: none; padding: 0 2px;';
+    span.textContent = this.isBlock ? '\u25BC' : '\u25B6'; // down triangle = block, right triangle = inline
+    span.title = this.isBlock ? 'Collapse to inline' : 'Expand to block';
+    return span;
+  }
+}
+
+function createNodeToggleGutter(
+  formatRef: { current: 'json5' | 'dsl' },
+  nodeFormatsRef: { current: Record<string, 'inline' | 'block'> },
+  onToggle: (nodeId: string) => void,
+): Extension {
+  return gutter({
+    class: 'cm-dsl-toggle-gutter',
+    lineMarker(view, line) {
+      if (formatRef.current !== 'dsl') return null;
+      const lineText = view.state.doc.sliceString(line.from, line.to);
+      const m = lineText.match(NODE_LINE_RE);
+      if (!m) return null;
+      const nodeId = m[2];
+      const DOC_KW = new Set(['name', 'description', 'background', 'viewport', 'images', 'style', 'animate']);
+      if (DOC_KW.has(nodeId)) return null;
+      const isBlock = nodeFormatsRef.current[nodeId] === 'block';
+      return new NodeToggleMarker(nodeId, isBlock);
+    },
+    domEventHandlers: {
+      click(view, line) {
+        if (formatRef.current !== 'dsl') return false;
+        const lineText = view.state.doc.sliceString(line.from, line.to);
+        const m = lineText.match(NODE_LINE_RE);
+        if (!m) return false;
+        const nodeId = m[2];
+        const DOC_KW = new Set(['name', 'description', 'background', 'viewport', 'images', 'style', 'animate']);
+        if (DOC_KW.has(nodeId)) return false;
+        onToggle(nodeId);
+        return true;
+      },
+    },
+  });
+}
+
 // ─── Editor Component ───────────────────────────────────────────
 
 interface V2EditorProps {
@@ -248,9 +313,11 @@ interface V2EditorProps {
   onChange: (value: string) => void;
   viewFormat?: 'json5' | 'dsl';
   onViewFormatChange?: (format: 'json5' | 'dsl') => void;
+  nodeFormats?: Record<string, 'inline' | 'block'>;
+  onNodeFormatsChange?: (formats: Record<string, 'inline' | 'block'>) => void;
 }
 
-export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatChange }: V2EditorProps) {
+export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatChange, nodeFormats, onNodeFormatsChange }: V2EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -267,6 +334,10 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
   const json5TextRef = useRef(value);
   // Track last valid raw scene for DSL generation
   const lastValidRawRef = useRef<any>(null);
+
+  // Node formats for DSL inline/block toggle
+  const nodeFormatsRef = useRef<Record<string, 'inline' | 'block'>>(nodeFormats || {});
+  if (nodeFormats) nodeFormatsRef.current = nodeFormats;
 
   // CodeMirror compartments for dynamic reconfiguration
   const langCompartment = useRef(new Compartment());
@@ -304,6 +375,33 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       }
     } catch { /* keep previous */ }
   }, []);
+
+  // Handle inline/block toggle for a DSL node
+  const handleNodeToggle = useCallback((nodeId: string) => {
+    const view = viewRef.current;
+    if (!view || formatRef.current !== 'dsl') return;
+
+    const current = nodeFormatsRef.current[nodeId];
+    const newFormat: 'inline' | 'block' = current === 'block' ? 'inline' : 'block';
+    const newFormats: Record<string, 'inline' | 'block'> = { ...nodeFormatsRef.current, [nodeId]: newFormat };
+    nodeFormatsRef.current = newFormats;
+
+    if (onNodeFormatsChange) {
+      onNodeFormatsChange(newFormats);
+    }
+
+    // Regenerate DSL with the new node formats
+    if (lastValidRawRef.current) {
+      try {
+        const newText = generateDsl(lastValidRawRef.current, { nodeFormats: newFormats });
+        externalUpdate.current = true;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: newText },
+        });
+        externalUpdate.current = false;
+      } catch { /* keep current */ }
+    }
+  }, [onNodeFormatsChange]);
 
   // Handle click on editor — detect if we clicked on a value and show popup
   const handleEditorClick = useCallback((view: EditorView, event: MouseEvent) => {
@@ -430,6 +528,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         linterCompartment.current.of(isDsl ? dslEditorLinter : v2EditorLinter),
         lintGutter(),
         createHoverTooltipSource(formatRef),
+        createNodeToggleGutter(formatRef, nodeFormatsRef, handleNodeToggle),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !externalUpdate.current) {
             const newText = update.state.doc.toString();
@@ -463,7 +562,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         }),
       ];
     },
-    [handleEditorClick],
+    [handleEditorClick, handleNodeToggle],
   );
 
   // Mount editor
@@ -508,7 +607,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     if (formatRef.current === 'dsl') {
       try {
         displayText = lastValidRawRef.current
-          ? generateDsl(lastValidRawRef.current)
+          ? generateDsl(lastValidRawRef.current, { nodeFormats: nodeFormatsRef.current })
           : value;
       } catch {
         displayText = value;
@@ -547,7 +646,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     if (newFormat === 'dsl') {
       try {
         newText = lastValidRawRef.current
-          ? generateDsl(lastValidRawRef.current)
+          ? generateDsl(lastValidRawRef.current, { nodeFormats: nodeFormatsRef.current })
           : json5TextRef.current;
       } catch {
         newText = json5TextRef.current;
