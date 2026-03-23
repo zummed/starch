@@ -19,6 +19,11 @@ const DOC_KEYWORDS = new Set([
   'name', 'description', 'background', 'viewport', 'images', 'style', 'animate',
 ]);
 
+const TEXT_BOOLEANS = new Set(['bold', 'mono']);
+const PATH_BOOLEANS = new Set(['closed', 'smooth']);
+const NODE_BOOLEANS = new Set(['active']);
+const ALL_BOOLEANS = new Set([...TEXT_BOOLEANS, ...PATH_BOOLEANS, ...NODE_BOOLEANS]);
+
 const TRANSFORM_PROPS = new Set(['rotation', 'scale', 'anchor', 'pathFollow', 'pathProgress', 'x', 'y']);
 const TEXT_PROPS = new Set(['size', 'lineHeight', 'align', 'content', 'bold', 'mono']);
 const RECT_PROPS = new Set(['w', 'h', 'radius']);
@@ -92,6 +97,12 @@ function determineSectionAtCursor(tokens: Token[], cursorOffset: number): Sectio
   let inlineNodeIndex: number | undefined;
   let inlineGeomType: string | undefined;
 
+  // Preserve node info across a newline so an indent on the next line can still use it.
+  // Cleared when anything other than indent follows.
+  let pendingNodeId: string | undefined;
+  let pendingNodeIndex: number | undefined;
+  let pendingGeomType: string | undefined;
+
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     if (tok.offset >= cursorOffset) break;
@@ -99,9 +110,12 @@ function determineSectionAtCursor(tokens: Token[], cursorOffset: number): Sectio
     switch (tok.type) {
       case 'indent':
         indentLevel++;
-        // Push the current inline node or section as a frame
+        // Push the current inline node (or the one saved from the previous line) as a frame
         if (inlineNodeId !== undefined) {
           frameStack.push({ type: 'node', nodeId: inlineNodeId, nodeIndex: inlineNodeIndex, geomType: inlineGeomType });
+          currentFrame = frameStack[frameStack.length - 1];
+        } else if (pendingNodeId !== undefined) {
+          frameStack.push({ type: 'node', nodeId: pendingNodeId, nodeIndex: pendingNodeIndex, geomType: pendingGeomType });
           currentFrame = frameStack[frameStack.length - 1];
         } else if (section === 'style' && styleName) {
           frameStack.push({ type: 'style', styleName });
@@ -119,17 +133,26 @@ function determineSectionAtCursor(tokens: Token[], cursorOffset: number): Sectio
         inlineNodeId = undefined;
         inlineNodeIndex = undefined;
         inlineGeomType = undefined;
+        pendingNodeId = undefined;
+        pendingNodeIndex = undefined;
+        pendingGeomType = undefined;
         break;
 
       case 'dedent':
         indentLevel--;
         frameStack.pop();
         currentFrame = frameStack.length > 0 ? frameStack[frameStack.length - 1] : { type: 'top' };
+        pendingNodeId = undefined;
+        pendingNodeIndex = undefined;
+        pendingGeomType = undefined;
         break;
 
       case 'newline':
         // When we go to a new line at the same indent level, an inline node definition ends
-        // (unless it gets an indent on the next line)
+        // (unless it gets an indent on the next line — preserved via pending variables)
+        pendingNodeId = inlineNodeId;
+        pendingNodeIndex = inlineNodeIndex;
+        pendingGeomType = inlineGeomType;
         inlineNodeId = undefined;
         inlineNodeIndex = undefined;
         inlineGeomType = undefined;
@@ -291,7 +314,18 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
         parts.push('route');
         currentKey = 'route';
       } else {
-        isPropertyName = true;
+        // Check if cursor is on a boolean keyword.
+        // lineTextToCursor may only have a partial word (e.g., "bol" for "bold"),
+        // so extract the full word spanning the cursor position.
+        const wordStart = lineTextToCursor.match(/(\w+)$/);
+        const wordEnd = fullText.slice(cursorOffset).match(/^(\w*)/);
+        const fullWord = (wordStart ? wordStart[1] : '') + (wordEnd ? wordEnd[1] : '');
+        if (fullWord && ALL_BOOLEANS.has(fullWord)) {
+          appendPropertyPath(parts, fullWord, info.geomType);
+          currentKey = fullWord;
+        } else {
+          isPropertyName = true;
+        }
       }
       break;
     }
@@ -391,6 +425,19 @@ function detectDimensionsAtCursor(text: string, cursorOffset: number): { half: '
     }
   }
   return null;
+}
+
+/**
+ * Strip the model prefix from a path to get a schema-compatible path.
+ * "objects.0.rect.w" -> "rect.w"
+ * "styles.primary.fill.h" -> "fill.h"
+ */
+export function stripModelPrefix(path: string): string {
+  const objMatch = path.match(/^objects\.\d+\.(.+)$/);
+  if (objMatch) return objMatch[1];
+  const styleMatch = path.match(/^styles\.[^.]+\.(.+)$/);
+  if (styleMatch) return styleMatch[1];
+  return path;
 }
 
 /**

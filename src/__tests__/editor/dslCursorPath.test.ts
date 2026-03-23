@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDslCursorContext } from '../../editor/dslCursorPath';
+import { getDslCursorContext, stripModelPrefix } from '../../editor/dslCursorPath';
 
 /** Helper: find the | in text, remove it, and call getDslCursorContext at that position */
 function ctx(text: string) {
@@ -156,5 +156,58 @@ describe('getDslCursorContext', () => {
     const result = ctx('box: rect 160x100 easing=eas|');
     expect(result.currentKey).toBe('easing');
     expect(result.prefix).toBe('eas');
+  });
+});
+
+// ─── Boolean keyword context ────────────────────────────────────
+describe('boolean keywords', () => {
+  it('resolves bold on its own indented line', () => {
+    const result = ctx('box: text "hi"\n  bol|d');
+    expect(result.path).toContain('text');
+    expect(result.path).toContain('bold');
+    expect(result.isPropertyName).toBe(false);
+  });
+
+  it('resolves mono on its own indented line', () => {
+    const result = ctx('box: text "hi"\n  mon|o');
+    expect(result.path).toContain('text');
+    expect(result.path).toContain('mono');
+    expect(result.isPropertyName).toBe(false);
+  });
+
+  it('resolves smooth for path nodes', () => {
+    const result = ctx('line: path (0,0) (100,100)\n  smoot|h');
+    expect(result.path).toContain('path');
+    expect(result.path).toContain('smooth');
+    expect(result.isPropertyName).toBe(false);
+  });
+
+  it('resolves closed for path nodes', () => {
+    const result = ctx('line: path (0,0) (100,100)\n  close|d');
+    expect(result.path).toContain('path');
+    expect(result.path).toContain('closed');
+    expect(result.isPropertyName).toBe(false);
+  });
+
+  it('resolves inline bold keyword', () => {
+    const result = ctx('box: text "hi" bol|d');
+    expect(result.path).toContain('text');
+    expect(result.path).toContain('bold');
+    expect(result.isPropertyName).toBe(false);
+  });
+});
+
+describe('stripModelPrefix', () => {
+  it('strips objects.N prefix', () => {
+    expect(stripModelPrefix('objects.0.rect.w')).toBe('rect.w');
+    expect(stripModelPrefix('objects.3.fill.h')).toBe('fill.h');
+  });
+
+  it('strips styles.name prefix', () => {
+    expect(stripModelPrefix('styles.primary.fill.s')).toBe('fill.s');
+  });
+
+  it('passes through paths without prefix', () => {
+    expect(stripModelPrefix('animate.duration')).toBe('animate.duration');
   });
 });
