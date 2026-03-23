@@ -28,7 +28,7 @@ const ALL_BOOLEANS = new Set([...TEXT_BOOLEANS, ...PATH_BOOLEANS, ...NODE_BOOLEA
 const CLICKABLE_PROPS = new Set([
   ...ALL_BOOLEANS,
   ...GEOM_KEYWORDS,
-  'fill', 'stroke', 'opacity', 'visible', 'depth', 'slot',
+  'fill', 'stroke', 'opacity', 'visible', 'depth', 'slot', 'rgb', 'hsl',
 ]);
 
 const TRANSFORM_PROPS = new Set(['rotation', 'scale', 'anchor', 'pathFollow', 'pathProgress', 'x', 'y']);
