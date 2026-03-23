@@ -2,6 +2,8 @@ import JSON5 from 'json5';
 import { tokenize } from './tokenizer';
 import { nameToHsl, hexToHsl } from './colorNames';
 import type { Token, TokenType } from './types';
+import type { FormatHints } from './formatHints';
+import { emptyFormatHints } from './formatHints';
 
 // ─── Token Stream ────────────────────────────────────────────────
 
@@ -1271,4 +1273,44 @@ export function parseDsl(input: string): any {
   if (!result.styles) result.styles = {};
 
   return result;
+}
+
+export function parseDslWithHints(input: string): { scene: any; formatHints: FormatHints } {
+  const scene = parseDsl(input);
+  const formatHints = extractFormatHints(input);
+  return { scene, formatHints };
+}
+
+function extractFormatHints(input: string): FormatHints {
+  const hints = emptyFormatHints();
+  const tokens = tokenize(input);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    // Node definition: identifier colon ...
+    if (tok.type === 'identifier' && tokens[i + 1]?.type === 'colon') {
+      const id = tok.value;
+      // Skip document-level keywords
+      if (DOC_KEYWORDS.has(id)) continue;
+
+      // Scan forward past the colon to find the next newline or eof
+      let j = i + 2;
+      while (j < tokens.length && tokens[j].type !== 'newline' && tokens[j].type !== 'eof') {
+        j++;
+      }
+      // After the newline (or eof), check if next token is indent
+      if (j < tokens.length && tokens[j].type === 'newline') {
+        const afterNewline = tokens[j + 1];
+        if (afterNewline && afterNewline.type === 'indent') {
+          hints.nodes[id] = { display: 'block' };
+        } else {
+          hints.nodes[id] = { display: 'inline' };
+        }
+      } else {
+        hints.nodes[id] = { display: 'inline' };
+      }
+    }
+  }
+
+  return hints;
 }
