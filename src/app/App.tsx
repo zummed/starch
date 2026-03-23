@@ -362,28 +362,55 @@ export default function App() {
         ))}
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
       </div>
-      {activeTab.closable && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
-          borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
-        }}>
-          {[
-            { label: 'Load', onClick: loadFileToTab },
-            { label: 'Save', onClick: saveTabToFile },
-          ].map(btn => (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
+        borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
+      }}>
+        <button
+          onClick={() => {
+            const newFormat = (activeTab.viewFormat || 'json5') === 'json5' ? 'dsl' : 'json5';
+            setTabs(prev => prev.map(t =>
+              t.id === activeTabId ? { ...t, viewFormat: newFormat } : t
+            ));
+          }}
+          title="Toggle between JSON5 and DSL view"
+          style={{
+            padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+            border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          Mode
+        </button>
+        {activeTab.closable && (
+          <>
             <button
-              key={btn.label}
-              onClick={btn.onClick}
+              onClick={loadFileToTab}
               style={{
                 padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
                 border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
                 cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              {btn.label}
+              Load
             </button>
-          ))}
-          <div style={{ flex: 1 }} />
+            <button
+              onClick={saveTabToFile}
+              style={{
+                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+                border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Save
+            </button>
+          </>
+        )}
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 9, color: '#4a4f59', marginRight: activeTab.closable ? 6 : 0 }}>
+          {(activeTab.viewFormat || 'json5') === 'json5' ? 'JSON5' : 'DSL'}
+        </span>
+        {activeTab.closable && (
           <button
             onClick={() => closeTab(activeTabId)}
             style={{
@@ -394,8 +421,8 @@ export default function App() {
           >
             ✕
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <V2Editor
           value={activeDsl}

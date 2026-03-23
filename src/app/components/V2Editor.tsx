@@ -723,6 +723,48 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     });
   }, [onViewFormatChange]);
 
+  // Respond to external format prop changes (e.g., Mode button in App toolbar)
+  const prevFormatRef = useRef(viewFormat);
+  useEffect(() => {
+    if (viewFormat !== prevFormatRef.current) {
+      prevFormatRef.current = viewFormat;
+      // Trigger the same logic as handleFormatToggle but with the new format
+      const view = viewRef.current;
+      if (!view) return;
+
+      formatRef.current = viewFormat;
+
+      let newText: string;
+      if (viewFormat === 'dsl') {
+        try {
+          newText = lastValidRawRef.current
+            ? generateDsl(lastValidRawRef.current, { nodeFormats: nodeFormatsRef.current })
+            : json5TextRef.current;
+        } catch { newText = json5TextRef.current; }
+      } else {
+        newText = json5TextRef.current;
+      }
+
+      externalUpdate.current = true;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: newText } });
+      externalUpdate.current = false;
+
+      const isDsl = viewFormat === 'dsl';
+      view.dispatch({
+        effects: [
+          langCompartment.current.reconfigure(isDsl ? [dslLanguage, dslHighlight] : [json(), starchHighlight]),
+          linterCompartment.current.reconfigure(isDsl ? dslEditorLinter : v2EditorLinter),
+          completionCompartment.current.reconfigure(
+            autocompletion({
+              override: [isDsl ? dslCompletionSource : v2CompletionSource],
+              activateOnTyping: true,
+            }),
+          ),
+        ],
+      });
+    }
+  }, [viewFormat]);
+
   // Handle popup value change — surgical text replacement at the value span
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
@@ -819,28 +861,6 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      {/* Format toggle bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', padding: '2px 8px',
-        borderBottom: '1px solid #1a1d24', background: '#0a0c10', flexShrink: 0,
-      }}>
-        <button
-          onClick={handleFormatToggle}
-          title="Toggle between JSON5 and DSL view"
-          style={{
-            padding: '2px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
-            border: `1px solid ${currentFormat === 'dsl' ? '#a78bfa' : '#2a2d35'}`,
-            background: currentFormat === 'dsl' ? 'rgba(167,139,250,0.1)' : '#14161c',
-            color: currentFormat === 'dsl' ? '#a78bfa' : '#6b7280',
-            cursor: 'pointer', whiteSpace: 'nowrap',
-          }}
-        >
-          {currentFormat === 'json5' ? 'DSL' : 'JSON5'}
-        </button>
-        <span style={{ fontSize: 9, color: '#4a4f59', marginLeft: 8 }}>
-          {currentFormat === 'json5' ? 'JSON5 mode' : 'DSL mode'}
-        </span>
-      </div>
       <div
         ref={containerRef}
         style={{
