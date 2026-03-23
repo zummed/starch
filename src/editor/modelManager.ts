@@ -74,9 +74,16 @@ export class ModelManager {
     }, this._debounceMs);
   }
 
-  /** Immediate parse without debounce (for initial load, sample selection). */
+  /** Immediate parse without debounce (for initial load before listeners exist). */
   setTextImmediate(text: string, format: 'json5' | 'dsl'): void {
     this._processText(text, format);
+  }
+
+  /** Load new content into an already-connected ModelManager.
+   *  Processes text AND emits textChange so the editor updates. */
+  loadText(text: string, format: 'json5' | 'dsl'): void {
+    this._processText(text, format);
+    this._emitText(this.getDisplayText());
   }
 
   // ── updateProperty (from popups) — mutates _json, emits modelChange + textChange ──

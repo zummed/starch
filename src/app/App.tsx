@@ -213,7 +213,7 @@ export default function App() {
     setTabs(prev => {
       const existing = prev.find(t => t.id === 'sample');
       if (existing) {
-        existing.modelManager.setTextImmediate(sample.dsl, 'dsl');
+        existing.modelManager.loadText(sample.dsl, 'dsl');
         return [...prev]; // trigger re-render
       }
       const mm = createModelManager(sample.dsl, 'dsl');
@@ -273,7 +273,7 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
-          activeModelManager.setTextImmediate(reader.result, activeTab.viewFormat);
+          activeModelManager.loadText(reader.result, activeTab.viewFormat);
         }
       };
       reader.readAsText(file);
