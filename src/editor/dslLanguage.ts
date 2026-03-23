@@ -1,45 +1,25 @@
 /**
  * CodeMirror 6 language extension for the Starch DSL.
- * Provides syntax highlighting with hover affordance on clickable tokens only.
  *
- * Uses StreamLanguage WITHOUT tokenTable so that .tok-* CSS classes are
- * generated, giving us precise control over which tokens get hover effects.
+ * ALL token names use the `dsl-` prefix so StreamLanguage generates
+ * predictable `.tok-dsl-*` CSS classes (standard names like "keyword"
+ * would be mapped to Lezer tags with auto-generated class names,
+ * making them impossible to target for selective hover affordance).
  */
 import { StreamLanguage, type StringStream } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
 
-// ─── Token names ─────────────────────────────────────────────────
-// Clickable tokens (get hover affordance):
-//   keyword        — clickable keywords: rect, ellipse, fill, stroke, at, etc.
-//   number         — numeric values (HSL, key=value, coordinates)
-//   dsl-dimension  — WxH shorthand (140x80)
-//   dsl-color      — named/hex colors
-//   atom           — boolean keywords (bold, smooth, active)
-//   propertyName   — key in key=value (radius=, width=)
-//   dsl-styleRef   — @stylename
-//
-// Non-clickable tokens (no hover):
-//   dsl-meta       — document/section keywords (name, style, animate)
-//   dsl-nodeId     — node ID before colon (box:)
-//   dsl-arrow      — connection arrow (->)
-//   dsl-timestamp  — animation timestamps (0.0, +2.0)
-//   string         — quoted strings
-//   comment        — line comments
-//   variableName   — identifiers (animation refs, easing names)
-//   operator       — equals sign
-//   punctuation    — colons, parens, braces, commas
-
 // ─── Known keyword sets ──────────────────────────────────────────
 
 const CLICKABLE_KEYWORDS = new Set([
-  'rect', 'ellipse', 'text', 'image', 'camera',  // geometry → compound popup
-  'fill', 'stroke', 'at',                          // property → compound popup
+  'rect', 'ellipse', 'text', 'image', 'camera',
+  'fill', 'stroke', 'at',
 ]);
 
 const DOC_KEYWORDS = new Set([
   'name', 'description', 'background', 'viewport', 'images',
   'style', 'animate', 'template', 'chapter',
-  'path', 'layout', 'dash', 'slot',  // these don't open popups
+  'path', 'layout', 'dash', 'slot',
 ]);
 
 const BOOL_KEYWORDS = new Set([
@@ -51,7 +31,7 @@ const NAMED_COLORS = new Set([
   'cyan', 'magenta', 'orange', 'purple', 'gray', 'grey',
 ]);
 
-// ─── Stream tokenizer state ─────────────────────────────────────
+// ─── Tokenizer state ─────────────────────────────────────────────
 
 interface DslState {
   inAnimate: boolean;
@@ -73,153 +53,94 @@ function token(stream: StringStream, state: DslState): string | null {
 
   if (stream.eatSpace()) return null;
 
-  // Comments
-  if (stream.match('//')) {
-    stream.skipToEnd();
-    return 'comment';
-  }
+  if (stream.match('//')) { stream.skipToEnd(); return 'dsl-comment'; }
 
-  // Strings
   if (stream.peek() === '"') {
     stream.next();
-    while (!stream.eol()) {
-      const ch = stream.next();
-      if (ch === '"') break;
-      if (ch === '\\') stream.next();
-    }
-    return 'string';
+    while (!stream.eol()) { const ch = stream.next(); if (ch === '"') break; if (ch === '\\') stream.next(); }
+    return 'dsl-string';
   }
 
-  // Hex colors
-  if (stream.match(/#[0-9a-fA-F]{3,6}\b/)) {
-    return 'dsl-color';
-  }
+  if (stream.match(/#[0-9a-fA-F]{3,6}\b/)) return 'dsl-color';
 
-  // Style reference @name
-  if (stream.peek() === '@') {
-    stream.next();
-    stream.eatWhile(/[\w]/);
-    return 'dsl-styleRef';
-  }
+  if (stream.peek() === '@') { stream.next(); stream.eatWhile(/[\w]/); return 'dsl-styleRef'; }
 
-  // Arrow ->
-  if (stream.match('->')) {
-    return 'dsl-arrow';
-  }
+  if (stream.match('->')) return 'dsl-arrow';
 
-  // Dimensions NxN
-  if (stream.match(/^\d+x\d+/)) {
-    return 'dsl-dimension';
-  }
+  if (stream.match(/^\d+x\d+/)) return 'dsl-dimension';
 
-  // Relative time +N
-  if (stream.peek() === '+' && stream.match(/^\+\d+(\.\d+)?/)) {
-    return 'dsl-timestamp';
-  }
+  if (stream.peek() === '+' && stream.match(/^\+\d+(\.\d+)?/)) return 'dsl-timestamp';
 
-  // Numbers
   if (stream.match(/^-?\d+(\.\d+)?/)) {
-    if (state.afterFillStroke && state.hslCount < 3) {
-      state.hslCount++;
-      return 'number';
-    }
-    if (state.lineStart && state.inAnimate) {
-      state.lineStart = false;
-      return 'dsl-timestamp';
-    }
-    return 'number';
+    if (state.afterFillStroke && state.hslCount < 3) { state.hslCount++; return 'dsl-number'; }
+    if (state.lineStart && state.inAnimate) { state.lineStart = false; return 'dsl-timestamp'; }
+    return 'dsl-number';
   }
 
-  // Equals
-  if (stream.peek() === '=') {
-    stream.next();
-    return 'operator';
-  }
+  if (stream.peek() === '=') { stream.next(); return 'dsl-operator'; }
 
-  // Punctuation
-  if (stream.match(/^[(){}\[\],;:]/)) {
-    return 'punctuation';
-  }
+  if (stream.match(/^[(){}\[\],;:]/)) return 'dsl-punctuation';
 
-  // Words
   if (stream.match(/^[\w]+/)) {
     const word = stream.current();
 
-    // Node ID (word before colon at line start)
     if (state.lineStart && stream.peek() === ':') {
       state.lineStart = false;
       if (word === 'animate') state.inAnimate = true;
-      if (DOC_KEYWORDS.has(word) || CLICKABLE_KEYWORDS.has(word)) {
-        return 'dsl-meta';
-      }
+      if (DOC_KEYWORDS.has(word) || CLICKABLE_KEYWORDS.has(word)) return 'dsl-meta';
       return 'dsl-nodeId';
     }
 
     state.lineStart = false;
 
-    // Clickable keywords
     if (CLICKABLE_KEYWORDS.has(word)) {
-      if (word === 'fill' || word === 'stroke') {
-        state.afterFillStroke = true;
-        state.hslCount = 0;
-      }
-      return 'keyword';
+      if (word === 'fill' || word === 'stroke') { state.afterFillStroke = true; state.hslCount = 0; }
+      return 'dsl-keyword';
     }
 
-    // Document/section keywords (not clickable)
     if (DOC_KEYWORDS.has(word)) {
       if (word === 'animate') state.inAnimate = true;
       return 'dsl-meta';
     }
 
-    // Boolean keywords (clickable)
-    if (BOOL_KEYWORDS.has(word)) {
-      return 'atom';
-    }
+    if (BOOL_KEYWORDS.has(word)) return 'dsl-bool';
 
-    // Named colors after fill/stroke (clickable)
-    if (NAMED_COLORS.has(word) && state.afterFillStroke) {
-      state.afterFillStroke = false;
-      return 'dsl-color';
-    }
+    if (NAMED_COLORS.has(word) && state.afterFillStroke) { state.afterFillStroke = false; return 'dsl-color'; }
 
-    // Key in key=value (clickable)
-    if (stream.peek() === '=') {
-      return 'propertyName';
-    }
+    if (stream.peek() === '=') return 'dsl-propName';
 
-    // Other identifiers (not clickable)
-    return 'variableName';
+    return 'dsl-ident';
   }
 
   stream.next();
   return null;
 }
 
-// ─── Language definition (no tokenTable → generates .tok-* classes) ───
+// ─── Language definition ─────────────────────────────────────────
 
+// No tokenTable — custom names generate .tok-dsl-* CSS classes which we
+// target directly in dslHighlight. StreamLanguage logs "Unknown highlighting tag"
+// warnings for custom names but these are harmless (dev-only, no production impact).
 export const dslLanguage = StreamLanguage.define<DslState>({
   startState,
   token,
-  languageData: {
-    commentTokens: { line: '//' },
-  },
+  languageData: { commentTokens: { line: '//' } },
 });
 
-// ─── All styling via CSS (colors + selective hover) ──────────────
+// ─── All styling via .tok-dsl-* CSS classes ──────────────────────
 
 export const dslHighlight = EditorView.theme({
-  // ── Token colors ──────────────────────────────────────
-  '.tok-keyword':       { color: '#7aa2f7', fontWeight: 'bold' },
-  '.tok-dsl-meta':      { color: '#7aa2f7' },                      // same blue, no bold
-  '.tok-string':        { color: '#9ece6a' },
-  '.tok-number':        { color: '#e0af68' },
-  '.tok-atom':          { color: '#bb9af7' },
-  '.tok-operator':      { color: '#6b7280' },
-  '.tok-propertyName':  { color: '#73daca' },
-  '.tok-variableName':  { color: '#c0caf5' },
-  '.tok-comment':       { color: '#4a4f59', fontStyle: 'italic' },
-  '.tok-punctuation':   { color: '#545a6a' },
+  // ── Colors ────────────────────────────────────────────
+  '.tok-dsl-keyword':   { color: '#7aa2f7', fontWeight: 'bold' },
+  '.tok-dsl-meta':      { color: '#7aa2f7' },
+  '.tok-dsl-string':    { color: '#9ece6a' },
+  '.tok-dsl-number':    { color: '#e0af68' },
+  '.tok-dsl-bool':      { color: '#bb9af7' },
+  '.tok-dsl-operator':  { color: '#6b7280' },
+  '.tok-dsl-propName':  { color: '#73daca' },
+  '.tok-dsl-ident':     { color: '#c0caf5' },
+  '.tok-dsl-comment':   { color: '#4a4f59', fontStyle: 'italic' },
+  '.tok-dsl-punctuation': { color: '#545a6a' },
   '.tok-dsl-dimension': { color: '#ff9e64', fontWeight: 'bold' },
   '.tok-dsl-color':     { color: '#f7768e' },
   '.tok-dsl-styleRef':  { color: '#bb9af7', fontStyle: 'italic' },
@@ -228,7 +149,8 @@ export const dslHighlight = EditorView.theme({
   '.tok-dsl-timestamp': { color: '#e0af68', fontStyle: 'italic' },
 
   // ── Hover affordance (clickable tokens only) ──────────
-  '.tok-keyword:hover, .tok-number:hover, .tok-dsl-dimension:hover, .tok-dsl-color:hover, .tok-atom:hover, .tok-propertyName:hover, .tok-dsl-styleRef:hover': {
+  // These tokens open popups when clicked:
+  '.tok-dsl-keyword:hover, .tok-dsl-number:hover, .tok-dsl-dimension:hover, .tok-dsl-color:hover, .tok-dsl-bool:hover, .tok-dsl-propName:hover, .tok-dsl-styleRef:hover': {
     cursor: 'pointer',
     textDecoration: 'underline',
     textDecorationColor: 'rgba(122, 162, 247, 0.4)',
@@ -237,5 +159,5 @@ export const dslHighlight = EditorView.theme({
   },
 });
 
-// Kept as a named export for backward compat (now empty — styles are in dslHighlight)
+// Kept for backward compat (empty)
 export const dslInteractiveTheme = EditorView.theme({});
