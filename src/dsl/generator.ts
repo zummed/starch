@@ -1,4 +1,4 @@
-import { hslToName } from '../types/color';
+import { hslToName, rgbToName, isColor } from '../types/color';
 import type { FormatHints } from './formatHints';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -10,27 +10,44 @@ interface GeneratorOptions {
 
 // ─── Color Formatting ─────────────────────────────────────────────
 
-function formatColor(color: { h: number; s: number; l: number; a?: number }): string {
-  const name = hslToName({ h: color.h, s: color.s, l: color.l });
-  if (name) {
-    if (color.a !== undefined) return `${name} a=${color.a}`;
-    return name;
+function formatColor(color: any): string {
+  // String: named or hex
+  if (typeof color === 'string') return color;
+  // Named + alpha
+  if ('name' in color && 'a' in color && !('h' in color) && !('r' in color)) {
+    return `${color.name} a=${color.a}`;
   }
-  let result = `${color.h} ${color.s} ${color.l}`;
-  if (color.a !== undefined) result += ` a=${color.a}`;
-  return result;
+  // Hex + alpha
+  if ('hex' in color && 'a' in color) {
+    return `${color.hex} a=${color.a}`;
+  }
+  // RGB
+  if ('r' in color) {
+    const name = rgbToName(color);
+    if (name) {
+      if (color.a !== undefined) return `${name} a=${color.a}`;
+      return name;
+    }
+    let s = `rgb ${color.r} ${color.g} ${color.b}`;
+    if (color.a !== undefined) s += ` a=${color.a}`;
+    return s;
+  }
+  // HSL
+  if ('h' in color) {
+    const name = hslToName({ h: color.h, s: color.s, l: color.l });
+    if (name) {
+      if (color.a !== undefined) return `${name} a=${color.a}`;
+      return name;
+    }
+    let s = `hsl ${color.h} ${color.s} ${color.l}`;
+    if (color.a !== undefined) s += ` a=${color.a}`;
+    return s;
+  }
+  return String(color);
 }
 
-function formatStroke(stroke: { h: number; s: number; l: number; a?: number; width?: number }): string {
-  const name = hslToName({ h: stroke.h, s: stroke.s, l: stroke.l });
-  let result: string;
-  if (name) {
-    result = name;
-    if (stroke.a !== undefined) result += ` a=${stroke.a}`;
-  } else {
-    result = `${stroke.h} ${stroke.s} ${stroke.l}`;
-    if (stroke.a !== undefined) result += ` a=${stroke.a}`;
-  }
+function formatStroke(stroke: any): string {
+  let result = formatColor(stroke.color);
   if (stroke.width !== undefined) result += ` width=${stroke.width}`;
   return result;
 }
@@ -495,17 +512,14 @@ function formatKeyframeChange(path: string, val: any): string {
     return s;
   }
 
-  // HSL color object
-  if (typeof val === 'object' && val !== null && !Array.isArray(val)
-      && 'h' in val && 's' in val && 'l' in val
-      && !('effect' in val) && !('value' in val)) {
+  // Color value (string colors with dot-paths, or any Color object)
+  if (isColor(val) && !isEffectKey(path)) {
     return `${path}: ${formatColor(val)}`;
   }
 
   // Property change with easing: { value, easing }
   if (typeof val === 'object' && val !== null && !Array.isArray(val) && 'value' in val && 'easing' in val) {
-    const valStr = (typeof val.value === 'object' && val.value !== null && 'h' in val.value && 's' in val.value && 'l' in val.value)
-      ? formatColor(val.value) : formatValue(val.value);
+    const valStr = isColor(val.value) ? formatColor(val.value) : formatValue(val.value);
     return `${path}: ${valStr} easing=${val.easing}`;
   }
 

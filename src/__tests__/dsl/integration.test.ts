@@ -83,7 +83,8 @@ animate 4s
 
     // Track paths generated
     expect(scene.trackPaths).toContain('box1.rect.w');
-    expect(scene.trackPaths).toContain('primary.fill.h');
+    // fill 210 70 45 is now parsed as RGB {r,g,b}
+    expect(scene.trackPaths).toContain('primary.fill.r');
   });
 
   it('empty DSL input does not crash', () => {

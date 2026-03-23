@@ -39,7 +39,7 @@ describe('parseDslWithHints', () => {
   });
 
   it('preserves parseDsl scene output exactly', () => {
-    const { scene } = parseDslWithHints('box: rect 100x200 fill 210 70 45');
+    const { scene } = parseDslWithHints('box: rect 100x200 fill hsl 210 70 45');
     expect(scene.objects[0].id).toBe('box');
     expect(scene.objects[0].rect).toEqual({ w: 100, h: 200 });
     expect(scene.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });

@@ -63,13 +63,13 @@ describe('DSL generator', () => {
         styles: {
           primary: {
             fill: { h: 210, s: 70, l: 45 },
-            stroke: { h: 210, s: 80, l: 30, width: 2 },
+            stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 },
           },
         },
       });
       expect(dsl).toContain('style primary');
-      expect(dsl).toContain('  fill 210 70 45');
-      expect(dsl).toContain('  stroke 210 80 30 width=2');
+      expect(dsl).toContain('  fill hsl 210 70 45');
+      expect(dsl).toContain('  stroke hsl 210 80 30 width=2');
     });
 
     it('generates multiple styles', () => {
@@ -143,7 +143,7 @@ describe('DSL generator', () => {
       const dsl = generateDsl({
         objects: [{ id: 'box', rect: { w: 10, h: 10 }, fill: { h: 210, s: 70, l: 45 } }],
       });
-      expect(dsl).toContain('fill 210 70 45');
+      expect(dsl).toContain('fill hsl 210 70 45');
     });
 
     it('generates fill with named color', () => {
@@ -157,21 +157,21 @@ describe('DSL generator', () => {
       const dsl = generateDsl({
         objects: [{ id: 'box', rect: { w: 10, h: 10 }, fill: { h: 210, s: 70, l: 45, a: 0.5 } }],
       });
-      expect(dsl).toContain('fill 210 70 45 a=0.5');
+      expect(dsl).toContain('fill hsl 210 70 45 a=0.5');
     });
 
     it('generates stroke with width', () => {
       const dsl = generateDsl({
-        objects: [{ id: 'box', rect: { w: 10, h: 10 }, stroke: { h: 210, s: 80, l: 30, width: 2 } }],
+        objects: [{ id: 'box', rect: { w: 10, h: 10 }, stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 } }],
       });
-      expect(dsl).toContain('stroke 210 80 30 width=2');
+      expect(dsl).toContain('stroke hsl 210 80 30 width=2');
     });
 
     it('generates stroke with alpha and width', () => {
       const dsl = generateDsl({
-        objects: [{ id: 'box', rect: { w: 10, h: 10 }, stroke: { h: 0, s: 0, l: 60, a: 0.5, width: 3 } }],
+        objects: [{ id: 'box', rect: { w: 10, h: 10 }, stroke: { color: { h: 0, s: 0, l: 60, a: 0.5 }, width: 3 } }],
       });
-      expect(dsl).toContain('stroke 0 0 60 a=0.5 width=3');
+      expect(dsl).toContain('stroke hsl 0 0 60 a=0.5 width=3');
     });
 
     it('generates at position', () => {
@@ -306,10 +306,10 @@ describe('DSL generator', () => {
         objects: [{
           id: 'link',
           path: { route: ['a', 'b'] },
-          stroke: { h: 0, s: 0, l: 60, width: 2 },
+          stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
         }],
       });
-      expect(dsl).toContain('link: a -> b stroke 0 0 60 width=2');
+      expect(dsl).toContain('link: a -> b stroke hsl 0 0 60 width=2');
     });
   });
 
@@ -324,7 +324,7 @@ describe('DSL generator', () => {
         }],
       });
       expect(dsl).toContain('tri: path (0,-40) (40,30) (-40,30) closed');
-      expect(dsl).toContain('fill 280 60 45');
+      expect(dsl).toContain('fill hsl 280 60 45');
     });
   });
 
@@ -346,7 +346,7 @@ describe('DSL generator', () => {
           id: 'box',
           rect: { w: 160, h: 100 },
           fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 0, s: 0, l: 0 },
+          stroke: { color: 'black' },
           opacity: 0.8,
           depth: 5,
         }],
@@ -361,7 +361,7 @@ describe('DSL generator', () => {
           id: 'box',
           rect: { w: 160, h: 100 },
           fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 0, s: 0, l: 0 },
+          stroke: { color: 'black' },
           opacity: 0.8,
           depth: 5,
         }],
@@ -556,7 +556,7 @@ describe('DSL generator', () => {
           id: 'box',
           rect: { w: 100, h: 200 },
           fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 0, s: 0, l: 0 },
+          stroke: { color: 'black' },
           transform: { x: 100, y: 200 },
           opacity: 0.5,
         }],

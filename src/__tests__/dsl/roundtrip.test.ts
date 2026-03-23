@@ -123,13 +123,13 @@ describe('DSL round-trip fidelity', () => {
         {
           id: 'link',
           path: { route: ['a', 'b'] },
-          stroke: { h: 0, s: 0, l: 60, width: 2 },
+          stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
         },
       ],
     };
     const result = roundTrip(scene);
     expect(result.objects[0].path).toEqual({ route: ['a', 'b'] });
-    expect(result.objects[0].stroke).toEqual({ h: 0, s: 0, l: 60, width: 2 });
+    expect(result.objects[0].stroke).toEqual({ color: { h: 0, s: 0, l: 60 }, width: 2 });
   });
 
   // ── Styles ─────────────────────────────────────────────────────
@@ -139,14 +139,14 @@ describe('DSL round-trip fidelity', () => {
       styles: {
         primary: {
           fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 210, s: 80, l: 30, width: 2 },
+          stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 },
         },
       },
     };
     const result = roundTrip(scene);
     expect(result.styles.primary).toEqual({
       fill: { h: 210, s: 70, l: 45 },
-      stroke: { h: 210, s: 80, l: 30, width: 2 },
+      stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 },
     });
   });
 
@@ -156,12 +156,12 @@ describe('DSL round-trip fidelity', () => {
       objects: [],
       styles: {
         primary: { fill: { h: 210, s: 70, l: 45 } },
-        danger: { fill: { h: 0, s: 80, l: 50 } },
+        danger: { fill: 'red' },
       },
     };
     const result = roundTrip(scene);
     expect(result.styles.primary.fill).toEqual({ h: 210, s: 70, l: 45 });
-    expect(result.styles.danger.fill).toEqual({ h: 0, s: 80, l: 50 });
+    expect(result.styles.danger.fill).toBe('red');
   });
 
   // ── Style reference ────────────────────────────────────────────
@@ -179,7 +179,7 @@ describe('DSL round-trip fidelity', () => {
   it('round-trips named colors (white)', () => {
     const scene = {
       objects: [
-        { id: 'box', rect: { w: 10, h: 10 }, fill: { h: 0, s: 0, l: 100 } },
+        { id: 'box', rect: { w: 10, h: 10 }, fill: 'white' },
       ],
     };
 
@@ -189,31 +189,31 @@ describe('DSL round-trip fidelity', () => {
 
     // Then verify round-trip preserves values
     const result = roundTrip(scene);
-    expect(result.objects[0].fill).toEqual({ h: 0, s: 0, l: 100 });
+    expect(result.objects[0].fill).toBe('white');
   });
 
   it('round-trips named colors (black)', () => {
     const scene = {
       objects: [
-        { id: 'box', rect: { w: 10, h: 10 }, fill: { h: 0, s: 0, l: 0 } },
+        { id: 'box', rect: { w: 10, h: 10 }, fill: 'black' },
       ],
     };
     const dsl = generateDsl(scene);
     expect(dsl).toContain('fill black');
     const result = roundTrip(scene);
-    expect(result.objects[0].fill).toEqual({ h: 0, s: 0, l: 0 });
+    expect(result.objects[0].fill).toBe('black');
   });
 
   it('round-trips named colors (red)', () => {
     const scene = {
       objects: [
-        { id: 'box', rect: { w: 10, h: 10 }, fill: { h: 0, s: 100, l: 50 } },
+        { id: 'box', rect: { w: 10, h: 10 }, fill: 'red' },
       ],
     };
     const dsl = generateDsl(scene);
     expect(dsl).toContain('fill red');
     const result = roundTrip(scene);
-    expect(result.objects[0].fill).toEqual({ h: 0, s: 100, l: 50 });
+    expect(result.objects[0].fill).toBe('red');
   });
 
   // ── Fill with alpha ────────────────────────────────────────────
@@ -231,11 +231,11 @@ describe('DSL round-trip fidelity', () => {
   it('round-trips stroke with alpha and width', () => {
     const scene = {
       objects: [
-        { id: 'box', rect: { w: 10, h: 10 }, stroke: { h: 0, s: 0, l: 60, a: 0.5, width: 3 } },
+        { id: 'box', rect: { w: 10, h: 10 }, stroke: { color: { h: 0, s: 0, l: 60, a: 0.5 }, width: 3 } },
       ],
     };
     const result = roundTrip(scene);
-    expect(result.objects[0].stroke).toEqual({ h: 0, s: 0, l: 60, a: 0.5, width: 3 });
+    expect(result.objects[0].stroke).toEqual({ color: { h: 0, s: 0, l: 60, a: 0.5 }, width: 3 });
   });
 
   // ── Point paths ────────────────────────────────────────────────
@@ -333,6 +333,43 @@ describe('DSL round-trip fidelity', () => {
     expect(result.animate.keyframes[0].changes['card']).toBe('pulse');
   });
 
+  // ── Animation with color keyframes ──────────────────────────────
+  it('round-trips animation with named color in keyframe', () => {
+    const scene = {
+      objects: [
+        { id: 'box', rect: { w: 100, h: 80 } },
+      ],
+      animate: {
+        duration: 5,
+        keyframes: [
+          { time: 0, changes: { 'box.fill': 'blue' } },
+          { time: 2, changes: { 'box.fill': 'red' } },
+        ],
+      },
+    };
+    const result = roundTrip(scene);
+    expect(result.animate.keyframes[0].changes['box.fill']).toBe('blue');
+    expect(result.animate.keyframes[1].changes['box.fill']).toBe('red');
+  });
+
+  it('round-trips animation with non-named HSL color in keyframe', () => {
+    const scene = {
+      objects: [
+        { id: 'box', rect: { w: 100, h: 80 } },
+      ],
+      animate: {
+        duration: 5,
+        keyframes: [
+          { time: 0, changes: { 'box.fill': { h: 210, s: 70, l: 45 } } },
+          { time: 2, changes: { 'box.fill': { h: 30, s: 80, l: 60 } } },
+        ],
+      },
+    };
+    const result = roundTrip(scene);
+    expect(result.animate.keyframes[0].changes['box.fill']).toEqual({ h: 210, s: 70, l: 45 });
+    expect(result.animate.keyframes[1].changes['box.fill']).toEqual({ h: 30, s: 80, l: 60 });
+  });
+
   // ── Document metadata ──────────────────────────────────────────
   it('round-trips document metadata', () => {
     const scene = {
@@ -410,7 +447,7 @@ describe('DSL round-trip fidelity', () => {
       styles: {
         primary: {
           fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 210, s: 80, l: 30, width: 2 },
+          stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 },
         },
       },
       objects: [
@@ -423,7 +460,7 @@ describe('DSL round-trip fidelity', () => {
             { id: 'label', text: { content: 'Hi', size: 12 } },
           ],
         },
-        { id: 'dot', ellipse: { rx: 5, ry: 5 }, fill: { h: 0, s: 0, l: 100 } },
+        { id: 'dot', ellipse: { rx: 5, ry: 5 }, fill: 'white' },
         { id: 'link', path: { route: ['box', 'dot'] } },
       ],
       animate: {
@@ -450,7 +487,7 @@ describe('DSL round-trip fidelity', () => {
 
     // Styles
     expect(result.styles.primary.fill).toEqual({ h: 210, s: 70, l: 45 });
-    expect(result.styles.primary.stroke).toEqual({ h: 210, s: 80, l: 30, width: 2 });
+    expect(result.styles.primary.stroke).toEqual({ color: { h: 210, s: 80, l: 30 }, width: 2 });
 
     // Objects
     expect(result.objects).toHaveLength(3);
@@ -458,7 +495,7 @@ describe('DSL round-trip fidelity', () => {
     expect(result.objects[0].style).toBe('primary');
     expect(result.objects[0].transform).toEqual({ x: 200, y: 150 });
     expect(result.objects[0].children[0].text.content).toBe('Hi');
-    expect(result.objects[1].fill).toEqual({ h: 0, s: 0, l: 100 });
+    expect(result.objects[1].fill).toBe('white');
     expect(result.objects[2].path.route).toEqual(['box', 'dot']);
 
     // Animation
@@ -519,5 +556,50 @@ describe('DSL round-trip fidelity', () => {
     };
     const result = roundTrip(scene);
     expect(result.objects[0].dash).toEqual({ pattern: 'dashed' });
+  });
+
+  // ── New Color union round-trip tests ────────────────────────────
+
+  it('round-trips fill with named color', () => {
+    const scene = { objects: [{ id: 'box', rect: { w: 100, h: 80 }, fill: 'red' }] };
+    const result = roundTrip(scene);
+    expect(result.objects[0].fill).toBe('red');
+  });
+
+  it('round-trips fill with hex', () => {
+    const scene = { objects: [{ id: 'box', rect: { w: 100, h: 80 }, fill: '#3B82F6' }] };
+    const result = roundTrip(scene);
+    expect(result.objects[0].fill).toBe('#3B82F6');
+  });
+
+  it('round-trips fill with RGB', () => {
+    const scene = { objects: [{ id: 'box', rect: { w: 100, h: 80 }, fill: { r: 255, g: 128, b: 0 } }] };
+    const result = roundTrip(scene);
+    expect(result.objects[0].fill).toEqual({ r: 255, g: 128, b: 0 });
+  });
+
+  it('round-trips fill with HSL', () => {
+    const scene = { objects: [{ id: 'box', rect: { w: 100, h: 80 }, fill: { h: 210, s: 70, l: 45 } }] };
+    const result = roundTrip(scene);
+    expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+  });
+
+  it('round-trips stroke with nested color', () => {
+    const scene = { objects: [{ id: 'box', rect: { w: 100, h: 80 }, stroke: { color: 'blue', width: 2 } }] };
+    const result = roundTrip(scene);
+    expect(result.objects[0].stroke).toEqual({ color: 'blue', width: 2 });
+  });
+
+  it('round-trips animation keyframe with named color', () => {
+    const scene = {
+      objects: [{ id: 'box', rect: { w: 100, h: 80 } }],
+      animate: { duration: 5, keyframes: [
+        { time: 0, changes: { 'box.fill': 'red' } },
+        { time: 2, changes: { 'box.fill': 'blue' } },
+      ]},
+    };
+    const result = roundTrip(scene);
+    expect(result.animate.keyframes[0].changes['box.fill']).toBe('red');
+    expect(result.animate.keyframes[1].changes['box.fill']).toBe('blue');
   });
 });
