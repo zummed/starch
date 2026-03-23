@@ -73,7 +73,7 @@ export const v2Samples: V2Sample[] = [
       id: "box",
       rect: { w: 140, h: 80, radius: 8 },
       fill: { h: 210, s: 70, l: 45 },
-      stroke: { h: 210, s: 80, l: 30, width: 2 },
+      stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 },
       transform: { x: 200, y: 150 }
     }
   ]
@@ -89,14 +89,14 @@ export const v2Samples: V2Sample[] = [
       id: "circle",
       ellipse: { rx: 50, ry: 50 },
       fill: { h: 120, s: 60, l: 40 },
-      stroke: { h: 120, s: 70, l: 30, width: 2 },
+      stroke: { color: { h: 120, s: 70, l: 30 }, width: 2 },
       transform: { x: 200, y: 150 }
     },
     {
       id: "oval",
       ellipse: { rx: 70, ry: 35 },
       fill: { h: 30, s: 80, l: 50 },
-      stroke: { h: 30, s: 90, l: 35, width: 2 },
+      stroke: { color: { h: 30, s: 90, l: 35 }, width: 2 },
       transform: { x: 400, y: 150 }
     }
   ]
@@ -123,13 +123,13 @@ export const v2Samples: V2Sample[] = [
       id: "triangle",
       path: { points: [[0, -40], [40, 30], [-40, 30]], closed: true },
       fill: { h: 280, s: 60, l: 45 },
-      stroke: { h: 280, s: 70, l: 30, width: 2 },
+      stroke: { color: { h: 280, s: 70, l: 30 }, width: 2 },
       transform: { x: 150, y: 150 }
     },
     {
       id: "zigzag",
       path: { points: [[0, 0], [30, -30], [60, 0], [90, -30], [120, 0]], closed: false },
-      stroke: { h: 40, s: 90, l: 50, width: 2 },
+      stroke: { color: { h: 40, s: 90, l: 50 }, width: 2 },
       transform: { x: 280, y: 150 }
     }
   ]
@@ -141,9 +141,9 @@ export const v2Samples: V2Sample[] = [
     description: 'Dash patterns on paths — solid, dashed, dotted',
     dsl: `{
   objects: [
-    { id: "solid", path: { points: [[0, 0], [250, 0]] }, stroke: { h: 0, s: 0, l: 70, width: 2 }, transform: { x: 100, y: 100 } },
-    { id: "dashed", path: { points: [[0, 0], [250, 0]] }, stroke: { h: 0, s: 0, l: 70, width: 2 }, dash: { pattern: "dashed", length: 10, gap: 5 }, transform: { x: 100, y: 140 } },
-    { id: "dotted", path: { points: [[0, 0], [250, 0]] }, stroke: { h: 0, s: 0, l: 70, width: 2 }, dash: { pattern: "dotted", length: 2, gap: 6 }, transform: { x: 100, y: 180 } },
+    { id: "solid", path: { points: [[0, 0], [250, 0]] }, stroke: { color: { h: 0, s: 0, l: 70 }, width: 2 }, transform: { x: 100, y: 100 } },
+    { id: "dashed", path: { points: [[0, 0], [250, 0]] }, stroke: { color: { h: 0, s: 0, l: 70 }, width: 2 }, dash: { pattern: "dashed", length: 10, gap: 5 }, transform: { x: 100, y: 140 } },
+    { id: "dotted", path: { points: [[0, 0], [250, 0]] }, stroke: { color: { h: 0, s: 0, l: 70 }, width: 2 }, dash: { pattern: "dotted", length: 2, gap: 6 }, transform: { x: 100, y: 180 } },
     { id: "l1", text: { content: "solid", size: 11 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 50, y: 100 } },
     { id: "l2", text: { content: "dashed", size: 11 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 42, y: 140 } },
     { id: "l3", text: { content: "dotted", size: 11 }, fill: { h: 0, s: 0, l: 50 }, transform: { x: 42, y: 180 } }
@@ -162,7 +162,7 @@ export const v2Samples: V2Sample[] = [
       id: "mybox",
       transform: { x: 200, y: 150 },
       children: [
-        { id: "bg", rect: { w: 160, h: 70, radius: 8 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
+        { id: "bg", rect: { w: 160, h: 70, radius: 8 }, fill: { h: 210, s: 50, l: 20 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 } },
         { id: "label", text: { content: "Composed Box", size: 14, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
     }
@@ -179,7 +179,7 @@ export const v2Samples: V2Sample[] = [
       id: "a",
       transform: { x: 100, y: 150 },
       children: [
-        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 } },
         { id: "a.label", text: { content: "Source", size: 12, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
     },
@@ -187,11 +187,11 @@ export const v2Samples: V2Sample[] = [
       id: "b",
       transform: { x: 400, y: 150 },
       children: [
-        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { h: 0, s: 70, l: 50, width: 2 } },
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { color: { h: 0, s: 70, l: 50 }, width: 2 } },
         { id: "b.label", text: { content: "Target", size: 12, align: "middle" }, fill: { h: 0, s: 0, l: 90 } }
       ]
     },
-    { id: "line", path: { route: ["a", "b"] }, stroke: { h: 0, s: 0, l: 60, width: 2 } },
+    { id: "line", path: { route: ["a", "b"] }, stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 } },
     { id: "lineLabel", text: { content: "sends data", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { x: 250, y: 130 } }
   ]
 }`,
@@ -206,7 +206,7 @@ export const v2Samples: V2Sample[] = [
       id: "card",
       transform: { x: 200, y: 150 },
       children: [
-        { id: "bg", rect: { w: 160, h: 100, radius: 6 }, fill: { h: 210, s: 50, l: 18 }, stroke: { h: 210, s: 70, l: 45, width: 2 } },
+        { id: "bg", rect: { w: 160, h: 100, radius: 6 }, fill: { h: 210, s: 50, l: 18 }, stroke: { color: { h: 210, s: 70, l: 45 }, width: 2 } },
         { id: "title", text: { content: "Card Title", size: 14, bold: true }, fill: { h: 0, s: 0, l: 90 }, transform: { y: -20 } },
         { id: "badge", ellipse: { rx: 8, ry: 8 }, fill: { h: 120, s: 70, l: 45 }, transform: { x: 55, y: -30 } },
         { id: "body", text: { content: "Some description text", size: 11 }, fill: { h: 0, s: 0, l: 60 }, transform: { y: 15 } }
@@ -217,9 +217,9 @@ export const v2Samples: V2Sample[] = [
     duration: 3,
     loop: true,
     keyframes: [
-      { time: 0, changes: { "card.bg.fill.h": 210, "card.badge.fill.h": 120 } },
-      { time: 1.5, changes: { "card.bg.fill.h": 0, "card.badge.fill.h": 0 } },
-      { time: 3, changes: { "card.bg.fill.h": 210, "card.badge.fill.h": 120 } }
+      { time: 0, changes: { "card.bg.fill": { h: 210, s: 50, l: 18 }, "card.badge.fill": { h: 120, s: 70, l: 45 } } },
+      { time: 1.5, changes: { "card.bg.fill": { h: 0, s: 50, l: 18 }, "card.badge.fill": { h: 0, s: 70, l: 45 } } },
+      { time: 3, changes: { "card.bg.fill": { h: 210, s: 50, l: 18 }, "card.badge.fill": { h: 120, s: 70, l: 45 } } }
     ]
   }
 }`,
@@ -241,23 +241,30 @@ export const v2Samples: V2Sample[] = [
 }`,
   },
   {
-    name: 'hue-animation',
+    name: 'color-animation',
     category: 'Colors',
-    description: 'Animate hue independently — saturation and lightness stay constant',
-    dsl: `{
-  objects: [
-    { id: "box", rect: { w: 120, h: 120, radius: 12 }, fill: { h: 0, s: 80, l: 50 }, transform: { x: 200, y: 130 } }
-  ],
-  animate: {
-    duration: 4,
-    loop: true,
-    keyframes: [
-      { time: 0, changes: { "box.fill.h": 0 } },
-      { time: 2, changes: { "box.fill.h": 180 } },
-      { time: 4, changes: { "box.fill.h": 360 } }
-    ]
-  }
-}`,
+    description: 'Animate whole fill colors — named, hex, rgb, and hsl formats all interpolate smoothly',
+    dsl: `\
+a: rect 80x80 radius=8 fill red at 60,100
+b: rect 80x80 radius=8 fill #3366ff at 170,100
+c: rect 80x80 radius=8 fill rgb 60 200 80 at 280,100
+d: rect 80x80 radius=8 fill hsl 60 80 50 at 390,100
+
+animate 6s loop
+  0 a.fill: red
+  0 b.fill: #3366ff
+  0 c.fill: rgb 60 200 80
+  0 d.fill: hsl 60 80 50
+
+  3 a.fill: blue
+  3 b.fill: #ff6633
+  3 c.fill: rgb 200 60 180
+  3 d.fill: hsl 280 70 55
+
+  6 a.fill: red
+  6 b.fill: #3366ff
+  6 c.fill: rgb 60 200 80
+  6 d.fill: hsl 60 80 50`,
   },
   {
     name: 'hue-shortest-arc',
@@ -272,9 +279,9 @@ export const v2Samples: V2Sample[] = [
     duration: 3,
     loop: true,
     keyframes: [
-      { time: 0, changes: { "box.fill.h": 350 } },
-      { time: 1.5, changes: { "box.fill.h": 10 } },
-      { time: 3, changes: { "box.fill.h": 350 } }
+      { time: 0, changes: { "box.fill": { h: 350, s: 90, l: 50 } } },
+      { time: 1.5, changes: { "box.fill": { h: 10, s: 90, l: 50 } } },
+      { time: 3, changes: { "box.fill": { h: 350, s: 90, l: 50 } } }
     ]
   }
 }`,
@@ -287,8 +294,8 @@ export const v2Samples: V2Sample[] = [
     description: 'Define reusable styles — node properties override style defaults',
     dsl: `{
   styles: {
-    primary: { fill: { h: 210, s: 70, l: 45 }, stroke: { h: 210, s: 80, l: 30, width: 2 } },
-    danger: { fill: { h: 0, s: 80, l: 45 }, stroke: { h: 0, s: 90, l: 30, width: 2 } }
+    primary: { fill: { h: 210, s: 70, l: 45 }, stroke: { color: { h: 210, s: 80, l: 30 }, width: 2 } },
+    danger: { fill: { h: 0, s: 80, l: 45 }, stroke: { color: { h: 0, s: 90, l: 30 }, width: 2 } }
   },
   objects: [
     { id: "a", rect: { w: 100, h: 60, radius: 6 }, style: "primary", transform: { x: 100, y: 150 } },
@@ -314,9 +321,9 @@ export const v2Samples: V2Sample[] = [
     duration: 4,
     loop: true,
     keyframes: [
-      { time: 0, changes: { "theme.fill.h": 210 } },
-      { time: 2, changes: { "theme.fill.h": 0 } },
-      { time: 4, changes: { "theme.fill.h": 210 } }
+      { time: 0, changes: { "theme.fill": { h: 210, s: 70, l: 45 } } },
+      { time: 2, changes: { "theme.fill": { h: 0, s: 70, l: 45 } } },
+      { time: 4, changes: { "theme.fill": { h: 210, s: 70, l: 45 } } }
     ]
   }
 }`,
@@ -373,9 +380,9 @@ export const v2Samples: V2Sample[] = [
     description: 'Lines snap to object edges, not centers — with gap spacing',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 100, y: 150 } },
-    { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 120, s: 60, l: 35 }, stroke: { h: 120, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { route: ["a", "b"], gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 }, transform: { x: 100, y: 150 } },
+    { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: { h: 120, s: 60, l: 35 }, stroke: { color: { h: 120, s: 70, l: 50 }, width: 2 }, transform: { x: 380, y: 150 } },
+    { id: "line", path: { route: ["a", "b"], gap: 4 }, stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 } }
   ]
 }`,
   },
@@ -388,14 +395,14 @@ export const v2Samples: V2Sample[] = [
     {
       id: "a", transform: { x: 100, y: 150 },
       children: [
-        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { h: 210, s: 70, l: 50, width: 2 } },
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 210, s: 50, l: 20 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 } },
         { id: "a.label", text: { content: "Source", size: 12 }, fill: { h: 0, s: 0, l: 90 } }
       ]
     },
     {
       id: "b", transform: { x: 400, y: 150 },
       children: [
-        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { h: 0, s: 70, l: 50, width: 2 } },
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: { h: 0, s: 50, l: 20 }, stroke: { color: { h: 0, s: 70, l: 50 }, width: 2 } },
         { id: "b.label", text: { content: "Target", size: 12 }, fill: { h: 0, s: 0, l: 90 } }
       ]
     },
@@ -409,9 +416,9 @@ export const v2Samples: V2Sample[] = [
     description: 'Smooth quadratic bend — animate the curve amount',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 120, y: 150 } },
-    { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { route: ["a", "b"], bend: 0, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 210, s: 60, l: 35 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 }, transform: { x: 120, y: 150 } },
+    { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: { h: 0, s: 60, l: 35 }, stroke: { color: { h: 0, s: 70, l: 50 }, width: 2 }, transform: { x: 380, y: 150 } },
+    { id: "line", path: { route: ["a", "b"], bend: 0, gap: 4 }, stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 } }
   ],
   animate: {
     duration: 4,
@@ -434,7 +441,7 @@ export const v2Samples: V2Sample[] = [
   objects: [
     { id: "a", ellipse: { rx: 20, ry: 20 }, fill: { h: 210, s: 60, l: 45 }, transform: { x: 80, y: 150 } },
     { id: "b", ellipse: { rx: 20, ry: 20 }, fill: { h: 0, s: 60, l: 45 }, transform: { x: 420, y: 150 } },
-    { id: "line", path: { route: ["a", [180, 80], [250, 220], [340, 80], "b"], smooth: true, gap: 4 }, stroke: { h: 120, s: 60, l: 50, width: 2 } }
+    { id: "line", path: { route: ["a", [180, 80], [250, 220], [340, 80], "b"], smooth: true, gap: 4 }, stroke: { color: { h: 120, s: 60, l: 50 }, width: 2 } }
   ]
 }`,
   },
@@ -444,9 +451,9 @@ export const v2Samples: V2Sample[] = [
     description: 'Polyline routed through waypoints with rounded corners',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 210, s: 60, l: 35 }, stroke: { h: 210, s: 70, l: 50, width: 2 }, transform: { x: 80, y: 100 } },
-    { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 0, s: 60, l: 35 }, stroke: { h: 0, s: 70, l: 50, width: 2 }, transform: { x: 420, y: 200 } },
-    { id: "line", path: { route: ["a", [250, 100], [250, 200], "b"], smooth: false, radius: 15, gap: 4 }, stroke: { h: 0, s: 0, l: 60, width: 2 } }
+    { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 210, s: 60, l: 35 }, stroke: { color: { h: 210, s: 70, l: 50 }, width: 2 }, transform: { x: 80, y: 100 } },
+    { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 0, s: 60, l: 35 }, stroke: { color: { h: 0, s: 70, l: 50 }, width: 2 }, transform: { x: 420, y: 200 } },
+    { id: "line", path: { route: ["a", [250, 100], [250, 200], "b"], smooth: false, radius: 15, gap: 4 }, stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 } }
   ]
 }`,
   },
@@ -514,7 +521,7 @@ export const v2Samples: V2Sample[] = [
       id: "row",
       rect: { w: 400, h: 80 },
       fill: { h: 0, s: 0, l: 12 },
-      stroke: { h: 0, s: 0, l: 25, width: 1 },
+      stroke: { color: { h: 0, s: 0, l: 25 }, width: 1 },
       layout: { type: "flex", direction: "row", gap: 10 },
       transform: { x: 200, y: 150 },
       children: [
@@ -556,14 +563,14 @@ export const v2Samples: V2Sample[] = [
     {
       id: "left",
       fill: { h: 210, s: 30, l: 15 },
-      stroke: { h: 210, s: 50, l: 40, width: 1 },
+      stroke: { color: { h: 210, s: 50, l: 40 }, width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 120, y: 150 }
     },
     {
       id: "right",
       fill: { h: 0, s: 30, l: 15 },
-      stroke: { h: 0, s: 50, l: 40, width: 1 },
+      stroke: { color: { h: 0, s: 50, l: 40 }, width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 350, y: 150 }
     },
@@ -618,7 +625,7 @@ export const v2Samples: V2Sample[] = [
     dsl: `{
   objects: [
     { id: "cam", camera: { look: [300, 200], zoom: 1 } },
-    { id: "outer", rect: { w: 400, h: 300, radius: 12 }, stroke: { h: 210, s: 50, l: 40, width: 2 }, transform: { x: 300, y: 200 } },
+    { id: "outer", rect: { w: 400, h: 300, radius: 12 }, stroke: { color: { h: 210, s: 50, l: 40 }, width: 2 }, transform: { x: 300, y: 200 } },
     { id: "inner", rect: { w: 120, h: 80, radius: 8 }, fill: { h: 160, s: 60, l: 45 }, transform: { x: 300, y: 200 } },
     { id: "dot", ellipse: { rx: 10, ry: 10 }, fill: { h: 40, s: 80, l: 55 }, transform: { x: 300, y: 200 } }
   ],
