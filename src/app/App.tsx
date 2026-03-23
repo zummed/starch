@@ -368,7 +368,7 @@ export default function App() {
       }}>
         <button
           onClick={() => {
-            const newFormat = (activeTab.viewFormat || 'json5') === 'json5' ? 'dsl' : 'json5';
+            const newFormat = (activeTab.viewFormat || 'dsl') === 'json5' ? 'dsl' : 'json5';
             setTabs(prev => prev.map(t =>
               t.id === activeTabId ? { ...t, viewFormat: newFormat } : t
             ));
@@ -408,7 +408,7 @@ export default function App() {
         )}
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 9, color: '#4a4f59', marginRight: activeTab.closable ? 6 : 0 }}>
-          {(activeTab.viewFormat || 'json5') === 'json5' ? 'JSON5' : 'DSL'}
+          {(activeTab.viewFormat || 'dsl') === 'json5' ? 'JSON5' : 'DSL'}
         </span>
         {activeTab.closable && (
           <button
@@ -427,7 +427,7 @@ export default function App() {
         <V2Editor
           value={activeDsl}
           onChange={updateTabDsl}
-          viewFormat={activeTab.viewFormat || 'json5'}
+          viewFormat={activeTab.viewFormat || 'dsl'}
           onViewFormatChange={(format) => {
             setTabs(prev => prev.map(t =>
               t.id === activeTabId ? { ...t, viewFormat: format } : t

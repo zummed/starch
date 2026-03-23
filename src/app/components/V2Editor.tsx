@@ -318,7 +318,7 @@ interface V2EditorProps {
   onNodeFormatsChange?: (formats: Record<string, 'inline' | 'block'>) => void;
 }
 
-export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatChange, nodeFormats, onNodeFormatsChange }: V2EditorProps) {
+export function V2Editor({ value, onChange, viewFormat = 'dsl', onViewFormatChange, nodeFormats, onNodeFormatsChange }: V2EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
