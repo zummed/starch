@@ -14,7 +14,7 @@ import { autocompletion, type CompletionContext, type CompletionResult } from '@
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
 import { starchTheme, starchHighlight } from '../../editor/theme';
 import { findValueSpan, formatValue } from '../../editor/textReplace';
-import { findDslValueSpan, extractDslValue, formatDslValue } from '../../editor/dslTextReplace';
+import { resolveDslClick, applyDslPopupChange, type DslClickTarget } from '../../editor/dslClickTarget';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
 import { getCursorContext } from '../../editor/cursorPath';
@@ -347,6 +347,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
   // Property popup state
   const [popup, setPopup] = useState<{
     schemaPath: string;
+    target?: DslClickTarget; // only present in DSL mode — fully resolved click target
     dslPath: string;
     key: string;       // the property key clicked on (e.g., "h", "radius")
     cursorPos: number;  // cursor offset in the text, for finding the value span
@@ -409,9 +410,29 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     if (pos === null) return;
 
     const doc = view.state.doc.toString();
-    const ctx = formatRef.current === 'dsl'
-      ? getDslCursorContext(doc, pos)
-      : getCursorContext(doc, pos);
+
+    // ─── DSL mode: use resolveDslClick (resolve-once architecture) ───
+    if (formatRef.current === 'dsl') {
+      const target = resolveDslClick(doc, pos);
+      if (!target) return;
+
+      const coords = view.coordsAtPos(pos);
+      if (coords) {
+        setPopup({
+          schemaPath: target.schemaPath,
+          target,
+          dslPath: '',
+          key: '',
+          cursorPos: pos,
+          value: target.value,
+          position: { x: coords.left, y: coords.bottom + 4 },
+        });
+      }
+      return;
+    }
+
+    // ─── JSON5 mode: existing cursor context pipeline (unchanged) ────
+    const ctx = getCursorContext(doc, pos);
 
     // Clicking on a property name (like "fill", "rect") — open compound popup
     if (ctx.isPropertyName && ctx.path) {
@@ -438,14 +459,8 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         if (schema) {
           const type = detectSchemaType(schema);
 
-          // In DSL mode, skip 'object' popups for geometry/compound keywords —
-          // their sub-properties (dimensions, radius=) are clickable individually.
-          // Color popups still work (fill/stroke keywords open the color picker).
-          const allowPopup = type === 'color' || (type === 'object' && formatRef.current !== 'dsl');
-          if (allowPopup) {
-            const currentValue = formatRef.current === 'dsl'
-              ? extractDslValue(doc, pos, clickedWord, schemaPath, type)
-              : extractValueAtCursor(doc, pos, type, clickedWord);
+          if (type === 'color' || type === 'object') {
+            const currentValue = extractValueAtCursor(doc, pos, type, clickedWord);
             const coords = view.coordsAtPos(pos);
             if (coords) {
               setPopup({
@@ -493,10 +508,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       // Show popup for types that have widgets
       if (['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) {
         const key = ctx.currentKey || schemaPath.split('.').pop() || '';
-        const currentValue = formatRef.current === 'dsl'
-          ? extractDslValue(doc, pos, key, schemaPath, type)
-          : extractValueAtCursor(doc, pos, type, key);
-
+        const currentValue = extractValueAtCursor(doc, pos, type, key);
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
@@ -697,60 +709,55 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     const doc = view.state.doc.toString();
     const isDsl = formatRef.current === 'dsl';
 
-    let span: { from: number; to: number } | null;
-    let replacement: string;
+    if (isDsl && popup.target) {
+      // DSL mode: use applyDslPopupChange with the resolved target
+      const newDoc = applyDslPopupChange(doc, popup.target, newValue);
 
-    if (isDsl) {
-      span = findDslValueSpan(doc, popup.cursorPos, popup.key, popup.schemaPath);
+      externalUpdate.current = true;
+      view.dispatch({
+        changes: { from: 0, to: doc.length, insert: newDoc },
+      });
+      externalUpdate.current = false;
 
-      if (!span) return;
+      // Re-parse DSL to update canonical JSON5
+      try {
+        const raw = parseDsl(newDoc);
+        const json5Text = JSON5.stringify(raw, null, 2);
+        json5TextRef.current = json5Text;
+        lastValidRawRef.current = raw;
+      } catch { /* keep last valid */ }
+      onChangeRef.current(json5TextRef.current);
 
-      // For dimensions (WxH), we need to replace the full token with updated WxH
-      if (['w', 'h', 'rx', 'ry'].includes(popup.key)) {
-        const dimText = doc.slice(span.from, span.to);
-        const dimMatch = dimText.match(/(\d+)x(\d+)/);
-        if (dimMatch) {
-          const oldW = parseInt(dimMatch[1], 10);
-          const oldH = parseInt(dimMatch[2], 10);
-          const numVal = Math.round(newValue as number);
-          if (popup.key === 'w' || popup.key === 'rx') {
-            replacement = `${numVal}x${oldH}`;
-          } else {
-            replacement = `${oldW}x${numVal}`;
-          }
-        } else {
-          replacement = formatDslValue(newValue, popup.key, popup.schemaPath);
-        }
-      } else if (typeof newValue === 'object' && newValue !== null && 'h' in newValue && 's' in newValue && 'l' in newValue) {
-        // Color object (HSL) — format as "H S L". Check for s and l too to avoid
-        // false-positives on rect objects which also have an 'h' (height) property.
-        const c = newValue as { h: number; s: number; l: number; a?: number };
-        replacement = `${Math.round(c.h)} ${Math.round(c.s)} ${Math.round(c.l)}`;
-        if (c.a !== undefined && c.a !== 1) replacement += ` a=${c.a}`;
-      } else {
-        replacement = formatDslValue(newValue, popup.key, popup.schemaPath);
-      }
+      // Re-resolve the click target at the same position for continued dragging
+      const newTarget = resolveDslClick(newDoc, popup.target.span.from + 1);
+      setPopup(prev => prev ? {
+        ...prev,
+        value: newValue,
+        target: newTarget ?? prev.target,
+        cursorPos: popup.target!.span.from + 1,
+      } : null);
     } else {
       // JSON5 mode — existing behavior
+      let span: { from: number; to: number } | null;
       span = findValueSpan(doc, popup.cursorPos, popup.key);
       if (!span && /^\d+$/.test(popup.key)) {
         span = findEnclosingValue(doc, popup.cursorPos);
       }
       if (!span) return;
-      replacement = formatValue(newValue);
+      const replacement = formatValue(newValue);
+
+      externalUpdate.current = true;
+      view.dispatch({
+        changes: { from: span.from, to: span.to, insert: replacement },
+      });
+      externalUpdate.current = false;
+
+      const newDoc = view.state.doc.toString();
+      onChangeRef.current(newDoc);
+
+      // Update popup state — place cursor inside the replacement
+      setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: span!.from + 1 } : null);
     }
-
-    externalUpdate.current = true;
-    view.dispatch({
-      changes: { from: span.from, to: span.to, insert: replacement },
-    });
-    externalUpdate.current = false;
-
-    const newDoc = view.state.doc.toString();
-    onChangeRef.current(isDsl ? json5TextRef.current : newDoc);
-
-    // Update popup state — place cursor inside the replacement
-    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: span!.from + 1 } : null);
   }, [popup]);
 
   return (
