@@ -24,6 +24,13 @@ const PATH_BOOLEANS = new Set(['closed', 'smooth']);
 const NODE_BOOLEANS = new Set(['active']);
 const ALL_BOOLEANS = new Set([...TEXT_BOOLEANS, ...PATH_BOOLEANS, ...NODE_BOOLEANS]);
 
+/** All keywords that are clickable node properties (not doc-level, not unknown). */
+const CLICKABLE_PROPS = new Set([
+  ...ALL_BOOLEANS,
+  ...GEOM_KEYWORDS,
+  'fill', 'stroke', 'opacity', 'visible', 'depth', 'slot',
+]);
+
 const TRANSFORM_PROPS = new Set(['rotation', 'scale', 'anchor', 'pathFollow', 'pathProgress', 'x', 'y']);
 const TEXT_PROPS = new Set(['size', 'lineHeight', 'align', 'content', 'bold', 'mono']);
 const RECT_PROPS = new Set(['w', 'h', 'radius']);
@@ -319,16 +326,8 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
         const wordStart = lineTextToCursor.match(/(\w+)$/);
         const wordEnd = fullText.slice(cursorOffset).match(/^(\w*)/);
         const fullWord = (wordStart ? wordStart[1] : '') + (wordEnd ? wordEnd[1] : '');
-        if (fullWord && ALL_BOOLEANS.has(fullWord)) {
+        if (fullWord && CLICKABLE_PROPS.has(fullWord)) {
           appendPropertyPath(parts, fullWord, info.geomType);
-          currentKey = fullWord;
-        } else if (fullWord === 'fill' || fullWord === 'stroke') {
-          // Clicking on the fill/stroke keyword → compound color path
-          parts.push(fullWord);
-          currentKey = fullWord;
-        } else if (fullWord && GEOM_KEYWORDS.has(fullWord)) {
-          // Clicking on a geometry keyword (rect, ellipse, text, etc.)
-          parts.push(fullWord);
           currentKey = fullWord;
         } else {
           isPropertyName = true;
