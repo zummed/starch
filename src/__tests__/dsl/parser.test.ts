@@ -408,4 +408,247 @@ box: rect 160x100 @primary at 200,150
     });
   });
 
+  // ══════════════════════════════════════════════════════════════
+  // ── Animation (Task 7) ─────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+
+  describe('animation', () => {
+    // ── Top-level animate block ──────────────────────────────────
+    describe('animate block header', () => {
+      it('parses duration', () => {
+        const result = parseDsl(`
+animate 3s
+`);
+        expect(result.animate.duration).toBe(3);
+        expect(result.animate.keyframes).toEqual([]);
+      });
+
+      it('parses loop flag', () => {
+        const result = parseDsl(`animate 3s loop`);
+        expect(result.animate.loop).toBe(true);
+      });
+
+      it('parses easing=name', () => {
+        const result = parseDsl(`animate 3s easing=easeInOut`);
+        expect(result.animate.easing).toBe('easeInOut');
+      });
+
+      it('parses autoKey flag', () => {
+        const result = parseDsl(`animate 3s autoKey`);
+        expect(result.animate.autoKey).toBe(true);
+      });
+
+      it('parses all header options together', () => {
+        const result = parseDsl(`animate 3s loop easing=easeInOut autoKey`);
+        expect(result.animate.duration).toBe(3);
+        expect(result.animate.loop).toBe(true);
+        expect(result.animate.easing).toBe('easeInOut');
+        expect(result.animate.autoKey).toBe(true);
+      });
+    });
+
+    // ── Flat keyframes (Form 1) ──────────────────────────────────
+    describe('flat keyframes', () => {
+      it('parses flat keyframes with numeric values', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  box.fill.h: 120
+  1.5  box.fill.h: 0
+`);
+        expect(result.animate.keyframes).toHaveLength(2);
+        expect(result.animate.keyframes[0]).toEqual({
+          time: 0,
+          changes: { 'box.fill.h': 120 },
+        });
+        expect(result.animate.keyframes[1]).toEqual({
+          time: 1.5,
+          changes: { 'box.fill.h': 0 },
+        });
+      });
+
+      it('parses flat keyframe with string value', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  cam.camera.look: all
+`);
+        expect(result.animate.keyframes[0].changes['cam.camera.look']).toBe('all');
+      });
+
+      it('parses flat keyframe with boolean value', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  box.visible: true
+  1.0  box.visible: false
+`);
+        expect(result.animate.keyframes[0].changes['box.visible']).toBe(true);
+        expect(result.animate.keyframes[1].changes['box.visible']).toBe(false);
+      });
+    });
+
+    // ── Per-keyframe easing ──────────────────────────────────────
+    describe('per-keyframe easing', () => {
+      it('parses easing on a change value', () => {
+        const result = parseDsl(`
+animate 3s
+  1.5  box.fill.h: 0 easing=bounce
+`);
+        expect(result.animate.keyframes[0].changes['box.fill.h']).toEqual({
+          value: 0,
+          easing: 'bounce',
+        });
+      });
+    });
+
+    // ── Scoped blocks (Form 2) ───────────────────────────────────
+    describe('scoped blocks', () => {
+      it('parses a scoped block with track paths', () => {
+        const result = parseDsl(`
+animate 3s
+  card.badge:
+    0.0  fill.h: 120
+    1.5  fill.h: 0
+`);
+        expect(result.animate.keyframes).toHaveLength(2);
+        expect(result.animate.keyframes[0]).toEqual({
+          time: 0,
+          changes: { 'card.badge.fill.h': 120 },
+        });
+        expect(result.animate.keyframes[1]).toEqual({
+          time: 1.5,
+          changes: { 'card.badge.fill.h': 0 },
+        });
+      });
+
+      it('parses a single-id scope block', () => {
+        const result = parseDsl(`
+animate 3s
+  box:
+    0.0  fill.h: 120
+`);
+        expect(result.animate.keyframes[0].changes['box.fill.h']).toBe(120);
+      });
+    });
+
+    // ── Relative time ────────────────────────────────────────────
+    describe('relative time', () => {
+      it('parses +N as relative time', () => {
+        const result = parseDsl(`
+animate 3s
+  +2.0  box.fill.h: 120
+`);
+        const kf = result.animate.keyframes[0];
+        expect(kf.plus).toBe(2);
+        expect(kf.changes['box.fill.h']).toBe(120);
+      });
+    });
+
+    // ── Chapters ─────────────────────────────────────────────────
+    describe('chapters', () => {
+      it('parses chapter declarations', () => {
+        const result = parseDsl(`
+animate 5s
+  chapter "Intro" at 0
+  chapter "Middle" at 2.5
+`);
+        expect(result.animate.chapters).toEqual([
+          { name: 'Intro', time: 0 },
+          { name: 'Middle', time: 2.5 },
+        ]);
+      });
+    });
+
+    // ── Effects ──────────────────────────────────────────────────
+    describe('effects', () => {
+      it('parses simple effect (no params)', () => {
+        const result = parseDsl(`
+animate 3s
+  1.5  card pulse
+`);
+        const kf = result.animate.keyframes[0];
+        expect(kf.time).toBe(1.5);
+        expect(kf.changes['card']).toBe('pulse');
+      });
+
+      it('parses effect with parameters', () => {
+        const result = parseDsl(`
+animate 3s
+  1.5  card flash amplitude=2
+`);
+        const kf = result.animate.keyframes[0];
+        expect(kf.changes['card']).toEqual({ effect: 'flash', amplitude: 2 });
+      });
+    });
+
+    // ── Multi-line keyframes (continuation lines) ────────────────
+    describe('continuation lines', () => {
+      it('parses continuation lines in a keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  cam.camera.look: all
+    cam.camera.zoom: 1
+`);
+        const kf = result.animate.keyframes[0];
+        expect(kf.time).toBe(0);
+        expect(kf.changes['cam.camera.look']).toBe('all');
+        expect(kf.changes['cam.camera.zoom']).toBe(1);
+      });
+    });
+
+    // ── Mixed scoped and flat entries ────────────────────────────
+    describe('mixed scoped and flat entries', () => {
+      it('interleaves scoped and flat keyframes', () => {
+        const result = parseDsl(`
+animate 5s
+  0.0  box.fill.h: 210
+  card.badge:
+    0.0  fill.h: 120
+    1.5  fill.h: 0
+  3.0  box.fill.h: 0
+`);
+        expect(result.animate.keyframes).toHaveLength(4);
+        expect(result.animate.keyframes[0]).toEqual({
+          time: 0,
+          changes: { 'box.fill.h': 210 },
+        });
+        expect(result.animate.keyframes[1]).toEqual({
+          time: 0,
+          changes: { 'card.badge.fill.h': 120 },
+        });
+        expect(result.animate.keyframes[2]).toEqual({
+          time: 1.5,
+          changes: { 'card.badge.fill.h': 0 },
+        });
+        expect(result.animate.keyframes[3]).toEqual({
+          time: 3,
+          changes: { 'box.fill.h': 0 },
+        });
+      });
+    });
+
+    // ── Complete animated scene ──────────────────────────────────
+    describe('complete animated scene', () => {
+      it('parses a full scene with objects and animation', () => {
+        const result = parseDsl(`
+name "Animated Demo"
+viewport 800x600
+
+box: rect 100x80 fill 210 70 45 at 100,100
+dot: ellipse 10x10 fill white at 300,200
+
+animate 3s loop
+  0.0  box.fill.h: 210
+  1.5  box.fill.h: 0
+  3.0  box.fill.h: 210
+  chapter "Start" at 0
+  chapter "End" at 3
+`);
+        expect(result.name).toBe('Animated Demo');
+        expect(result.objects).toHaveLength(2);
+        expect(result.animate.duration).toBe(3);
+        expect(result.animate.loop).toBe(true);
+        expect(result.animate.keyframes).toHaveLength(3);
+        expect(result.animate.chapters).toHaveLength(2);
+      });
+    });
+  });
 });

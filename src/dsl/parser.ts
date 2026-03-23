@@ -830,11 +830,305 @@ function parseFlatReferenceValue(s: TokenStream): any {
   throw new Error(`Unexpected token in flat reference value at line ${s.peek().line}`);
 }
 
-// ─── Animation Parsing (placeholder — implemented in Task 7) ────
+// ─── Animation Parsing ───────────────────────────────────────────
 
-function parseAnimateBlock(_s: TokenStream): any {
-  // Skip animate block for now; fully implemented in Task 7
-  return { keyframes: [] };
+function parseAnimateBlock(s: TokenStream): any {
+  const animate: any = { keyframes: [] };
+
+  // Parse duration: "3s" is an identifier like "3s"
+  if (s.is('identifier')) {
+    const durStr = s.peek().value;
+    const match = durStr.match(/^(\d+(?:\.\d+)?)s$/);
+    if (match) {
+      s.next();
+      animate.duration = parseFloat(match[1]);
+    }
+  } else if (s.is('number')) {
+    animate.duration = parseFloat(s.next().value);
+    // Optional 's' suffix
+    if (s.is('identifier', 's')) s.next();
+  }
+
+  // Parse top-level animate keywords on same line
+  while (!s.atEnd() && !s.is('newline') && !s.is('eof')) {
+    if (s.is('identifier', 'loop')) {
+      s.next();
+      animate.loop = true;
+      continue;
+    }
+    if (s.is('identifier', 'autoKey')) {
+      s.next();
+      animate.autoKey = true;
+      continue;
+    }
+    const kv = parseKeyValue(s);
+    if (kv) {
+      animate[kv[0]] = kv[1];
+      continue;
+    }
+    break;
+  }
+
+  s.skipNewlines();
+
+  // Parse indented keyframe content
+  if (s.is('indent')) {
+    s.next();
+    parseAnimateContent(s, animate, '');
+    if (s.is('dedent')) s.next();
+  }
+
+  return animate;
+}
+
+function parseAnimateContent(s: TokenStream, animate: any, scopePrefix: string): void {
+  while (!s.atEnd() && !s.is('dedent') && !s.is('eof')) {
+    s.skipNewlines();
+    if (s.is('dedent') || s.is('eof')) break;
+
+    // Chapter: "chapter" "Name" at N
+    if (s.is('identifier', 'chapter')) {
+      s.next();
+      const name = s.expect('string').value;
+      s.expect('identifier'); // 'at'
+      const time = parseFloat(s.expect('number').value);
+      if (!animate.chapters) animate.chapters = [];
+      animate.chapters.push({ name, time });
+      s.skipNewlines();
+      continue;
+    }
+
+    // Relative time: +N
+    if (s.is('plus')) {
+      s.next();
+      const timeVal = parseFloat(s.expect('number').value);
+      const kf = parseKeyframeLine(s, scopePrefix);
+      kf.plus = timeVal;
+      // Set time to 0 as placeholder; the plus field indicates relative
+      if (kf.time === undefined) kf.time = 0;
+      animate.keyframes.push(kf);
+      s.skipNewlines();
+      // Check for continuation lines
+      parseContinuationLines(s, kf, scopePrefix);
+      continue;
+    }
+
+    // Timestamp: a number at the start
+    if (s.is('number')) {
+      const time = parseFloat(s.next().value);
+      const kf = parseKeyframeLine(s, scopePrefix);
+      kf.time = time;
+      animate.keyframes.push(kf);
+      s.skipNewlines();
+      // Check for continuation lines
+      parseContinuationLines(s, kf, scopePrefix);
+      continue;
+    }
+
+    // Scoped block: identifier + optional dots + colon, no timestamp
+    // e.g. "card.badge:" — identified by having a colon but no preceding timestamp
+    if (s.is('identifier')) {
+      const scopeResult = tryParseScopeBlock(s, animate, scopePrefix);
+      if (scopeResult) {
+        continue;
+      }
+    }
+
+    // Skip unknown
+    s.next();
+    s.skipNewlines();
+  }
+}
+
+function tryParseScopeBlock(s: TokenStream, animate: any, parentScope: string): boolean {
+  if (!s.is('identifier')) return false;
+
+  // Look ahead: identifier (dot identifier)* colon newline
+  const tokens = (s as any).tokens;
+  let pos = (s as any).pos;
+  const scopeParts: string[] = [];
+
+  // Gather identifier.dot.identifier... pattern
+  while (pos < tokens.length) {
+    if (tokens[pos].type !== 'identifier') break;
+    scopeParts.push(tokens[pos].value);
+    pos++;
+    if (pos < tokens.length && tokens[pos].type === 'dot') {
+      pos++;
+    } else {
+      break;
+    }
+  }
+
+  if (pos >= tokens.length || tokens[pos].type !== 'colon') return false;
+  pos++; // skip colon
+  // A scope block has a colon followed by newline/eof (no inline content)
+  if (pos < tokens.length && tokens[pos].type !== 'newline' && tokens[pos].type !== 'eof') {
+    return false;
+  }
+
+  // It IS a scope block. Consume the tokens.
+  const parts: string[] = [];
+  parts.push(s.next().value); // first identifier
+  while (s.is('dot')) {
+    s.next(); // dot
+    parts.push(s.expect('identifier').value);
+  }
+  s.expect('colon');
+
+  const newScope = parentScope ? parentScope + '.' + parts.join('.') : parts.join('.');
+
+  s.skipNewlines();
+
+  // Parse indented content with the new scope
+  if (s.is('indent')) {
+    s.next();
+    parseAnimateContent(s, animate, newScope);
+    if (s.is('dedent')) s.next();
+  }
+
+  return true;
+}
+
+function parseKeyframeLine(s: TokenStream, scopePrefix: string): any {
+  const kf: any = { changes: {} };
+
+  // Check if there is a colon on this line (property change vs effect)
+  const hasColon = lineHasColon(s);
+
+  if (hasColon) {
+    // Property change: track.path: value
+    const trackPath = parseTrackPath(s, scopePrefix);
+    s.expect('colon');
+    const value = parseKeyframeValue(s);
+
+    // Check for per-change easing: easing=X
+    let easing: string | undefined;
+    if (s.is('identifier', 'easing') && s.peek(1).type === 'equals') {
+      s.next(); s.next();
+      easing = s.expect('identifier').value;
+    }
+
+    if (easing) {
+      kf.changes[trackPath] = { value, easing };
+    } else {
+      kf.changes[trackPath] = value;
+    }
+
+    // Check for keyframe-level easing too
+    while (!s.atEnd() && !s.is('newline') && !s.is('eof') && !s.is('dedent')) {
+      if (s.is('identifier', 'easing') && s.peek(1).type === 'equals') {
+        s.next(); s.next();
+        kf.easing = s.expect('identifier').value;
+      } else {
+        break;
+      }
+    }
+  } else {
+    // Effect syntax: nodeId effectName [params]
+    const targetId = parseTrackPath(s, scopePrefix);
+
+    if (s.is('identifier') && !s.is('identifier', 'easing')) {
+      const effectName = s.next().value;
+
+      // Check for effect params (key=value)
+      const params: any = {};
+      let hasParams = false;
+      while (!s.atEnd() && !s.is('newline') && !s.is('eof') && !s.is('dedent')) {
+        const kv = parseKeyValue(s);
+        if (kv) {
+          params[kv[0]] = kv[1];
+          hasParams = true;
+        } else {
+          break;
+        }
+      }
+
+      if (hasParams) {
+        kf.changes[targetId] = { effect: effectName, ...params };
+      } else {
+        kf.changes[targetId] = effectName;
+      }
+    }
+
+    // Check for per-keyframe easing
+    if (s.is('identifier', 'easing') && s.peek(1).type === 'equals') {
+      s.next(); s.next();
+      kf.easing = s.expect('identifier').value;
+    }
+  }
+
+  return kf;
+}
+
+function parseContinuationLines(s: TokenStream, kf: any, scopePrefix: string): void {
+  // Continuation lines are indented past the timestamp column
+  if (s.is('indent')) {
+    s.next();
+    while (!s.atEnd() && !s.is('dedent') && !s.is('eof')) {
+      s.skipNewlines();
+      if (s.is('dedent') || s.is('eof')) break;
+
+      if (lineHasColon(s)) {
+        const trackPath = parseTrackPath(s, scopePrefix);
+        s.expect('colon');
+        const value = parseKeyframeValue(s);
+
+        let easing: string | undefined;
+        if (s.is('identifier', 'easing') && s.peek(1).type === 'equals') {
+          s.next(); s.next();
+          easing = s.expect('identifier').value;
+        }
+
+        if (easing) {
+          kf.changes[trackPath] = { value, easing };
+        } else {
+          kf.changes[trackPath] = value;
+        }
+      } else {
+        break;
+      }
+      s.skipNewlines();
+    }
+    if (s.is('dedent')) s.next();
+  }
+}
+
+function lineHasColon(s: TokenStream): boolean {
+  const tokens = (s as any).tokens;
+  let pos = (s as any).pos;
+  while (pos < tokens.length) {
+    const tok = tokens[pos];
+    if (tok.type === 'newline' || tok.type === 'eof' || tok.type === 'indent' || tok.type === 'dedent') break;
+    if (tok.type === 'colon') return true;
+    pos++;
+  }
+  return false;
+}
+
+function parseTrackPath(s: TokenStream, scopePrefix: string): string {
+  let path = '';
+  if (scopePrefix) {
+    path = scopePrefix + '.';
+  }
+  path += s.expect('identifier').value;
+  while (s.is('dot')) {
+    s.next();
+    path += '.' + s.expect('identifier').value;
+  }
+  return path;
+}
+
+function parseKeyframeValue(s: TokenStream): any {
+  if (s.is('number')) return parseFloat(s.next().value);
+  if (s.is('string')) return s.next().value;
+  if (s.is('identifier', 'true')) { s.next(); return true; }
+  if (s.is('identifier', 'false')) { s.next(); return false; }
+  if (s.is('parenOpen')) return parseTuple(s);
+  if (s.is('braceOpen')) return parseJsonEscapeHatch(s);
+  if (s.is('identifier')) return s.next().value;
+
+  throw new Error(`Expected keyframe value at line ${s.peek().line}`);
 }
 
 // ─── Flat Reference Detection ────────────────────────────────────
