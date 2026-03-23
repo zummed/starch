@@ -9,48 +9,49 @@ export const EasingNameSchema = z.enum([
   'easeInBack', 'easeOutBack',
   'bounce', 'elastic', 'spring',
   'snap', 'step',
-]);
+]).describe('Easing function name (string)');
 
 export const PropertyChangeSchema = z.object({
-  value: z.union([z.number(), z.string(), z.boolean()]).describe('Target value'),
-  easing: EasingNameSchema.describe('Per-property easing override').optional(),
+  value: z.union([z.number(), z.string(), z.boolean()]).describe('Target property value (number, string, or boolean)'),
+  easing: EasingNameSchema.describe('Per-property easing override (EasingName)').optional(),
 });
 
 export const ChangeValueSchema = z.union([
   z.number().describe('Direct numeric value'),
   z.string().describe('Direct string value'),
   z.boolean().describe('Direct boolean value'),
-  PropertyChangeSchema.describe('Value with per-property easing'),
-  z.record(z.string(), z.unknown()).describe('Sub-object shorthand (e.g., fill: { h, s, l })'),
+  z.array(z.unknown()).describe('Array value for multi-element properties like route'),
+  PropertyChangeSchema.describe('Value with per-property easing { value, easing? }'),
+  z.record(z.string(), z.unknown()).describe('Sub-object shorthand (e.g., fill: { h: 180, s: 50, l: 60 })'),
 ]);
 
 export const KeyframeBlockSchema = z.object({
-  time: z.number().min(0).describe('Absolute time (seconds)'),
-  plus: z.number().describe('Relative time offset').optional(),
-  delay: z.number().min(0).describe('Delay before this keyframe').optional(),
-  easing: EasingNameSchema.describe('Block-level easing').optional(),
-  autoKey: z.boolean().describe('Hold values between blocks').optional(),
-  changes: z.record(z.string(), ChangeValueSchema).describe('Property changes — keys are track paths like "box.fill.h"'),
+  time: z.number().min(0).describe('Absolute time in seconds (number, >= 0)'),
+  plus: z.number().describe('Relative time offset added to previous keyframe time (number)').optional(),
+  delay: z.number().min(0).describe('Delay before this keyframe starts in seconds (number, >= 0)').optional(),
+  easing: EasingNameSchema.describe('Default easing for all changes in this block (EasingName)').optional(),
+  autoKey: z.boolean().describe('When true, hold property values between keyframe blocks (boolean)').optional(),
+  changes: z.record(z.string(), ChangeValueSchema).describe('Property changes — keys are dot-separated track paths like "box.fill.h"'),
 });
 
 export const ChapterSchema = z.object({
-  name: z.string().describe('Chapter name'),
-  time: z.number().min(0).describe('Chapter time (seconds)'),
+  name: z.string().describe('Chapter display name (string)'),
+  time: z.number().min(0).describe('Chapter start time in seconds (number, >= 0)'),
 });
 
 export const AnimConfigSchema = z.object({
-  duration: z.number().min(0).describe('Animation duration (seconds)'),
-  loop: z.boolean().describe('Loop animation').optional(),
-  autoKey: z.boolean().describe('Global autoKey default').optional(),
-  easing: EasingNameSchema.describe('Global default easing').optional(),
-  keyframes: z.array(KeyframeBlockSchema).describe('Keyframe blocks'),
-  chapters: z.array(ChapterSchema).describe('Chapter markers').optional(),
+  duration: z.number().min(0).describe('Total animation duration in seconds (number, >= 0)'),
+  loop: z.boolean().describe('Loop animation continuously (boolean, default false)').optional(),
+  autoKey: z.boolean().describe('Global autoKey — hold values between blocks by default (boolean, default false)').optional(),
+  easing: EasingNameSchema.describe('Global default easing applied to all keyframes (EasingName, default "linear")').optional(),
+  keyframes: z.array(KeyframeBlockSchema).describe('Ordered list of keyframe blocks'),
+  chapters: z.array(ChapterSchema).describe('Named chapter markers for timeline navigation').optional(),
 });
 
 export const TrackKeyframeSchema = z.object({
-  time: z.number().min(0),
-  value: z.unknown(),
-  easing: EasingNameSchema,
+  time: z.number().min(0).describe('Keyframe time in seconds (number, >= 0)'),
+  value: z.unknown().describe('Keyframe value (any type)'),
+  easing: EasingNameSchema.describe('Easing function for interpolation to this keyframe'),
 });
 
 // ─── Derived Types ──────────────────────────────────────────────
