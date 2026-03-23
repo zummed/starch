@@ -1,16 +1,20 @@
 /**
- * ModelManager: coordinates the model lifecycle.
- * - Holds real model (valid Node[]) and staging state
- * - Text input flows through staging → validation → promotion
- * - Direct model mutations (from popups) re-serialize to text
- * - Canvas always renders the real model
+ * ModelManager: single source of truth for the scene model.
+ *
+ * Two edit paths:
+ *   setText(text, format) — from editor typing. Parses text, updates _json and _model.
+ *                           Does NOT emit textChange (editor already has the text).
+ *   updateProperty(path, value) — from popups. Mutates _json, regenerates text,
+ *                                  emits both modelChange and textChange.
  */
 import JSON5 from 'json5';
-import type { Node, NodeInput } from '../types/node';
+import type { Node } from '../types/node';
 import type { AnimConfig } from '../types/animation';
-import { parseScene, type ParsedScene } from '../parser/parser';
-import { parseDsl } from '../dsl/parser';
+import { parseScene } from '../parser/parser';
+import { parseDslWithHints } from '../dsl/parser';
 import { generateDsl } from '../dsl/generator';
+import type { FormatHints } from '../dsl/formatHints';
+import { emptyFormatHints } from '../dsl/formatHints';
 import type { ZodError } from 'zod';
 
 export interface ModelState {
@@ -25,7 +29,7 @@ export interface ModelState {
 
 type ModelChangeCallback = (state: ModelState) => void;
 type TextChangeCallback = (text: string) => void;
-type ValidationCallback = (errors: ZodError | null) => void;
+type ValidationCallback = (errors: ZodError | Error | null) => void;
 
 const EMPTY_STATE: ModelState = {
   nodes: [],
@@ -34,9 +38,11 @@ const EMPTY_STATE: ModelState = {
 };
 
 export class ModelManager {
-  private _realModel: ModelState = EMPTY_STATE;
-  private _text = '';
-  private _validationErrors: ZodError | null = null;
+  private _json: any = {};
+  private _model: ModelState = EMPTY_STATE;
+  private _formatHints: FormatHints = emptyFormatHints();
+  private _viewFormat: 'json5' | 'dsl' = 'json5';
+
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _debounceMs: number;
 
@@ -44,116 +50,77 @@ export class ModelManager {
   private _textListeners = new Set<TextChangeCallback>();
   private _validationListeners = new Set<ValidationCallback>();
 
-  // Track whether the last change came from text or model to avoid loops
-  private _updating = false;
-
-  // View format: JSON5 is always canonical in _text; DSL is a generated view
-  private _viewFormat: 'json5' | 'dsl' = 'json5';
-
-  // Last successfully parsed raw scene data (for DSL generation)
-  private _lastValidRaw: any = null;
-
   constructor(debounceMs = 100) {
     this._debounceMs = debounceMs;
   }
 
   // ── Getters ──
 
-  get realModel(): ModelState { return this._realModel; }
-  get text(): string { return this._text; }
-  get validationErrors(): ZodError | null { return this._validationErrors; }
+  get json(): any { return this._json; }
+  get formatHints(): FormatHints { return this._formatHints; }
+  get realModel(): ModelState { return this._model; }
   get viewFormat(): 'json5' | 'dsl' { return this._viewFormat; }
 
-  // ── Text input (from editor) ──
+  // ── setText (from editor typing) — debounced, does NOT emit textChange ──
 
-  setText(text: string): void {
-    if (this._updating) return;
-    this._text = text;
-
-    // Debounced parse → validate → promote
+  setText(text: string, format: 'json5' | 'dsl'): void {
+    if (this._debounceMs === 0) {
+      this._processText(text, format);
+      return;
+    }
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => {
-      this._parseAndPromote(text);
+      this._processText(text, format);
     }, this._debounceMs);
   }
 
-  /** Immediate parse without debounce (for initial load, sample selection) */
-  setTextImmediate(text: string): void {
-    if (this._updating) return;
-    this._text = text;
-    this._emitText(text);
-    this._parseAndPromote(text);
+  /** Immediate parse without debounce (for initial load, sample selection). */
+  setTextImmediate(text: string, format: 'json5' | 'dsl'): void {
+    this._processText(text, format);
   }
 
-  // ── Direct model mutation (from popups, visual builder) ──
+  // ── updateProperty (from popups) — mutates _json, emits modelChange + textChange ──
 
   updateProperty(path: string, value: unknown): void {
-    // Parse current text, apply the change, re-serialize
+    // If _json is empty, no-op
+    if (this._json == null || Object.keys(this._json).length === 0) return;
+
+    setNestedValue(this._json, path.split('.'), value);
+
     try {
-      const raw = JSON5.parse(this._text);
-      setNestedValue(raw, path.split('.'), value);
-      const newText = JSON5.stringify(raw, null, 2);
-      this._updating = true;
-      this._text = newText;
-      this._emitText(newText);
-      this._parseAndPromote(newText);
-      this._updating = false;
-    } catch {
-      // If current text is invalid, ignore the mutation
+      const jsonStr = JSON5.stringify(this._json, null, 2);
+      const scene = parseScene(jsonStr);
+      this._model = {
+        nodes: scene.nodes,
+        styles: scene.styles,
+        animate: scene.animate,
+        background: scene.background,
+        viewport: scene.viewport,
+        images: scene.images,
+        trackPaths: scene.trackPaths,
+      };
+      this._emitModel(this._model);
+      this._emitText(this.getDisplayText());
+    } catch (e) {
+      // If parse fails after mutation, still emit textChange so editor updates
+      this._emitText(this.getDisplayText());
     }
   }
 
-  // ── View Format (DSL ↔ JSON5) ──
+  // ── View Format ──
 
   setViewFormat(format: 'json5' | 'dsl'): void {
     this._viewFormat = format;
+    this._emitText(this.getDisplayText());
   }
 
-  /** Generate DSL text from the last valid model. */
-  getDslText(): string {
-    if (this._lastValidRaw) {
-      return generateDsl(this._lastValidRaw);
-    }
-    // Fallback: try to parse current JSON5 text
-    try {
-      const raw = JSON5.parse(this._text);
-      return generateDsl(raw);
-    } catch {
-      return '// Unable to generate DSL\n';
-    }
-  }
+  // ── Display Text ──
 
-  /** Get the display text for the current view format. */
   getDisplayText(): string {
     if (this._viewFormat === 'dsl') {
-      return this.getDslText();
+      return generateDsl(this._json, { formatHints: this._formatHints });
     }
-    return this._text;
-  }
-
-  /**
-   * Apply a DSL edit: parse DSL → serialize to JSON5 → update _text → promote.
-   * Called when the user edits in DSL mode.
-   */
-  applyDslEdit(dslText: string): void {
-    if (this._updating) return;
-
-    // Debounced: parse DSL, convert to JSON5, then promote
-    if (this._debounceTimer) clearTimeout(this._debounceTimer);
-    this._debounceTimer = setTimeout(() => {
-      try {
-        const raw = parseDsl(dslText);
-        const json5Text = JSON5.stringify(raw, null, 2);
-        this._text = json5Text;
-        this._parseAndPromote(json5Text);
-      } catch (e) {
-        // DSL parse failed — report as validation error but keep last valid model
-        if (e instanceof Error) {
-          this._validationErrors = null;
-          this._emitValidation(null);
-        }
-      }
-    }, this._debounceMs);
+    return JSON5.stringify(this._json, null, 2);
   }
 
   // ── Events ──
@@ -184,10 +151,23 @@ export class ModelManager {
 
   // ── Internal ──
 
-  private _parseAndPromote(text: string): void {
+  private _processText(text: string, format: 'json5' | 'dsl'): void {
     try {
-      const scene = parseScene(text);
-      this._realModel = {
+      if (format === 'json5') {
+        const parsed = JSON5.parse(text);
+        this._json = parsed;
+        // json5 path does NOT update formatHints
+      } else {
+        // DSL path: parse with hints
+        const { scene, formatHints } = parseDslWithHints(text);
+        this._json = scene;
+        this._formatHints = formatHints;
+      }
+
+      // parseScene expects a string — serialize _json
+      const jsonStr = JSON5.stringify(this._json, null, 2);
+      const scene = parseScene(jsonStr);
+      this._model = {
         nodes: scene.nodes,
         styles: scene.styles,
         animate: scene.animate,
@@ -196,29 +176,13 @@ export class ModelManager {
         images: scene.images,
         trackPaths: scene.trackPaths,
       };
-      // Store raw parsed data for DSL generation
-      try {
-        this._lastValidRaw = JSON5.parse(text);
-      } catch {
-        // If text was DSL (not JSON5), parse it as DSL for raw storage
-        try {
-          this._lastValidRaw = parseDsl(text);
-        } catch {
-          // Keep previous raw
-        }
-      }
-      this._validationErrors = null;
+
       this._emitValidation(null);
-      this._emitModel(this._realModel);
+      this._emitModel(this._model);
     } catch (e) {
-      // Parse failed — keep last valid model, report error
-      if (e instanceof Error && 'issues' in e) {
-        this._validationErrors = e as unknown as ZodError;
-        this._emitValidation(this._validationErrors);
-      } else {
-        // JSON5 parse error or other
-        this._validationErrors = null;
-        this._emitValidation(null);
+      // Parse failed — keep last valid _model and _formatHints
+      if (e instanceof Error) {
+        this._emitValidation(e);
       }
     }
   }
@@ -231,14 +195,14 @@ export class ModelManager {
     for (const cb of this._textListeners) cb(text);
   }
 
-  private _emitValidation(errors: ZodError | null): void {
+  private _emitValidation(errors: ZodError | Error | null): void {
     for (const cb of this._validationListeners) cb(errors);
   }
 }
 
-// ── Utility ──
+// ── Utilities ──
 
-function setNestedValue(obj: any, keys: string[], value: unknown): void {
+export function setNestedValue(obj: any, keys: string[], value: unknown): void {
   if (keys.length === 0) return;
   if (keys.length === 1) {
     obj[keys[0]] = value;
@@ -249,4 +213,14 @@ function setNestedValue(obj: any, keys: string[], value: unknown): void {
     obj[head] = {};
   }
   setNestedValue(obj[head], rest, value);
+}
+
+export function getNestedValue(obj: any, path: string): unknown {
+  const keys = path.split('.');
+  let current = obj;
+  for (const key of keys) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = current[key];
+  }
+  return current;
 }
