@@ -6,6 +6,7 @@ import { expandTemplates } from '../templates/registry';
 import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
+import { parseDsl } from '../dsl/parser';
 
 export interface ParsedScene {
   name?: string;
@@ -64,7 +65,9 @@ export function normalizeRoutes(nodes: Node[]): Node[] {
 export function parseScene(input: string): ParsedScene {
   registerBuiltinTemplates();
 
-  const raw = JSON5.parse(input);
+  const trimmed = input.trim();
+  const isDsl = trimmed.length === 0 || trimmed[0] !== '{';
+  const raw = isDsl ? parseDsl(trimmed) : JSON5.parse(trimmed);
 
   const name = typeof raw.name === 'string' ? raw.name : undefined;
   const description = typeof raw.description === 'string' ? raw.description : undefined;
