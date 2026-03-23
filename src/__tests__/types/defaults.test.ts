@@ -3,8 +3,8 @@ import { StrokeSchema, DashSchema } from '../../types/properties';
 import { TextGeomSchema } from '../../types/node';
 
 describe('StrokeSchema defaults', () => {
-  it('parses without width (width is optional)', () => {
-    const result = StrokeSchema.safeParse({ h: 0, s: 0, l: 60 });
+  it('parses with color only (width is optional)', () => {
+    const result = StrokeSchema.safeParse({ color: 'red' });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.width).toBeUndefined();
@@ -12,7 +12,7 @@ describe('StrokeSchema defaults', () => {
   });
 
   it('accepts explicit width', () => {
-    const result = StrokeSchema.safeParse({ h: 0, s: 0, l: 60, width: 3 });
+    const result = StrokeSchema.safeParse({ color: { h: 0, s: 0, l: 60 }, width: 3 });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.width).toBe(3);
@@ -20,8 +20,23 @@ describe('StrokeSchema defaults', () => {
   });
 
   it('rejects width above max', () => {
-    const result = StrokeSchema.safeParse({ h: 0, s: 0, l: 60, width: 25 });
+    const result = StrokeSchema.safeParse({ color: { h: 0, s: 0, l: 60 }, width: 25 });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts HSL color object', () => {
+    const result = StrokeSchema.safeParse({ color: { h: 210, s: 80, l: 50 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts RGB color object', () => {
+    const result = StrokeSchema.safeParse({ color: { r: 255, g: 0, b: 0 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts string color', () => {
+    const result = StrokeSchema.safeParse({ color: '#ff0000' });
+    expect(result.success).toBe(true);
   });
 });
 

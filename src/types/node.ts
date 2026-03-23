@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
-  HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
+  ColorSchema, StrokeSchema, TransformSchema, DashSchema,
   LayoutSchema, LayoutHintSchema,
 } from './properties';
-import type { HslColor, Stroke, Transform, Dash, Layout, LayoutHint } from './properties';
+import type { Color, Stroke, Transform, Dash, Layout, LayoutHint } from './properties';
 
 // ─── Geometry Schemas ───────────────────────────────────────────
 
@@ -86,8 +86,8 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   image: ImageGeomSchema.describe('Image geometry — src URL, w, h, fit mode').optional(),
 
   // Visual properties
-  fill: HslColorSchema.describe('Fill color in HSL — h, s, l, optional a (inherits from parent)').optional(),
-  stroke: StrokeSchema.describe('Stroke color and width in HSL — h, s, l, optional a, width (inherits from parent)').optional(),
+  fill: ColorSchema.describe('Fill color — string, RGB, HSL, named+alpha, or hex+alpha (inherits from parent)').optional(),
+  stroke: StrokeSchema.describe('Stroke — { color, width? } (inherits from parent)').optional(),
   opacity: z.number().min(0).max(1).describe('Node opacity, multiplied with parent (number, 0-1, default 1)').optional(),
 
   // Transform
@@ -130,7 +130,7 @@ export interface NodeInput {
   text?: TextGeom;
   path?: PathGeom;
   image?: ImageGeom;
-  fill?: HslColor;
+  fill?: Color;
   stroke?: Stroke;
   opacity?: number;
   transform?: Transform;
@@ -156,7 +156,7 @@ export interface Node {
   text?: TextGeom;
   path?: PathGeom;
   image?: ImageGeom;
-  fill?: HslColor;
+  fill?: Color;
   stroke?: Stroke;
   opacity?: number;
   transform?: Transform;

@@ -1,4 +1,6 @@
-import type { HslColor } from './properties';
+import type { HslColor, RgbColor, Color } from './properties';
+
+// ─── CSS Named Colours ──────────────────────────────────────────
 
 const CSS_NAMED_COLOURS: Record<string, string> = {
   aliceblue: '#f0f8ff', antiquewhite: '#faebd7', aqua: '#00ffff', aquamarine: '#7fffd4',
@@ -43,33 +45,9 @@ const CSS_NAMED_COLOURS: Record<string, string> = {
   whitesmoke: '#f5f5f5', yellow: '#ffff00', yellowgreen: '#9acd32',
 };
 
-function resolveColour(input: string): string {
-  const lower = input.toLowerCase().trim();
-  if (CSS_NAMED_COLOURS[lower]) return CSS_NAMED_COLOURS[lower];
-  if (/^#[0-9a-f]{6}$/i.test(lower)) return lower;
-  if (/^#[0-9a-f]{3}$/i.test(lower)) {
-    const [, r, g, b] = lower.match(/^#(.)(.)(.)$/)!;
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  if (input.trim()) console.warn(`[starch] Unknown colour: "${input}"`);
-  return input;
-}
+// ─── Low-level Converters ───────────────────────────────────────
 
-interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
-
-function isHsl(value: unknown): value is HslColor {
-  return typeof value === 'object' && value !== null && 'h' in value && 's' in value && 'l' in value;
-}
-
-function isRgb(value: unknown): value is RgbColor {
-  return typeof value === 'object' && value !== null && 'r' in value && 'g' in value && 'b' in value;
-}
-
-function rgbToHsl(r: number, g: number, b: number): HslColor {
+export function rgbToHsl(r: number, g: number, b: number): HslColor {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const l = (max + min) / 2;
@@ -83,26 +61,202 @@ function rgbToHsl(r: number, g: number, b: number): HslColor {
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  h /= 360; s /= 100; l /= 100;
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
+  }
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return {
+    r: Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    g: Math.round(hue2rgb(p, q, h) * 255),
+    b: Math.round(hue2rgb(p, q, h - 1/3) * 255),
+  };
+}
+
+export function hexToRgb(hex: string): [number, number, number] {
   hex = hex.replace('#', '');
   if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
   const n = parseInt(hex, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-export function parseColor(input: unknown): HslColor {
-  if (isHsl(input)) return input;
-  if (isRgb(input)) return rgbToHsl(input.r, input.g, input.b);
-  if (typeof input === 'string') {
-    const resolved = resolveColour(input);
-    if (!resolved.startsWith('#')) {
-      throw new Error(`Unrecognized color: ${input}`);
-    }
-    const [r, g, b] = hexToRgb(resolved);
-    return rgbToHsl(r, g, b);
-  }
-  throw new Error(`Invalid color input: ${JSON.stringify(input)}`);
+// ─── Named Color Utilities ──────────────────────────────────────
+
+/**
+ * Resolve a CSS named color to an RGB object.
+ * Returns null if the name is not recognized.
+ */
+export function resolveNamedColor(name: string): RgbColor | null {
+  const hex = CSS_NAMED_COLOURS[name.toLowerCase().trim()];
+  if (!hex) return null;
+  const [r, g, b] = hexToRgb(hex);
+  return { r, g, b };
 }
+
+/**
+ * Reverse lookup: find a CSS color name for an RGB value.
+ * Returns null if no exact match.
+ */
+export function rgbToName(color: RgbColor): string | null {
+  // Build hex string from RGB
+  const hex = '#' + [color.r, color.g, color.b]
+    .map(c => c.toString(16).padStart(2, '0'))
+    .join('');
+  for (const [name, value] of Object.entries(CSS_NAMED_COLOURS)) {
+    // CSS_NAMED_COLOURS stores as lowercase 6-digit hex
+    if (value === hex) return name;
+  }
+  return null;
+}
+
+// ─── Type Guard ─────────────────────────────────────────────────
+
+/**
+ * Runtime type guard for the Color union type.
+ */
+export function isColor(value: unknown): value is Color {
+  if (typeof value === 'string') return true;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const obj = value as Record<string, unknown>;
+  // RGB
+  if ('r' in obj && 'g' in obj && 'b' in obj) return true;
+  // HSL
+  if ('h' in obj && 's' in obj && 'l' in obj) return true;
+  // Named + alpha
+  if ('name' in obj && 'a' in obj) return true;
+  // Hex + alpha
+  if ('hex' in obj && 'a' in obj) return true;
+  return false;
+}
+
+// ─── Color Converters ───────────────────────────────────────────
+
+/**
+ * Convert any Color to HSL.
+ */
+export function colorToHsl(color: Color): HslColor {
+  if (typeof color === 'string') {
+    if (color.startsWith('#')) {
+      const [r, g, b] = hexToRgb(color);
+      return rgbToHsl(r, g, b);
+    }
+    const rgb = resolveNamedColor(color);
+    if (!rgb) throw new Error(`Unrecognized color: ${color}`);
+    return rgbToHsl(rgb.r, rgb.g, rgb.b);
+  }
+
+  if (typeof color !== 'object' || color === null) {
+    throw new Error(`Invalid color input: ${JSON.stringify(color)}`);
+  }
+
+  // HSL passthrough
+  if ('h' in color && 's' in color && 'l' in color) {
+    const hsl = color as HslColor;
+    const result: HslColor = { h: hsl.h, s: hsl.s, l: hsl.l };
+    if (hsl.a !== undefined) result.a = hsl.a;
+    return result;
+  }
+
+  // RGB
+  if ('r' in color && 'g' in color && 'b' in color) {
+    const rgb = color as RgbColor;
+    const result = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    if (rgb.a !== undefined) result.a = rgb.a;
+    return result;
+  }
+
+  // Named + alpha
+  if ('name' in color && 'a' in color) {
+    const named = color as { name: string; a: number };
+    const rgb = resolveNamedColor(named.name);
+    if (!rgb) throw new Error(`Unrecognized color name: ${named.name}`);
+    const result = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    result.a = named.a;
+    return result;
+  }
+
+  // Hex + alpha
+  if ('hex' in color && 'a' in color) {
+    const hexAlpha = color as { hex: string; a: number };
+    const [r, g, b] = hexToRgb(hexAlpha.hex);
+    const result = rgbToHsl(r, g, b);
+    result.a = hexAlpha.a;
+    return result;
+  }
+
+  throw new Error(`Invalid color input: ${JSON.stringify(color)}`);
+}
+
+/**
+ * Convert any Color to RGBA for rendering.
+ */
+export function colorToRgba(color: Color): { r: number; g: number; b: number; a: number } {
+  if (typeof color === 'string') {
+    if (color.startsWith('#')) {
+      const [r, g, b] = hexToRgb(color);
+      return { r, g, b, a: 1 };
+    }
+    const rgb = resolveNamedColor(color);
+    if (!rgb) throw new Error(`Unrecognized color: ${color}`);
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 };
+  }
+
+  if (typeof color !== 'object' || color === null) {
+    throw new Error(`Invalid color input: ${JSON.stringify(color)}`);
+  }
+
+  // RGB
+  if ('r' in color && 'g' in color && 'b' in color) {
+    const rgb = color as RgbColor;
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: rgb.a ?? 1 };
+  }
+
+  // HSL
+  if ('h' in color && 's' in color && 'l' in color) {
+    const hsl = color as HslColor;
+    const { r, g, b } = hslToRgb(hsl.h, hsl.s, hsl.l);
+    return { r, g, b, a: hsl.a ?? 1 };
+  }
+
+  // Named + alpha
+  if ('name' in color && 'a' in color) {
+    const named = color as { name: string; a: number };
+    const rgb = resolveNamedColor(named.name);
+    if (!rgb) throw new Error(`Unrecognized color name: ${named.name}`);
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: named.a };
+  }
+
+  // Hex + alpha
+  if ('hex' in color && 'a' in color) {
+    const hexAlpha = color as { hex: string; a: number };
+    const [r, g, b] = hexToRgb(hexAlpha.hex);
+    return { r, g, b, a: hexAlpha.a };
+  }
+
+  throw new Error(`Invalid color input: ${JSON.stringify(color)}`);
+}
+
+// ─── Backward Compatibility ─────────────────────────────────────
+
+/**
+ * @deprecated Use colorToHsl instead
+ */
+export function parseColor(input: unknown): HslColor {
+  return colorToHsl(input as Color);
+}
+
+// ─── Interpolation ──────────────────────────────────────────────
 
 export function lerpHsl(a: HslColor, b: HslColor, t: number): HslColor {
   if (t <= 0) return { ...a };
@@ -116,9 +270,20 @@ export function lerpHsl(a: HslColor, b: HslColor, t: number): HslColor {
   if (h < 0) h += 360;
   if (h >= 360) h -= 360;
 
-  return {
+  const result: HslColor = {
     h: Math.round(h),
     s: Math.round(a.s + (b.s - a.s) * t),
     l: Math.round(a.l + (b.l - a.l) * t),
   };
+
+  // Alpha interpolation
+  const hasAlphaA = a.a !== undefined;
+  const hasAlphaB = b.a !== undefined;
+  if (hasAlphaA || hasAlphaB) {
+    const alphaA = a.a ?? 1;
+    const alphaB = b.a ?? 1;
+    result.a = alphaA + (alphaB - alphaA) * t;
+  }
+
+  return result;
 }

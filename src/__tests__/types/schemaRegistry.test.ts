@@ -68,19 +68,24 @@ describe('getAvailableProperties', () => {
     expect(names).toContain('radius');
   });
 
-  it('returns fill properties (HSL)', () => {
+  it('returns empty for fill (Color union)', () => {
+    // fill is now a Color union (string | RGB | HSL | named+alpha | hex+alpha)
+    // getAvailableProperties returns [] for non-object schemas
     const props = getAvailableProperties('fill');
+    expect(props).toEqual([]);
+  });
+
+  it('returns stroke properties', () => {
+    const props = getAvailableProperties('stroke');
     const names = props.map(p => p.name);
-    expect(names).toContain('h');
-    expect(names).toContain('s');
-    expect(names).toContain('l');
-    expect(names).toContain('a');
+    expect(names).toContain('color');
+    expect(names).toContain('width');
   });
 
   it('includes descriptions', () => {
-    const props = getAvailableProperties('fill');
-    const hProp = props.find(p => p.name === 'h');
-    expect(hProp?.description).toContain('Hue');
+    const props = getAvailableProperties('stroke');
+    const colorProp = props.find(p => p.name === 'color');
+    expect(colorProp?.description).toContain('color');
   });
 
   it('marks required vs optional', () => {
