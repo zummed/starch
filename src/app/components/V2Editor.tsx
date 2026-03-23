@@ -13,6 +13,7 @@ import { bracketMatching } from '@codemirror/language';
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
 import { starchTheme, starchHighlight } from '../../editor/theme';
+import { dslLanguage, dslHighlight, dslInteractiveTheme } from '../../editor/dslLanguage';
 import { findValueSpan, formatValue } from '../../editor/textReplace';
 import { resolveDslClick, applyDslPopupChange, type DslClickTarget } from '../../editor/dslClickTarget';
 import { parseScene } from '../../parser/parser';
@@ -544,8 +545,8 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     () => {
       const isDsl = formatRef.current === 'dsl';
       return [
-        // Language: JSON for JSON5 mode, nothing for DSL mode
-        langCompartment.current.of(isDsl ? [] : json()),
+        // Language: JSON for JSON5 mode, DSL language for DSL mode
+        langCompartment.current.of(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : json()),
         starchTheme,
         starchHighlight,
         lineNumbers(),
@@ -711,7 +712,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     const isDsl = newFormat === 'dsl';
     view.dispatch({
       effects: [
-        langCompartment.current.reconfigure(isDsl ? [] : json()),
+        langCompartment.current.reconfigure(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : json()),
         linterCompartment.current.reconfigure(isDsl ? dslEditorLinter : v2EditorLinter),
         completionCompartment.current.reconfigure(
           autocompletion({
