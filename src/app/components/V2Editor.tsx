@@ -276,9 +276,11 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
   const viewRef = useRef<EditorView | null>(null);
   const externalDispatch = useRef(false);
 
-  // View format tracking
+  // Ref tracking — closures baked into CodeMirror extensions use these
   const formatRef = useRef(viewFormat);
   formatRef.current = viewFormat;
+  const modelManagerRef = useRef(modelManager);
+  modelManagerRef.current = modelManager;
 
   // CodeMirror compartments for dynamic reconfiguration
   const langCompartment = useRef(new Compartment());
@@ -299,38 +301,47 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
     popupOpenRef.current = popup !== null;
   }, [popup]);
 
-  // Subscribe to ModelManager text changes (for popup edits / mode toggle)
+  // When modelManager changes (tab switch), push new text into editor and re-subscribe
   useEffect(() => {
-    const unsubText = modelManager.onTextChange((text) => {
-      const view = viewRef.current;
-      if (!view) return;
+    const view = viewRef.current;
+    if (view) {
+      const text = modelManager.getDisplayText();
       externalDispatch.current = true;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
       });
       externalDispatch.current = false;
+    }
+
+    // Subscribe to text changes (for popup edits / mode toggle)
+    const unsubText = modelManager.onTextChange((text) => {
+      const v = viewRef.current;
+      if (!v) return;
+      externalDispatch.current = true;
+      v.dispatch({
+        changes: { from: 0, to: v.state.doc.length, insert: text },
+      });
+      externalDispatch.current = false;
     });
+    // Close any open popup when switching tabs
+    setPopup(null);
     return unsubText;
   }, [modelManager]);
 
   // Handle inline/block toggle for a DSL node
   const handleNodeToggle = useCallback((nodeId: string) => {
-    const hints = modelManager.formatHints;
+    const mm = modelManagerRef.current;
+    const hints = mm.formatHints;
     const current = hints.nodes[nodeId]?.display;
     const newDisplay: 'inline' | 'block' = current === 'block' ? 'inline' : 'block';
-
-    // Update formatHints on the model manager (mutate in place for now,
-    // then trigger re-generation via setViewFormat)
     hints.nodes[nodeId] = { display: newDisplay };
-
-    // Re-emit the text with updated format hints
-    modelManager.setViewFormat(formatRef.current);
-  }, [modelManager]);
+    mm.setViewFormat(formatRef.current);
+  }, []);
 
   // Helper to get node format from modelManager's formatHints
   const getNodeFormat = useCallback((nodeId: string): 'inline' | 'block' | undefined => {
-    return modelManager.formatHints.nodes[nodeId]?.display;
-  }, [modelManager]);
+    return modelManagerRef.current.formatHints.nodes[nodeId]?.display;
+  }, []);
 
   // Handle click on editor — detect if we clicked on a value and show popup
   const handleEditorClick = useCallback((view: EditorView, pos: number) => {
@@ -351,7 +362,7 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
     }
 
     // Get current value from model
-    const value = getNestedValue(modelManager.json, ctx.path);
+    const value = getNestedValue(modelManagerRef.current.json, ctx.path);
 
     // Get schema for popup widget selection
     const schema = rootSchema
@@ -375,20 +386,20 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
       value,
       position: { x: coords.left, y: coords.bottom + 4 },
     });
-  }, [modelManager]);
+  }, []);
 
   // Popup change handler — delegates to ModelManager
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
-    modelManager.updateProperty(popup.path, newValue);
+    modelManagerRef.current.updateProperty(popup.path, newValue);
     // Update popup's displayed value
     setPopup(prev => prev ? { ...prev, value: newValue } : null);
-  }, [popup, modelManager]);
+  }, [popup]);
 
   // Handle format toggle
   const handleFormatToggle = useCallback((newFormat: 'json5' | 'dsl') => {
     formatRef.current = newFormat;
-    modelManager.setViewFormat(newFormat);
+    modelManagerRef.current.setViewFormat(newFormat);
     // Reconfigure CodeMirror compartments for new format
     const view = viewRef.current;
     if (view) {
@@ -407,7 +418,7 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
       });
     }
     if (onViewFormatChange) onViewFormatChange(newFormat);
-  }, [modelManager, onViewFormatChange]);
+  }, [onViewFormatChange]);
 
   // Respond to external format prop changes (e.g., Mode button in App toolbar)
   const prevFormatRef = useRef(viewFormat);
@@ -422,10 +433,10 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
     () => {
       const isDsl = formatRef.current === 'dsl';
 
-      // Update listener — forward keystrokes to ModelManager
+      // Update listener — forward keystrokes to ModelManager (use ref for fresh reference)
       const updateListener = EditorView.updateListener.of((update) => {
         if (update.docChanged && !externalDispatch.current) {
-          modelManager.setText(update.state.doc.toString(), formatRef.current);
+          modelManagerRef.current.setText(update.state.doc.toString(), formatRef.current);
         }
       });
 
@@ -465,7 +476,7 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
         }),
       ];
     },
-    [modelManager, handleEditorClick, handleNodeToggle, getNodeFormat],
+    [handleEditorClick, handleNodeToggle, getNodeFormat],
   );
 
   // Mount editor
