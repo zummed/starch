@@ -283,6 +283,15 @@ export const DocumentSchema = z.object({
   images: z.record(z.string(), z.string()).describe('Named image sources (id → URL)').optional(),
 });
 
+/**
+ * Get the description for a property at a given path.
+ */
+export function getPropertyDescription(path: string, rootSchema?: z.ZodType): string | undefined {
+  const schema = getPropertySchema(path, rootSchema);
+  if (!schema) return undefined;
+  return schema.description;
+}
+
 export {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
   LayoutSchema, LayoutHintSchema,

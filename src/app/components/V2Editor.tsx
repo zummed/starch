@@ -5,7 +5,7 @@
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, hoverTooltip, type Tooltip } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -25,6 +25,7 @@ import { generateDsl } from '../../dsl/generator';
 import JSON5 from 'json5';
 import {
   getPropertySchema,
+  getPropertyDescription,
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
@@ -160,6 +161,84 @@ function dslCompletionSource(context: CompletionContext): CompletionResult | nul
       type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
     })),
   };
+}
+
+// ─── Hover Tooltip ───────────────────────────────────────────────
+
+function createHoverTooltipSource(formatRef: { current: 'json5' | 'dsl' }) {
+  return hoverTooltip((view, pos) => {
+    const doc = view.state.doc.toString();
+    const ctx = formatRef.current === 'dsl'
+      ? getDslCursorContext(doc, pos)
+      : getCursorContext(doc, pos);
+
+    if (!ctx.path) return null;
+
+    // Determine the schema path
+    const { schemaPath: basePath, rootSchema } = resolveDslPath(ctx.path);
+    let schemaPath = basePath;
+
+    // Append key if at a value position
+    if (!ctx.isPropertyName && ctx.currentKey && !schemaPath.endsWith(ctx.currentKey)) {
+      schemaPath = schemaPath ? `${schemaPath}.${ctx.currentKey}` : ctx.currentKey;
+    }
+
+    // If at a property name position, try to get the word at hover position
+    if (ctx.isPropertyName) {
+      // Extract the word at hover position
+      const line = view.state.doc.lineAt(pos);
+      const lineText = line.text;
+      const lineOffset = pos - line.from;
+      const wordMatch = lineText.slice(0, lineOffset + 20).match(/\b(\w+)$/);
+      if (!wordMatch) return null;
+      const word = lineText.slice(lineOffset).match(/^\w*/)?.[0] || '';
+      const fullWord = (wordMatch[1] || '') + word.slice(wordMatch[1]?.length || 0);
+      // Get word boundaries
+      const wordStart = lineText.lastIndexOf(fullWord, lineOffset);
+      if (wordStart < 0) return null;
+      const wordBefore = lineText.substring(Math.max(0, lineOffset - 20), lineOffset);
+      const wm = wordBefore.match(/(\w+)$/);
+      if (!wm) return null;
+      const hoveredWord = wm[1];
+      schemaPath = basePath ? `${basePath}.${hoveredWord}` : hoveredWord;
+    }
+
+    if (!schemaPath) return null;
+
+    const description = getPropertyDescription(schemaPath, rootSchema);
+    const schema = getPropertySchema(schemaPath, rootSchema);
+    if (!description && !schema) return null;
+
+    const type = schema ? detectSchemaType(schema) : 'unknown';
+
+    return {
+      pos,
+      above: true,
+      create() {
+        const dom = document.createElement('div');
+        dom.style.cssText = 'padding: 4px 8px; font-size: 11px; font-family: monospace; max-width: 300px;';
+
+        const pathEl = document.createElement('div');
+        pathEl.style.cssText = 'color: #a78bfa; font-weight: bold; margin-bottom: 2px;';
+        pathEl.textContent = schemaPath;
+        dom.appendChild(pathEl);
+
+        if (description) {
+          const descEl = document.createElement('div');
+          descEl.style.cssText = 'color: #c9cdd4;';
+          descEl.textContent = description;
+          dom.appendChild(descEl);
+        }
+
+        const typeEl = document.createElement('div');
+        typeEl.style.cssText = 'color: #6b7280; font-size: 10px; margin-top: 2px;';
+        typeEl.textContent = `Type: ${type}`;
+        dom.appendChild(typeEl);
+
+        return { dom };
+      },
+    } satisfies Tooltip;
+  }, { hoverTime: 400 });
 }
 
 // ─── Editor Component ───────────────────────────────────────────
@@ -350,6 +429,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         // Linter: mode-specific
         linterCompartment.current.of(isDsl ? dslEditorLinter : v2EditorLinter),
         lintGutter(),
+        createHoverTooltipSource(formatRef),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !externalUpdate.current) {
             const newText = update.state.doc.toString();
