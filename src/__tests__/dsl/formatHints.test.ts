@@ -32,6 +32,12 @@ describe('parseDslWithHints', () => {
     expect(formatHints.nodes['dot']).toEqual({ display: 'inline' });
   });
 
+  it('does not classify animate scope identifiers as nodes', () => {
+    const dsl = `box: rect 100x200\nanimate 3s\n  1  box.fill.h: 240`;
+    const { formatHints } = parseDslWithHints(dsl);
+    expect(formatHints.nodes['box']).toEqual({ display: 'inline' });
+  });
+
   it('preserves parseDsl scene output exactly', () => {
     const { scene } = parseDslWithHints('box: rect 100x200 fill 210 70 45');
     expect(scene.objects[0].id).toBe('box');

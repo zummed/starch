@@ -1285,9 +1285,15 @@ function extractFormatHints(input: string): FormatHints {
   const hints = emptyFormatHints();
   const tokens = tokenize(input);
 
+  let depth = 0;
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    // Node definition: identifier colon ...
+    if (tok.type === 'indent') { depth++; continue; }
+    if (tok.type === 'dedent') { depth--; continue; }
+
+    // Only classify top-level identifier:colon patterns as node definitions
+    if (depth !== 0) continue;
+
     if (tok.type === 'identifier' && tokens[i + 1]?.type === 'colon') {
       const id = tok.value;
       // Skip document-level keywords
