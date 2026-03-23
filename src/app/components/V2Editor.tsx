@@ -14,6 +14,7 @@ import { autocompletion, type CompletionContext, type CompletionResult } from '@
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
 import { starchTheme, starchHighlight } from '../../editor/theme';
 import { findValueSpan, formatValue } from '../../editor/textReplace';
+import { findDslValueSpan, extractDslValue, formatDslValue } from '../../editor/dslTextReplace';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
 import { getCursorContext } from '../../editor/cursorPath';
@@ -437,7 +438,9 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         if (schema) {
           const type = detectSchemaType(schema);
           if (['color', 'object'].includes(type)) {
-            const currentValue = extractValueAtCursor(doc, pos, type, clickedWord);
+            const currentValue = formatRef.current === 'dsl'
+              ? extractDslValue(doc, pos, clickedWord, schemaPath, type)
+              : extractValueAtCursor(doc, pos, type, clickedWord);
             const coords = view.coordsAtPos(pos);
             if (coords) {
               setPopup({
@@ -485,7 +488,9 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       // Show popup for types that have widgets
       if (['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) {
         const key = ctx.currentKey || schemaPath.split('.').pop() || '';
-        const currentValue = extractValueAtCursor(doc, pos, type, key);
+        const currentValue = formatRef.current === 'dsl'
+          ? extractDslValue(doc, pos, key, schemaPath, type)
+          : extractValueAtCursor(doc, pos, type, key);
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
@@ -684,15 +689,48 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     if (!view) return;
 
     const doc = view.state.doc.toString();
-    let span = findValueSpan(doc, popup.cursorPos, popup.key);
+    const isDsl = formatRef.current === 'dsl';
 
-    // For PointRef inside arrays (key is numeric), find the enclosing [...] or "..."
-    if (!span && /^\d+$/.test(popup.key)) {
-      span = findEnclosingValue(doc, popup.cursorPos);
+    let span: { from: number; to: number } | null;
+    let replacement: string;
+
+    if (isDsl) {
+      span = findDslValueSpan(doc, popup.cursorPos, popup.key, popup.schemaPath);
+      if (!span) return;
+
+      // For dimensions (WxH), we need to replace the full token with updated WxH
+      if (['w', 'h', 'rx', 'ry'].includes(popup.key)) {
+        const dimText = doc.slice(span.from, span.to);
+        const dimMatch = dimText.match(/(\d+)x(\d+)/);
+        if (dimMatch) {
+          const oldW = parseInt(dimMatch[1], 10);
+          const oldH = parseInt(dimMatch[2], 10);
+          const numVal = Math.round(newValue as number);
+          if (popup.key === 'w' || popup.key === 'rx') {
+            replacement = `${numVal}x${oldH}`;
+          } else {
+            replacement = `${oldW}x${numVal}`;
+          }
+        } else {
+          replacement = formatDslValue(newValue, popup.key, popup.schemaPath);
+        }
+      } else if (typeof newValue === 'object' && newValue !== null && 'h' in newValue) {
+        // Color object — format as "H S L"
+        const c = newValue as { h: number; s: number; l: number; a?: number };
+        replacement = `${Math.round(c.h)} ${Math.round(c.s)} ${Math.round(c.l)}`;
+        if (c.a !== undefined && c.a !== 1) replacement += ` a=${c.a}`;
+      } else {
+        replacement = formatDslValue(newValue, popup.key, popup.schemaPath);
+      }
+    } else {
+      // JSON5 mode — existing behavior
+      span = findValueSpan(doc, popup.cursorPos, popup.key);
+      if (!span && /^\d+$/.test(popup.key)) {
+        span = findEnclosingValue(doc, popup.cursorPos);
+      }
+      if (!span) return;
+      replacement = formatValue(newValue);
     }
-    if (!span) return;
-
-    const replacement = formatValue(newValue);
 
     externalUpdate.current = true;
     view.dispatch({
@@ -701,10 +739,10 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     externalUpdate.current = false;
 
     const newDoc = view.state.doc.toString();
-    onChangeRef.current(newDoc);
+    onChangeRef.current(isDsl ? json5TextRef.current : newDoc);
 
     // Update popup state — place cursor inside the replacement
-    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: span.from + 1 } : null);
+    setPopup(prev => prev ? { ...prev, value: newValue, cursorPos: span!.from + 1 } : null);
   }, [popup]);
 
   return (
