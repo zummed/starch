@@ -15,18 +15,28 @@ describe('applyTrackValues', () => {
     expect(result[0].transform!.x).toBe(150);
   });
 
-  it('applies fill sub-object values', () => {
+  it('applies fill as an atomic Color value', () => {
     const node = createNode({
       id: 'box',
       fill: { h: 0, s: 0, l: 0 },
     });
     const values = new Map<string, unknown>([
-      ['box.fill.h', 210],
-      ['box.fill.s', 80],
-      ['box.fill.l', 50],
+      ['box.fill', { h: 210, s: 80, l: 50 }],
     ]);
     const result = applyTrackValues([node], values);
     expect(result[0].fill).toEqual({ h: 210, s: 80, l: 50 });
+  });
+
+  it('applies fill as a string Color value', () => {
+    const node = createNode({
+      id: 'box',
+      fill: 'red',
+    });
+    const values = new Map<string, unknown>([
+      ['box.fill', 'steelblue'],
+    ]);
+    const result = applyTrackValues([node], values);
+    expect(result[0].fill).toBe('steelblue');
   });
 
   it('applies values to nested children', () => {

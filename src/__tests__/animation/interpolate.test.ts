@@ -41,6 +41,38 @@ describe('interpolateValue', () => {
     expect(mid.h).toBeCloseTo(0, 0);
   });
 
+  it('interpolates named color strings via HSL', () => {
+    const mid = interpolateValue('red', 'blue', 0) as { h: number; s: number; l: number };
+    // t=0 should return the first color converted to HSL
+    expect(mid.h).toBe(0);
+    expect(mid.s).toBe(100);
+    expect(mid.l).toBe(50);
+  });
+
+  it('interpolates named color strings at t=1', () => {
+    const end = interpolateValue('red', 'blue', 1) as { h: number; s: number; l: number };
+    expect(end.h).toBe(240);
+    expect(end.s).toBe(100);
+    expect(end.l).toBe(50);
+  });
+
+  it('interpolates RGB color objects', () => {
+    const a = { r: 255, g: 0, b: 0 };  // red
+    const b = { r: 0, g: 0, b: 255 };  // blue
+    const mid = interpolateValue(a, b, 0.5) as { h: number; s: number; l: number };
+    // Red (h=0) to blue (h=240): shortest arc goes through h=300 (magenta)
+    // midpoint at t=0.5: h = 0 + (-120)*0.5 = -60 → 300
+    expect(mid.h).toBeCloseTo(300, 0);
+  });
+
+  it('interpolates mixed formats: HSL object and string', () => {
+    const a = { h: 0, s: 100, l: 50 };  // red
+    const result = interpolateValue(a, 'blue', 0.5) as { h: number; s: number; l: number };
+    expect(result).toHaveProperty('h');
+    expect(result).toHaveProperty('s');
+    expect(result).toHaveProperty('l');
+  });
+
   it('returns start value for unknown types', () => {
     expect(interpolateValue([1, 2], [3, 4], 0.5)).toEqual([1, 2]);
   });

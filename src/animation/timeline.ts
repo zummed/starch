@@ -6,6 +6,7 @@ import { absoluteStrategy } from '../layout/absolute';
 import { evaluateAllTracks } from './evaluator';
 import { applyTrackValues } from './applyTracks';
 import { resolveCameraView } from './cameraExpansion';
+import { isColor } from '../types/color';
 
 // Ensure layout strategies are available for slot expansion
 function ensureStrategies(): void {
@@ -18,7 +19,9 @@ function isPropertyChange(value: unknown): value is PropertyChange {
 }
 
 function isSubObjectShorthand(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && !isPropertyChange(value) && !Array.isArray(value);
+  return typeof value === 'object' && value !== null
+    && !isPropertyChange(value) && !Array.isArray(value)
+    && !isColor(value);
 }
 
 function expandChanges(

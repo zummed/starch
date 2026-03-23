@@ -58,12 +58,12 @@ describe('buildTimeline', () => {
     const config = makeConfig({
       easing: 'easeInOut',
       keyframes: [
-        { time: 0, changes: { 'x.fill.h': 0 } },
-        { time: 2, changes: { 'x.fill.h': 180 } },
+        { time: 0, changes: { 'x.fill': { h: 0, s: 100, l: 50 } } },
+        { time: 2, changes: { 'x.fill': { h: 180, s: 100, l: 50 } } },
       ],
     });
     const { tracks } = buildTimeline(config);
-    const kfs = tracks.get('x.fill.h')!;
+    const kfs = tracks.get('x.fill')!;
     expect(kfs[1].easing).toBe('easeInOut');
   });
 
@@ -92,7 +92,7 @@ describe('buildTimeline', () => {
     expect(bKfs.some(kf => kf.time === 2 && kf.value === 1)).toBe(true);
   });
 
-  it('expands shorthand sub-object targets', () => {
+  it('keeps HSL color objects as atomic track values', () => {
     const config = makeConfig({
       keyframes: [
         { time: 0, changes: { 'box.fill': { h: 0, s: 100, l: 50 } } },
@@ -100,11 +100,53 @@ describe('buildTimeline', () => {
       ],
     });
     const { tracks } = buildTimeline(config);
-    expect(tracks.has('box.fill.h')).toBe(true);
-    expect(tracks.has('box.fill.s')).toBe(true);
-    expect(tracks.has('box.fill.l')).toBe(true);
-    expect(tracks.get('box.fill.h')![0].value).toBe(0);
-    expect(tracks.get('box.fill.h')![1].value).toBe(120);
+    // HSL objects should NOT be expanded into sub-tracks
+    expect(tracks.has('box.fill')).toBe(true);
+    expect(tracks.has('box.fill.h')).toBe(false);
+    const kfs = tracks.get('box.fill')!;
+    expect(kfs[0].value).toEqual({ h: 0, s: 100, l: 50 });
+    expect(kfs[1].value).toEqual({ h: 120, s: 80, l: 60 });
+  });
+
+  it('keeps string color values as atomic track values', () => {
+    const config = makeConfig({
+      keyframes: [
+        { time: 0, changes: { 'box.fill': 'red' } },
+        { time: 2, changes: { 'box.fill': 'blue' } },
+      ],
+    });
+    const { tracks } = buildTimeline(config);
+    expect(tracks.has('box.fill')).toBe(true);
+    const kfs = tracks.get('box.fill')!;
+    expect(kfs[0].value).toBe('red');
+    expect(kfs[1].value).toBe('blue');
+  });
+
+  it('keeps RGB color objects as atomic track values', () => {
+    const config = makeConfig({
+      keyframes: [
+        { time: 0, changes: { 'box.fill': { r: 255, g: 0, b: 0 } } },
+        { time: 2, changes: { 'box.fill': { r: 0, g: 0, b: 255 } } },
+      ],
+    });
+    const { tracks } = buildTimeline(config);
+    expect(tracks.has('box.fill')).toBe(true);
+    expect(tracks.has('box.fill.r')).toBe(false);
+    const kfs = tracks.get('box.fill')!;
+    expect(kfs[0].value).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it('still expands non-Color sub-object shorthand', () => {
+    const config = makeConfig({
+      keyframes: [
+        { time: 0, changes: { 'box.transform': { x: 0, y: 0 } } },
+        { time: 2, changes: { 'box.transform': { x: 100, y: 200 } } },
+      ],
+    });
+    const { tracks } = buildTimeline(config);
+    expect(tracks.has('box.transform.x')).toBe(true);
+    expect(tracks.has('box.transform.y')).toBe(true);
+    expect(tracks.get('box.transform.x')![1].value).toBe(100);
   });
 
   it('handles delay by inserting hold keyframe', () => {

@@ -1,9 +1,4 @@
-import { lerpHsl } from '../types/color';
-import type { HslColor } from '../types/properties';
-
-function isHslObject(value: unknown): value is HslColor {
-  return typeof value === 'object' && value !== null && 'h' in value && 's' in value && 'l' in value;
-}
+import { isColor, colorToHsl, lerpHsl } from '../types/color';
 
 export function interpolateValue(a: unknown, b: unknown, t: number): unknown {
   // Numeric lerp
@@ -11,9 +6,13 @@ export function interpolateValue(a: unknown, b: unknown, t: number): unknown {
     return a + (b - a) * t;
   }
 
-  // HSL color objects
-  if (isHslObject(a) && isHslObject(b)) {
-    return lerpHsl(a, b, t);
+  // Color values (HSL objects, RGB objects, named/hex strings)
+  if (isColor(a) && isColor(b)) {
+    try {
+      return lerpHsl(colorToHsl(a as any), colorToHsl(b as any), t);
+    } catch {
+      // If color conversion fails (e.g. unrecognized string), fall through to step interpolation
+    }
   }
 
   // Strings, booleans, arrays, etc. — step interpolation
