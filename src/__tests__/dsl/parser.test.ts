@@ -63,8 +63,8 @@ style primary
 `);
       expect(result.styles).toEqual({
         primary: {
-          fill: { h: 210, s: 70, l: 45 },
-          stroke: { h: 210, s: 80, l: 30, width: 2 },
+          fill: { r: 210, g: 70, b: 45 },
+          stroke: { color: { r: 210, g: 80, b: 30 }, width: 2 },
         },
       });
     });
@@ -79,7 +79,7 @@ style danger
 `);
       expect(result.styles.primary).toBeDefined();
       expect(result.styles.danger).toBeDefined();
-      expect(result.styles.danger.fill).toEqual({ h: 0, s: 80, l: 50 });
+      expect(result.styles.danger.fill).toEqual({ r: 0, g: 80, b: 50 });
     });
   });
 
@@ -130,37 +130,54 @@ style danger
 
   // ── Inline properties ──────────────────────────────────────────
   describe('inline properties', () => {
-    it('parses fill with HSL', () => {
-      const result = parseDsl('box: rect 10x10 fill 210 70 45');
+    it('parses fill with bare numbers (RGB)', () => {
+      const result = parseDsl('box: rect 10x10 fill 255 0 0');
+      expect(result.objects[0].fill).toEqual({ r: 255, g: 0, b: 0 });
+    });
+
+    it('parses fill with rgb prefix', () => {
+      const result = parseDsl('box: rect 10x10 fill rgb 255 128 0');
+      expect(result.objects[0].fill).toEqual({ r: 255, g: 128, b: 0 });
+    });
+
+    it('parses fill with hsl prefix', () => {
+      const result = parseDsl('box: rect 10x10 fill hsl 210 70 45');
       expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
     });
 
-    it('parses fill with HSL and alpha', () => {
+    it('parses fill with RGB and alpha', () => {
       const result = parseDsl('box: rect 10x10 fill 210 70 45 a=0.5');
-      expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45, a: 0.5 });
+      expect(result.objects[0].fill).toEqual({ r: 210, g: 70, b: 45, a: 0.5 });
     });
 
     it('parses fill with named color', () => {
       const result = parseDsl('box: rect 10x10 fill white');
-      expect(result.objects[0].fill).toEqual({ h: 0, s: 0, l: 100 });
+      expect(result.objects[0].fill).toBe('white');
+    });
+
+    it('parses fill with named color and alpha', () => {
+      const result = parseDsl('box: rect 10x10 fill red a=0.5');
+      expect(result.objects[0].fill).toEqual({ name: 'red', a: 0.5 });
     });
 
     it('parses fill with hex color', () => {
       const result = parseDsl('box: rect 10x10 fill #3B82F6');
-      const fill = result.objects[0].fill;
-      expect(fill.h).toBeDefined();
-      expect(fill.s).toBeDefined();
-      expect(fill.l).toBeDefined();
+      expect(result.objects[0].fill).toBe('#3B82F6');
     });
 
     it('parses stroke with width', () => {
       const result = parseDsl('box: rect 10x10 stroke 210 80 30 width=2');
-      expect(result.objects[0].stroke).toEqual({ h: 210, s: 80, l: 30, width: 2 });
+      expect(result.objects[0].stroke).toEqual({ color: { r: 210, g: 80, b: 30 }, width: 2 });
+    });
+
+    it('parses stroke with named color and width', () => {
+      const result = parseDsl('box: rect 10x10 stroke red width=2');
+      expect(result.objects[0].stroke).toEqual({ color: 'red', width: 2 });
     });
 
     it('parses stroke with alpha', () => {
       const result = parseDsl('box: rect 10x10 stroke 0 0 60 a=0.5 width=3');
-      expect(result.objects[0].stroke).toEqual({ h: 0, s: 0, l: 60, a: 0.5, width: 3 });
+      expect(result.objects[0].stroke).toEqual({ color: { r: 0, g: 0, b: 60, a: 0.5 }, width: 3 });
     });
 
     it('parses at position x,y', () => {
@@ -206,7 +223,7 @@ style danger
       expect(obj.id).toBe('box');
       expect(obj.rect).toEqual({ w: 160, h: 100, radius: 8 });
       expect(obj.style).toBe('primary');
-      expect(obj.fill).toEqual({ h: 210, s: 70, l: 45 });
+      expect(obj.fill).toEqual({ r: 210, g: 70, b: 45 });
       expect(obj.transform).toEqual({ x: 200, y: 150 });
     });
   });
@@ -249,7 +266,7 @@ outer: rect 200x200
 card: rect 160x100
   fill 210 70 45
 `);
-      expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+      expect(result.objects[0].fill).toEqual({ r: 210, g: 70, b: 45 });
     });
 
     it('parses stroke as block property', () => {
@@ -257,7 +274,7 @@ card: rect 160x100
 card: rect 160x100
   stroke 210 80 30 width=2
 `);
-      expect(result.objects[0].stroke).toEqual({ h: 210, s: 80, l: 30, width: 2 });
+      expect(result.objects[0].stroke).toEqual({ color: { r: 210, g: 80, b: 30 }, width: 2 });
     });
 
     it('parses layout as block property', () => {
@@ -284,8 +301,8 @@ card: rect 160x100
   title: text "Hello"
 `);
       const card = result.objects[0];
-      expect(card.fill).toEqual({ h: 210, s: 70, l: 45 });
-      expect(card.stroke).toEqual({ h: 0, s: 0, l: 0 });
+      expect(card.fill).toEqual({ r: 210, g: 70, b: 45 });
+      expect(card.stroke).toEqual({ color: { r: 0, g: 0, b: 0 } });
       expect(card.children).toHaveLength(1);
       expect(card.children[0].id).toBe('title');
     });
@@ -304,7 +321,7 @@ card: rect 160x100
       const result = parseDsl('link: a -> b stroke 0 0 60 width=2');
       const obj = result.objects[0];
       expect(obj.path).toEqual({ route: ['a', 'b'] });
-      expect(obj.stroke).toEqual({ h: 0, s: 0, l: 60, width: 2 });
+      expect(obj.stroke).toEqual({ color: { r: 0, g: 0, b: 60 }, width: 2 });
     });
 
     it('parses connection with waypoints', () => {
@@ -334,7 +351,7 @@ card: rect 160x100
         points: [[0, -40], [40, 30], [-40, 30]],
         closed: true,
       });
-      expect(obj.fill).toEqual({ h: 280, s: 60, l: 45 });
+      expect(obj.fill).toEqual({ r: 280, g: 60, b: 45 });
     });
   });
 
@@ -348,7 +365,7 @@ card: rect 160x100
 card.badge.fill: 120 70 45
 `);
       const card = result.objects[0];
-      expect(card.children[0].fill).toEqual({ h: 120, s: 70, l: 45 });
+      expect(card.children[0].fill).toEqual({ r: 120, g: 70, b: 45 });
     });
   });
 
@@ -392,7 +409,7 @@ viewport 800x600
 background "#000"
 
 style primary
-  fill 210 70 45
+  fill hsl 210 70 45
 
 box: rect 160x100 @primary at 200,150
   label: text "Hi" size=12
@@ -482,6 +499,72 @@ animate 3s
 `);
         expect(result.animate.keyframes[0].changes['box.visible']).toBe(true);
         expect(result.animate.keyframes[1].changes['box.visible']).toBe(false);
+      });
+
+      it('parses named color as string in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  box.fill: blue
+  2.0  box.fill: red
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toBe('blue');
+        expect(result.animate.keyframes[1].changes['box.fill']).toBe('red');
+      });
+
+      it('parses hex color as string in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  1.0  box.fill: #ff0000
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toBe('#ff0000');
+      });
+
+      it('parses bare triplet as RGB color in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  1.0  box.fill: 180 50 60
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toEqual({ r: 180, g: 50, b: 60 });
+      });
+
+      it('parses hsl prefix in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  1.0  box.fill: hsl 210 70 45
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toEqual({ h: 210, s: 70, l: 45 });
+      });
+
+      it('parses rgb prefix in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  1.0  box.fill: rgb 255 128 0
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toEqual({ r: 255, g: 128, b: 0 });
+      });
+
+      it('parses named color with alpha in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  1.0  box.fill: red a=0.5
+`);
+        expect(result.animate.keyframes[0].changes['box.fill']).toEqual({ name: 'red', a: 0.5 });
+      });
+
+      it('keeps non-color identifiers as strings in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  cam.camera.look: all
+`);
+        expect(result.animate.keyframes[0].changes['cam.camera.look']).toBe('all');
+      });
+
+      it('keeps single numbers as numbers in keyframe', () => {
+        const result = parseDsl(`
+animate 3s
+  0.0  box.opacity: 0.5
+`);
+        expect(result.animate.keyframes[0].changes['box.opacity']).toBe(0.5);
       });
     });
 

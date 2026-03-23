@@ -1,6 +1,7 @@
 import JSON5 from 'json5';
 import { tokenize } from './tokenizer';
-import { colorToHsl, resolveNamedColor } from '../types/color';
+import { resolveNamedColor } from '../types/color';
+import type { Color } from '../types/properties';
 import type { Token, TokenType } from './types';
 import type { FormatHints } from './formatHints';
 import { emptyFormatHints } from './formatHints';
@@ -92,22 +93,46 @@ const DOC_KEYWORDS = new Set([
 
 // ─── Color Parsing ──────────────────────────────────────────────
 
-function tryParseColor(s: TokenStream): Record<string, number> | null {
-  // Named color
+function tryParseAlpha(s: TokenStream): number | null {
+  if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
+    s.next(); // 'a'
+    s.next(); // '='
+    return parseFloat(s.expect('number').value);
+  }
+  return null;
+}
+
+function tryParseColor(s: TokenStream): Color | null {
+  // HSL prefix: hsl N N N
+  if (s.is('identifier', 'hsl') && s.peek(1).type === 'number' && s.peek(2).type === 'number' && s.peek(3).type === 'number') {
+    s.next(); // consume 'hsl'
+    const h = parseFloat(s.next().value);
+    const sat = parseFloat(s.next().value);
+    const l = parseFloat(s.next().value);
+    const alpha = tryParseAlpha(s);
+    if (alpha !== null) return { h, s: sat, l, a: alpha };
+    return { h, s: sat, l };
+  }
+
+  // RGB prefix: rgb N N N
+  if (s.is('identifier', 'rgb') && s.peek(1).type === 'number' && s.peek(2).type === 'number' && s.peek(3).type === 'number') {
+    s.next(); // consume 'rgb'
+    const r = parseFloat(s.next().value);
+    const g = parseFloat(s.next().value);
+    const b = parseFloat(s.next().value);
+    const alpha = tryParseAlpha(s);
+    if (alpha !== null) return { r, g, b, a: alpha };
+    return { r, g, b };
+  }
+
+  // Named color (must check AFTER hsl/rgb prefixes)
   if (s.is('identifier')) {
     const name = s.peek().value;
-    // Check if it's a recognized color name before consuming the token
     if (resolveNamedColor(name)) {
       s.next();
-      const hsl = colorToHsl(name);
-      const result: Record<string, number> = { ...hsl };
-      // Check for a= after named color
-      if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
-        s.next(); // 'a'
-        s.next(); // '='
-        result.a = parseFloat(s.expect('number').value);
-      }
-      return result;
+      const alpha = tryParseAlpha(s);
+      if (alpha !== null) return { name, a: alpha };
+      return name;
     }
     return null;
   }
@@ -115,30 +140,19 @@ function tryParseColor(s: TokenStream): Record<string, number> | null {
   // Hex color
   if (s.is('hexColor')) {
     const hex = s.next().value;
-    const hsl = colorToHsl(hex);
-    const result: Record<string, number> = { ...hsl };
-    // Check for a= after hex color
-    if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
-      s.next(); // 'a'
-      s.next(); // '='
-      result.a = parseFloat(s.expect('number').value);
-    }
-    return result;
+    const alpha = tryParseAlpha(s);
+    if (alpha !== null) return { hex, a: alpha };
+    return hex;
   }
 
-  // HSL: three numbers
+  // Bare three numbers → RGB (BREAKING CHANGE: was HSL)
   if (s.is('number') && s.peek(1).type === 'number' && s.peek(2).type === 'number') {
-    const h = parseFloat(s.next().value);
-    const sat = parseFloat(s.next().value);
-    const l = parseFloat(s.next().value);
-    const result: Record<string, number> = { h, s: sat, l };
-    // Check for a= after HSL
-    if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
-      s.next(); // 'a'
-      s.next(); // '='
-      result.a = parseFloat(s.expect('number').value);
-    }
-    return result;
+    const r = parseFloat(s.next().value);
+    const g = parseFloat(s.next().value);
+    const b = parseFloat(s.next().value);
+    const alpha = tryParseAlpha(s);
+    if (alpha !== null) return { r, g, b, a: alpha };
+    return { r, g, b };
   }
 
   return null;
@@ -329,17 +343,18 @@ function parseInlineProps(s: TokenStream, node: any): void {
       s.next();
       const color = tryParseColor(s);
       if (color) {
-        node.stroke = color;
-        // Check for width= and a=
+        const stroke: any = { color };
+        // Check for width=
         while (s.is('identifier') && s.peek(1).type === 'equals') {
           const key = s.peek().value;
-          if (key === 'width' || key === 'a') {
+          if (key === 'width') {
             s.next(); s.next(); // key, =
-            (node.stroke as any)[key] = parseFloat(s.expect('number').value);
+            stroke.width = parseFloat(s.expect('number').value);
           } else {
             break;
           }
         }
+        node.stroke = stroke;
       }
       continue;
     }
@@ -475,16 +490,17 @@ function parseBlockProperty(s: TokenStream, node: any): void {
   if (keyword === 'stroke') {
     const color = tryParseColor(s);
     if (color) {
-      node.stroke = color;
+      const stroke: any = { color };
       while (s.is('identifier') && s.peek(1).type === 'equals') {
         const key = s.peek().value;
-        if (key === 'width' || key === 'a') {
+        if (key === 'width') {
           s.next(); s.next();
-          (node.stroke as any)[key] = parseFloat(s.expect('number').value);
+          stroke.width = parseFloat(s.expect('number').value);
         } else {
           break;
         }
       }
+      node.stroke = stroke;
     }
     return;
   }
@@ -690,16 +706,17 @@ function parseStyleBlock(s: TokenStream): [string, any] {
         s.next();
         const color = tryParseColor(s);
         if (color) {
-          style.stroke = color;
+          const stroke: any = { color };
           while (s.is('identifier') && s.peek(1).type === 'equals') {
             const key = s.peek().value;
-            if (key === 'width' || key === 'a') {
+            if (key === 'width') {
               s.next(); s.next();
-              (style.stroke as any)[key] = parseFloat(s.expect('number').value);
+              stroke.width = parseFloat(s.expect('number').value);
             } else {
               break;
             }
           }
+          style.stroke = stroke;
         }
       } else if (s.is('identifier', 'dash')) {
         s.next();
@@ -1124,7 +1141,7 @@ function parseTrackPath(s: TokenStream, scopePrefix: string): string {
 
 function parseKeyframeValue(s: TokenStream): any {
   if (s.is('number')) {
-    // Three consecutive numbers = HSL color literal
+    // Three consecutive numbers = RGB color literal
     const color = tryParseColor(s);
     if (color) return color;
     return parseFloat(s.next().value);
