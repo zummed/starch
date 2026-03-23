@@ -39,7 +39,7 @@ export function findDslValueSpan(
   }
 
   // Case 2: HSL component (h, s, l) after fill/stroke
-  if (['h', 's', 'l'].includes(key) && (schemaPath.includes('.fill.') || schemaPath.includes('.stroke.'))) {
+  if (['h', 's', 'l'].includes(key) && (isFillOrStrokePath(schemaPath))) {
     const re = /\b(fill|stroke)\s+(\d+)\s+(\d+)\s+(\d+)/g;
     let m;
     while ((m = re.exec(line)) !== null) {
@@ -125,7 +125,7 @@ export function extractDslValue(
   }
 
   // HSL component
-  if (['h', 's', 'l'].includes(key) && (schemaPath.includes('.fill.') || schemaPath.includes('.stroke.'))) {
+  if (['h', 's', 'l'].includes(key) && (isFillOrStrokePath(schemaPath))) {
     const re = /\b(fill|stroke)\s+(\d+)\s+(\d+)\s+(\d+)/g;
     let m;
     while ((m = re.exec(line)) !== null) {
@@ -177,6 +177,11 @@ export function formatDslValue(value: unknown, key: string, schemaPath: string):
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'string') return value;
   return String(value);
+}
+
+function isFillOrStrokePath(schemaPath: string): boolean {
+  return schemaPath.startsWith('fill.') || schemaPath.startsWith('stroke.')
+    || schemaPath.includes('.fill.') || schemaPath.includes('.stroke.');
 }
 
 function escapeRegex(s: string): string {

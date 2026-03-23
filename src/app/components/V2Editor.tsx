@@ -437,6 +437,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         const schema = getPropertySchema(schemaPath, rootSchema);
         if (schema) {
           const type = detectSchemaType(schema);
+
           if (['color', 'object'].includes(type)) {
             const currentValue = formatRef.current === 'dsl'
               ? extractDslValue(doc, pos, clickedWord, schemaPath, type)
@@ -491,6 +492,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         const currentValue = formatRef.current === 'dsl'
           ? extractDslValue(doc, pos, key, schemaPath, type)
           : extractValueAtCursor(doc, pos, type, key);
+
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
@@ -696,6 +698,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
 
     if (isDsl) {
       span = findDslValueSpan(doc, popup.cursorPos, popup.key, popup.schemaPath);
+
       if (!span) return;
 
       // For dimensions (WxH), we need to replace the full token with updated WxH
