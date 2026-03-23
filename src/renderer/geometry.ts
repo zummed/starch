@@ -64,7 +64,7 @@ export function geometryToSvg(
       attrs: {
         'text-anchor': node.text.align === 'end' ? 'end' : node.text.align === 'start' ? 'start' : 'middle',
         'dominant-baseline': 'central',
-        'font-size': node.text.size,
+        'font-size': node.text.size ?? 14,
         ...(node.text.bold ? { 'font-weight': 'bold' } : {}),
         ...(node.text.mono ? { 'font-family': 'monospace' } : {}),
         ...(fill ? { fill } : {}),

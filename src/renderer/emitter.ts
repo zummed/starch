@@ -16,16 +16,30 @@ function hslFillToRgba(fill: HslColor | undefined): RgbaColor | null {
   return rgba;
 }
 
+function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number; pattern: string } | undefined {
+  if (!dash) return undefined;
+  const pattern = dash.pattern;
+  if (pattern === 'dotted') {
+    return { length: dash.length ?? 2, gap: dash.gap ?? 4, pattern };
+  }
+  if (pattern === 'dashed') {
+    return { length: dash.length ?? 8, gap: dash.gap ?? 4, pattern };
+  }
+  // Custom SVG dasharray or other patterns
+  return { length: dash.length ?? 8, gap: dash.gap ?? 4, pattern };
+}
+
 function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeStyle | null {
   if (!stroke) return null;
   const color = hslToRgba({ h: stroke.h, s: stroke.s, l: stroke.l });
   if (stroke.a !== undefined) color.a = stroke.a;
   const style: StrokeStyle = {
     color,
-    width: stroke.width,
+    width: stroke.width ?? 1,
   };
-  if (dash) {
-    style.dash = { length: dash.length, gap: dash.gap, pattern: dash.pattern };
+  const resolvedDash = resolveDashDefaults(dash);
+  if (resolvedDash) {
+    style.dash = resolvedDash;
   }
   return style;
 }
@@ -169,7 +183,7 @@ function emitNode(
   } else if (node.text) {
     backend.drawText(
       node.text.content,
-      node.text.size,
+      node.text.size ?? 14,
       fillRgba ?? { r: 200, g: 200, b: 200, a: 1 },
       node.text.align ?? 'middle',
       node.text.bold ?? false,

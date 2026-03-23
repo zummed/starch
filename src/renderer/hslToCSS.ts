@@ -7,6 +7,6 @@ export function hslToCSS(color: HslColor): string {
 export function strokeToCSS(stroke: Stroke): { color: string; width: number } {
   return {
     color: hslToCSS({ h: stroke.h, s: stroke.s, l: stroke.l }),
-    width: stroke.width,
+    width: stroke.width ?? 1,
   };
 }
