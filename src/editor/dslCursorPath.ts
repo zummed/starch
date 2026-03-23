@@ -314,14 +314,21 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
         parts.push('route');
         currentKey = 'route';
       } else {
-        // Check if cursor is on a boolean keyword.
-        // lineTextToCursor may only have a partial word (e.g., "bol" for "bold"),
-        // so extract the full word spanning the cursor position.
+        // Cursor may be mid-word (e.g., clicking on "fi|ll" or "re|ct").
+        // Extract the full word spanning the cursor position.
         const wordStart = lineTextToCursor.match(/(\w+)$/);
         const wordEnd = fullText.slice(cursorOffset).match(/^(\w*)/);
         const fullWord = (wordStart ? wordStart[1] : '') + (wordEnd ? wordEnd[1] : '');
         if (fullWord && ALL_BOOLEANS.has(fullWord)) {
           appendPropertyPath(parts, fullWord, info.geomType);
+          currentKey = fullWord;
+        } else if (fullWord === 'fill' || fullWord === 'stroke') {
+          // Clicking on the fill/stroke keyword → compound color path
+          parts.push(fullWord);
+          currentKey = fullWord;
+        } else if (fullWord && GEOM_KEYWORDS.has(fullWord)) {
+          // Clicking on a geometry keyword (rect, ellipse, text, etc.)
+          parts.push(fullWord);
           currentKey = fullWord;
         } else {
           isPropertyName = true;
