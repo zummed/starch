@@ -367,7 +367,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
   // calls fire before React re-renders with the updated popup state.
   const dslTargetRef = useRef<DslClickTarget | null>(null);
 
-  // Keep ref in sync
+  // Keep ref in sync (backup — primary sync is done synchronously at open/close sites)
   useEffect(() => {
     popupOpenRef.current = popup !== null;
   }, [popup]);
@@ -430,6 +430,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       const coords = view.coordsAtPos(pos);
       if (coords) {
         dslTargetRef.current = target;
+        popupOpenRef.current = true;
         setPopup({
           schemaPath: target.schemaPath,
           target,
@@ -475,6 +476,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
             const currentValue = extractValueAtCursor(doc, pos, type, clickedWord);
             const coords = view.coordsAtPos(pos);
             if (coords) {
+              popupOpenRef.current = true;
               setPopup({
                 schemaPath,
                 dslPath: ctx.path,
@@ -524,6 +526,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
 
         const coords = view.coordsAtPos(pos);
         if (coords) {
+          popupOpenRef.current = true;
           setPopup({
             schemaPath,
             dslPath: ctx.path,
@@ -853,7 +856,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
           value={popup.value}
           position={popup.position}
           onChange={handlePopupChange}
-          onClose={() => { dslTargetRef.current = null; setPopup(null); }}
+          onClose={() => { dslTargetRef.current = null; popupOpenRef.current = false; setPopup(null); }}
         />,
         document.body,
       )}
