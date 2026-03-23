@@ -1,4 +1,4 @@
-import { hslToName } from './colorNames';
+import { hslToName } from '../types/color';
 import type { FormatHints } from './formatHints';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -495,9 +495,18 @@ function formatKeyframeChange(path: string, val: any): string {
     return s;
   }
 
+  // HSL color object
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)
+      && 'h' in val && 's' in val && 'l' in val
+      && !('effect' in val) && !('value' in val)) {
+    return `${path}: ${formatColor(val)}`;
+  }
+
   // Property change with easing: { value, easing }
   if (typeof val === 'object' && val !== null && !Array.isArray(val) && 'value' in val && 'easing' in val) {
-    return `${path}: ${formatValue(val.value)} easing=${val.easing}`;
+    const valStr = (typeof val.value === 'object' && val.value !== null && 'h' in val.value && 's' in val.value && 'l' in val.value)
+      ? formatColor(val.value) : formatValue(val.value);
+    return `${path}: ${valStr} easing=${val.easing}`;
   }
 
   // Regular value (including string property values with dot-paths)

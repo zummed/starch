@@ -3,7 +3,7 @@
  * Provides keyword completions based on the cursor position within DSL text.
  */
 import { getDslCursorContext } from './dslCursorPath';
-import { getAllColorNames } from '../dsl/colorNames';
+import { getAllColorNames } from '../types/color';
 import { getEnumValues, EasingNameSchema } from '../types/schemaRegistry';
 
 export interface DslCompletionItem {

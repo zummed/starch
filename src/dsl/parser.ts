@@ -1,6 +1,6 @@
 import JSON5 from 'json5';
 import { tokenize } from './tokenizer';
-import { nameToHsl, hexToHsl } from './colorNames';
+import { colorToHsl, resolveNamedColor } from '../types/color';
 import type { Token, TokenType } from './types';
 import type { FormatHints } from './formatHints';
 import { emptyFormatHints } from './formatHints';
@@ -96,9 +96,10 @@ function tryParseColor(s: TokenStream): Record<string, number> | null {
   // Named color
   if (s.is('identifier')) {
     const name = s.peek().value;
-    const hsl = nameToHsl(name);
-    if (hsl) {
+    // Check if it's a recognized color name before consuming the token
+    if (resolveNamedColor(name)) {
       s.next();
+      const hsl = colorToHsl(name);
       const result: Record<string, number> = { ...hsl };
       // Check for a= after named color
       if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
@@ -114,7 +115,7 @@ function tryParseColor(s: TokenStream): Record<string, number> | null {
   // Hex color
   if (s.is('hexColor')) {
     const hex = s.next().value;
-    const hsl = hexToHsl(hex);
+    const hsl = colorToHsl(hex);
     const result: Record<string, number> = { ...hsl };
     // Check for a= after hex color
     if (s.is('identifier', 'a') && s.peek(1).type === 'equals') {
@@ -1122,13 +1123,27 @@ function parseTrackPath(s: TokenStream, scopePrefix: string): string {
 }
 
 function parseKeyframeValue(s: TokenStream): any {
-  if (s.is('number')) return parseFloat(s.next().value);
+  if (s.is('number')) {
+    // Three consecutive numbers = HSL color literal
+    const color = tryParseColor(s);
+    if (color) return color;
+    return parseFloat(s.next().value);
+  }
   if (s.is('string')) return s.next().value;
   if (s.is('identifier', 'true')) { s.next(); return true; }
   if (s.is('identifier', 'false')) { s.next(); return false; }
   if (s.is('parenOpen')) return parseTuple(s);
   if (s.is('braceOpen')) return parseJsonEscapeHatch(s);
-  if (s.is('identifier')) return s.next().value;
+  if (s.is('hexColor')) {
+    const color = tryParseColor(s);
+    if (color) return color;
+    return s.next().value;
+  }
+  if (s.is('identifier')) {
+    const color = tryParseColor(s);
+    if (color) return color;
+    return s.next().value;
+  }
 
   throw new Error(`Expected keyframe value at line ${s.peek().line}`);
 }
