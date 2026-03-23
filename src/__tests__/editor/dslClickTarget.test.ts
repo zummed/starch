@@ -95,12 +95,12 @@ describe('resolveDslClick', () => {
       expect(target!.value).toEqual({ h: 210, s: 70, l: 45 });
     });
 
-    it('clicking on stroke keyword resolves to color-compound', () => {
+    it('clicking on stroke keyword resolves to compound (has width)', () => {
       const { target } = click('box: rect 140x80 radius=8 fill 210 70 45 stro|ke 210 80 30 width=2 at 200,150');
       expect(target).not.toBeNull();
-      expect(target!.kind).toBe('color-compound');
+      expect(target!.kind).toBe('compound');
       expect(target!.schemaPath).toBe('stroke');
-      expect(target!.value).toEqual({ h: 210, s: 80, l: 30 });
+      expect(target!.value).toMatchObject({ h: 210, s: 80, l: 30, width: 2 });
     });
   });
 

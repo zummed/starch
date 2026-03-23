@@ -513,6 +513,27 @@ export function resolveDslClick(doc: string, pos: number): DslClickTarget | null
           }
         }
 
+        // Stroke has extra properties (width, a) beyond HSL — use compound
+        // target so write-back goes through parse → modify → generate,
+        // correctly handling disjoint tokens (e.g., "210 80 30 width=2").
+        if (keyword === 'stroke') {
+          const nodeIdx = countNodesBefore(doc, lineStart);
+          const strokeValue: Record<string, unknown> = { ...hslValue };
+          // Extract width and alpha from the line
+          const widthMatch = line.match(/\bwidth\s*=\s*(\d+(?:\.\d+)?)/);
+          if (widthMatch) strokeValue.width = parseFloat(widthMatch[1]);
+          const alphaMatch = colorValStr.match(/a=([\d.]+)/);
+          if (alphaMatch) strokeValue.a = parseFloat(alphaMatch[1]);
+          return {
+            kind: 'compound',
+            schemaPath: 'stroke',
+            span: { from: lineStart, to: lineEnd === -1 ? doc.length : lineEnd },
+            value: strokeValue,
+            nodeIndex: nodeIdx,
+            compoundProp: 'stroke',
+          };
+        }
+
         return {
           kind: 'color-compound',
           schemaPath: keyword as string,
