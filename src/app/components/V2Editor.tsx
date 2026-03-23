@@ -335,6 +335,13 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
   // Track last valid raw scene for DSL generation
   const lastValidRawRef = useRef<any>(null);
 
+  // Flag to suppress useEffect editor overwrite during popup edits.
+  // When a popup change updates the canonical JSON5 and notifies the parent,
+  // the parent re-renders with a new `value` prop. Without this flag, the
+  // useEffect([value]) would regenerate DSL and overwrite the editor, which
+  // invalidates the popup target's spans (causing corruption on next drag).
+  const popupEditingRef = useRef(false);
+
   // Node formats for DSL inline/block toggle
   const nodeFormatsRef = useRef<Record<string, 'inline' | 'block'>>(nodeFormats || {});
   if (nodeFormats) nodeFormatsRef.current = nodeFormats;
@@ -613,6 +620,14 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     const view = viewRef.current;
     if (!view) return;
 
+    // If this value change was triggered by a popup edit, skip the editor
+    // content replacement — the popup already has the correct DSL in the editor
+    // and replacing it would invalidate the popup target's spans.
+    if (popupEditingRef.current) {
+      popupEditingRef.current = false;
+      return;
+    }
+
     // Update the canonical JSON5 text
     json5TextRef.current = value;
     try {
@@ -726,6 +741,8 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         json5TextRef.current = json5Text;
         lastValidRawRef.current = raw;
       } catch { /* keep last valid */ }
+      // Suppress the useEffect editor overwrite — our DSL text is authoritative
+      popupEditingRef.current = true;
       onChangeRef.current(json5TextRef.current);
 
       // Re-resolve the click target at the same position for continued dragging
