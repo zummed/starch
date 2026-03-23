@@ -1,11 +1,12 @@
 /**
  * V2 Editor — backed by the structured editor system.
  * Uses ModelManager, schema-driven completion, v2 linter, and property popups.
+ * Supports toggling between JSON5 and DSL view modes.
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching } from '@codemirror/language';
@@ -16,6 +17,12 @@ import { findValueSpan, formatValue } from '../../editor/textReplace';
 import { parseScene } from '../../parser/parser';
 import { getCompletions } from '../../editor/completionSource';
 import { getCursorContext } from '../../editor/cursorPath';
+import { getDslCursorContext } from '../../editor/dslCursorPath';
+import { getDslCompletions } from '../../editor/dslCompletionSource';
+import { lintDsl } from '../../editor/dslLinter';
+import { parseDsl } from '../../dsl/parser';
+import { generateDsl } from '../../dsl/generator';
+import JSON5 from 'json5';
 import {
   getPropertySchema,
   detectSchemaType,
@@ -56,7 +63,7 @@ function resolveDslPath(dslPath: string): { schemaPath: string; rootSchema?: imp
   return { schemaPath: filtered.join('.'), rootSchema };
 }
 
-// ─── V2 Linter ──────────────────────────────────────────────────
+// ─── V2 Linter (JSON5 mode) ──────────────────────────────────────
 
 const v2EditorLinter = linter((view) => {
   const doc = view.state.doc.toString();
@@ -80,7 +87,27 @@ const v2EditorLinter = linter((view) => {
   return diagnostics;
 }, { delay: 300 });
 
-// ─── V2 Completion Source ───────────────────────────────────────
+// ─── V2 Linter (DSL mode) ───────────────────────────────────────
+
+const dslEditorLinter = linter((view) => {
+  const doc = view.state.doc.toString();
+  if (!doc.trim()) return [];
+  const diags = lintDsl(doc);
+  return diags.map(d => {
+    const lineNum = Math.min(d.line, view.state.doc.lines);
+    const line = view.state.doc.line(lineNum);
+    const col = Math.min(d.col - 1, line.length);
+    const from = line.from + Math.max(0, col);
+    return {
+      from,
+      to: Math.min(from + 1, line.to),
+      severity: d.severity as 'error' | 'warning' | 'info',
+      message: d.message,
+    };
+  });
+}, { delay: 300 });
+
+// ─── V2 Completion Source (JSON5 mode) ───────────────────────────
 
 function v2CompletionSource(context: CompletionContext): CompletionResult | null {
   const doc = context.state.doc.toString();
@@ -109,19 +136,63 @@ function v2CompletionSource(context: CompletionContext): CompletionResult | null
   };
 }
 
+// ─── V2 Completion Source (DSL mode) ────────────────────────────
+
+function dslCompletionSource(context: CompletionContext): CompletionResult | null {
+  const doc = context.state.doc.toString();
+  const pos = context.pos;
+
+  const items = getDslCompletions(doc, pos);
+  if (items.length === 0) return null;
+
+  let from = pos;
+  const textBefore = doc.slice(Math.max(0, pos - 50), pos);
+  const wordMatch = textBefore.match(/[\w]+$/);
+  if (wordMatch) {
+    from = pos - wordMatch[0].length;
+  }
+
+  return {
+    from,
+    options: items.map(item => ({
+      label: item.label,
+      detail: item.detail,
+      type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
+    })),
+  };
+}
+
 // ─── Editor Component ───────────────────────────────────────────
 
 interface V2EditorProps {
   value: string;
   onChange: (value: string) => void;
+  viewFormat?: 'json5' | 'dsl';
+  onViewFormatChange?: (format: 'json5' | 'dsl') => void;
 }
 
-export function V2Editor({ value, onChange }: V2EditorProps) {
+export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatChange }: V2EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const externalUpdate = useRef(false);
+
+  // View format state (use prop or internal state)
+  const [internalFormat, setInternalFormat] = useState<'json5' | 'dsl'>(viewFormat);
+  const currentFormat = onViewFormatChange ? viewFormat : internalFormat;
+  const formatRef = useRef(currentFormat);
+  formatRef.current = currentFormat;
+
+  // Track the last valid JSON5 text (canonical storage)
+  const json5TextRef = useRef(value);
+  // Track last valid raw scene for DSL generation
+  const lastValidRawRef = useRef<any>(null);
+
+  // CodeMirror compartments for dynamic reconfiguration
+  const langCompartment = useRef(new Compartment());
+  const linterCompartment = useRef(new Compartment());
+  const completionCompartment = useRef(new Compartment());
 
   // Property popup state
   const [popup, setPopup] = useState<{
@@ -139,13 +210,31 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
     popupOpenRef.current = popup !== null;
   }, [popup]);
 
+  // Parse initial value to get raw scene data
+  useEffect(() => {
+    try {
+      const trimmed = value.trim();
+      if (trimmed.startsWith('{')) {
+        json5TextRef.current = value;
+        lastValidRawRef.current = JSON5.parse(trimmed);
+      } else {
+        // DSL text — parse to raw, generate JSON5
+        const raw = parseDsl(trimmed);
+        lastValidRawRef.current = raw;
+        json5TextRef.current = JSON5.stringify(raw, null, 2);
+      }
+    } catch { /* keep previous */ }
+  }, []);
+
   // Handle click on editor — detect if we clicked on a value and show popup
   const handleEditorClick = useCallback((view: EditorView, event: MouseEvent) => {
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (pos === null) return;
 
     const doc = view.state.doc.toString();
-    const ctx = getCursorContext(doc, pos);
+    const ctx = formatRef.current === 'dsl'
+      ? getDslCursorContext(doc, pos)
+      : getCursorContext(doc, pos);
 
     // Clicking on a property name (like "fill", "rect") — open compound popup
     if (ctx.isPropertyName && ctx.path) {
@@ -238,37 +327,62 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
   }, []);
 
   const createExtensions = useCallback(
-    () => [
-      json(),
-      starchTheme,
-      starchHighlight,
-      lineNumbers(),
-      highlightActiveLine(),
-      bracketMatching(),
-      history(),
-      keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
-      EditorState.tabSize.of(2),
-      autocompletion({
-        override: [v2CompletionSource],
-        activateOnTyping: true,
-      }),
-      v2EditorLinter,
-      lintGutter(),
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged && !externalUpdate.current) {
-          onChangeRef.current(update.state.doc.toString());
-        }
-      }),
-      EditorView.domEventHandlers({
-        click: (event, view) => {
-          // Don't trigger popup logic if a popup is already open
-          if (popupOpenRef.current) return false;
-          // Delay to let cursor settle
-          setTimeout(() => handleEditorClick(view, event), 50);
-          return false;
-        },
-      }),
-    ],
+    () => {
+      const isDsl = formatRef.current === 'dsl';
+      return [
+        // Language: JSON for JSON5 mode, nothing for DSL mode
+        langCompartment.current.of(isDsl ? [] : json()),
+        starchTheme,
+        starchHighlight,
+        lineNumbers(),
+        highlightActiveLine(),
+        bracketMatching(),
+        history(),
+        keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
+        EditorState.tabSize.of(2),
+        // Completion: mode-specific
+        completionCompartment.current.of(
+          autocompletion({
+            override: [isDsl ? dslCompletionSource : v2CompletionSource],
+            activateOnTyping: true,
+          }),
+        ),
+        // Linter: mode-specific
+        linterCompartment.current.of(isDsl ? dslEditorLinter : v2EditorLinter),
+        lintGutter(),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged && !externalUpdate.current) {
+            const newText = update.state.doc.toString();
+            if (formatRef.current === 'dsl') {
+              // In DSL mode: parse DSL → serialize to JSON5 → update canonical text
+              try {
+                const raw = parseDsl(newText);
+                const json5Text = JSON5.stringify(raw, null, 2);
+                json5TextRef.current = json5Text;
+                lastValidRawRef.current = raw;
+              } catch { /* DSL parse failed, keep last valid */ }
+            } else {
+              // JSON5 mode: store directly
+              json5TextRef.current = newText;
+              try {
+                lastValidRawRef.current = JSON5.parse(newText);
+              } catch { /* keep last valid */ }
+            }
+            // Always emit the canonical JSON5 text to the parent
+            onChangeRef.current(json5TextRef.current);
+          }
+        }),
+        EditorView.domEventHandlers({
+          click: (event, view) => {
+            // Don't trigger popup logic if a popup is already open
+            if (popupOpenRef.current) return false;
+            // Delay to let cursor settle
+            setTimeout(() => handleEditorClick(view, event), 50);
+            return false;
+          },
+        }),
+      ];
+    },
     [handleEditorClick],
   );
 
@@ -297,15 +411,93 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+
+    // Update the canonical JSON5 text
+    json5TextRef.current = value;
+    try {
+      const trimmed = value.trim();
+      if (trimmed.startsWith('{')) {
+        lastValidRawRef.current = JSON5.parse(trimmed);
+      } else if (trimmed) {
+        lastValidRawRef.current = parseDsl(trimmed);
+      }
+    } catch { /* keep previous */ }
+
+    // Generate the display text based on current format
+    let displayText: string;
+    if (formatRef.current === 'dsl') {
+      try {
+        displayText = lastValidRawRef.current
+          ? generateDsl(lastValidRawRef.current)
+          : value;
+      } catch {
+        displayText = value;
+      }
+    } else {
+      displayText = value;
+    }
+
     const current = view.state.doc.toString();
-    if (current !== value) {
+    if (current !== displayText) {
       externalUpdate.current = true;
       view.dispatch({
-        changes: { from: 0, to: current.length, insert: value },
+        changes: { from: 0, to: current.length, insert: displayText },
       });
       externalUpdate.current = false;
     }
   }, [value]);
+
+  // Handle format toggle
+  const handleFormatToggle = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const newFormat = formatRef.current === 'json5' ? 'dsl' : 'json5';
+
+    // Update format state
+    if (onViewFormatChange) {
+      onViewFormatChange(newFormat);
+    } else {
+      setInternalFormat(newFormat);
+    }
+    formatRef.current = newFormat;
+
+    // Generate the new display text
+    let newText: string;
+    if (newFormat === 'dsl') {
+      try {
+        newText = lastValidRawRef.current
+          ? generateDsl(lastValidRawRef.current)
+          : json5TextRef.current;
+      } catch {
+        newText = json5TextRef.current;
+      }
+    } else {
+      newText = json5TextRef.current;
+    }
+
+    // Update CodeMirror content
+    externalUpdate.current = true;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: newText },
+    });
+    externalUpdate.current = false;
+
+    // Reconfigure compartments for the new mode
+    const isDsl = newFormat === 'dsl';
+    view.dispatch({
+      effects: [
+        langCompartment.current.reconfigure(isDsl ? [] : json()),
+        linterCompartment.current.reconfigure(isDsl ? dslEditorLinter : v2EditorLinter),
+        completionCompartment.current.reconfigure(
+          autocompletion({
+            override: [isDsl ? dslCompletionSource : v2CompletionSource],
+            activateOnTyping: true,
+          }),
+        ),
+      ],
+    });
+  }, [onViewFormatChange]);
 
   // Handle popup value change — surgical text replacement at the value span
   const handlePopupChange = useCallback((newValue: unknown) => {
@@ -339,6 +531,28 @@ export function V2Editor({ value, onChange }: V2EditorProps) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* Format toggle bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', padding: '2px 8px',
+        borderBottom: '1px solid #1a1d24', background: '#0a0c10', flexShrink: 0,
+      }}>
+        <button
+          onClick={handleFormatToggle}
+          title="Toggle between JSON5 and DSL view"
+          style={{
+            padding: '2px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+            border: `1px solid ${currentFormat === 'dsl' ? '#a78bfa' : '#2a2d35'}`,
+            background: currentFormat === 'dsl' ? 'rgba(167,139,250,0.1)' : '#14161c',
+            color: currentFormat === 'dsl' ? '#a78bfa' : '#6b7280',
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          {currentFormat === 'json5' ? 'DSL' : 'JSON5'}
+        </button>
+        <span style={{ fontSize: 9, color: '#4a4f59', marginLeft: 8 }}>
+          {currentFormat === 'json5' ? 'JSON5 mode' : 'DSL mode'}
+        </span>
+      </div>
       <div
         ref={containerRef}
         style={{

@@ -19,10 +19,11 @@ interface EditorTab {
   label: string;
   dsl: string;
   closable: boolean;
+  viewFormat?: 'json5' | 'dsl';
 }
 
 interface StoredTabs {
-  tabs: { id: string; label: string; dsl: string }[];
+  tabs: { id: string; label: string; dsl: string; viewFormat?: 'json5' | 'dsl' }[];
   activeTabId: string;
   nextTabId: number;
 }
@@ -40,7 +41,7 @@ function loadStoredTabs(): StoredTabs | null {
 
 function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: number) {
   try {
-    const userTabs = tabs.filter(t => t.id !== 'sample').map(({ id, label, dsl }) => ({ id, label, dsl }));
+    const userTabs = tabs.filter(t => t.id !== 'sample').map(({ id, label, dsl, viewFormat }) => ({ id, label, dsl, viewFormat }));
     const data: StoredTabs = { tabs: userTabs, activeTabId, nextTabId };
     localStorage.setItem(TABS_KEY, JSON.stringify(data));
   } catch { /* ignore */ }
@@ -395,7 +396,16 @@ export default function App() {
         </div>
       )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <V2Editor value={activeDsl} onChange={updateTabDsl} />
+        <V2Editor
+          value={activeDsl}
+          onChange={updateTabDsl}
+          viewFormat={activeTab.viewFormat || 'json5'}
+          onViewFormatChange={(format) => {
+            setTabs(prev => prev.map(t =>
+              t.id === activeTabId ? { ...t, viewFormat: format } : t
+            ));
+          }}
+        />
       </div>
     </div>
   );

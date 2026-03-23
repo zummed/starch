@@ -9,6 +9,8 @@ import JSON5 from 'json5';
 import type { Node, NodeInput } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { parseScene, type ParsedScene } from '../parser/parser';
+import { parseDsl } from '../dsl/parser';
+import { generateDsl } from '../dsl/generator';
 import type { ZodError } from 'zod';
 
 export interface ModelState {
@@ -45,6 +47,12 @@ export class ModelManager {
   // Track whether the last change came from text or model to avoid loops
   private _updating = false;
 
+  // View format: JSON5 is always canonical in _text; DSL is a generated view
+  private _viewFormat: 'json5' | 'dsl' = 'json5';
+
+  // Last successfully parsed raw scene data (for DSL generation)
+  private _lastValidRaw: any = null;
+
   constructor(debounceMs = 100) {
     this._debounceMs = debounceMs;
   }
@@ -54,6 +62,7 @@ export class ModelManager {
   get realModel(): ModelState { return this._realModel; }
   get text(): string { return this._text; }
   get validationErrors(): ZodError | null { return this._validationErrors; }
+  get viewFormat(): 'json5' | 'dsl' { return this._viewFormat; }
 
   // ── Text input (from editor) ──
 
@@ -92,6 +101,59 @@ export class ModelManager {
     } catch {
       // If current text is invalid, ignore the mutation
     }
+  }
+
+  // ── View Format (DSL ↔ JSON5) ──
+
+  setViewFormat(format: 'json5' | 'dsl'): void {
+    this._viewFormat = format;
+  }
+
+  /** Generate DSL text from the last valid model. */
+  getDslText(): string {
+    if (this._lastValidRaw) {
+      return generateDsl(this._lastValidRaw);
+    }
+    // Fallback: try to parse current JSON5 text
+    try {
+      const raw = JSON5.parse(this._text);
+      return generateDsl(raw);
+    } catch {
+      return '// Unable to generate DSL\n';
+    }
+  }
+
+  /** Get the display text for the current view format. */
+  getDisplayText(): string {
+    if (this._viewFormat === 'dsl') {
+      return this.getDslText();
+    }
+    return this._text;
+  }
+
+  /**
+   * Apply a DSL edit: parse DSL → serialize to JSON5 → update _text → promote.
+   * Called when the user edits in DSL mode.
+   */
+  applyDslEdit(dslText: string): void {
+    if (this._updating) return;
+
+    // Debounced: parse DSL, convert to JSON5, then promote
+    if (this._debounceTimer) clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(() => {
+      try {
+        const raw = parseDsl(dslText);
+        const json5Text = JSON5.stringify(raw, null, 2);
+        this._text = json5Text;
+        this._parseAndPromote(json5Text);
+      } catch (e) {
+        // DSL parse failed — report as validation error but keep last valid model
+        if (e instanceof Error) {
+          this._validationErrors = null;
+          this._emitValidation(null);
+        }
+      }
+    }, this._debounceMs);
   }
 
   // ── Events ──
@@ -134,6 +196,17 @@ export class ModelManager {
         images: scene.images,
         trackPaths: scene.trackPaths,
       };
+      // Store raw parsed data for DSL generation
+      try {
+        this._lastValidRaw = JSON5.parse(text);
+      } catch {
+        // If text was DSL (not JSON5), parse it as DSL for raw storage
+        try {
+          this._lastValidRaw = parseDsl(text);
+        } catch {
+          // Keep previous raw
+        }
+      }
       this._validationErrors = null;
       this._emitValidation(null);
       this._emitModel(this._realModel);
