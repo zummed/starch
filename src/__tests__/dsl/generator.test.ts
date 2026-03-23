@@ -548,6 +548,58 @@ describe('DSL generator', () => {
     });
   });
 
+  // ── Format hints ───────────────────────────────────────────────
+  describe('format hints', () => {
+    it('renders node as inline when hint says inline', () => {
+      const scene = {
+        objects: [{
+          id: 'box',
+          rect: { w: 100, h: 200 },
+          fill: { h: 210, s: 70, l: 45 },
+          stroke: { h: 0, s: 0, l: 0 },
+          transform: { x: 100, y: 200 },
+          opacity: 0.5,
+        }],
+      };
+      // Without hints, this has 5+ props → heuristic renders block
+      const blockDsl = generateDsl(scene);
+      expect(blockDsl).toContain('\n  fill');
+
+      // With inline hint, force single line
+      const inlineDsl = generateDsl(scene, { nodeFormats: { box: 'inline' } });
+      expect(inlineDsl).not.toContain('\n  fill');
+    });
+
+    it('renders node as block when hint says block even with few props', () => {
+      const scene = {
+        objects: [{ id: 'dot', ellipse: { rx: 5, ry: 5 }, fill: { h: 0, s: 80, l: 50 } }],
+      };
+      // Without hints, few props → heuristic renders inline
+      const inlineDsl = generateDsl(scene);
+      expect(inlineDsl).not.toContain('\n  fill');
+
+      // With block hint, force expanded
+      const blockDsl = generateDsl(scene, { nodeFormats: { dot: 'block' } });
+      expect(blockDsl).toContain('\n  fill');
+    });
+
+    it('falls back to heuristic when no hint for a node', () => {
+      const scene = {
+        objects: [{ id: 'box', rect: { w: 100, h: 200 } }],
+      };
+      const dsl = generateDsl(scene, { nodeFormats: { other: 'block' } });
+      expect(dsl).toContain('box: rect 100x200');
+    });
+
+    it('accepts formatHints as alternative to nodeFormats', () => {
+      const scene = {
+        objects: [{ id: 'dot', ellipse: { rx: 5, ry: 5 }, fill: { h: 0, s: 80, l: 50 } }],
+      };
+      const dsl = generateDsl(scene, { formatHints: { nodes: { dot: { display: 'block' } } } });
+      expect(dsl).toContain('\n  fill');
+    });
+  });
+
   // ── Complete scene ─────────────────────────────────────────────
   describe('complete scene', () => {
     it('generates a complete scene with all sections', () => {

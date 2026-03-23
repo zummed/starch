@@ -1,9 +1,11 @@
 import { hslToName } from './colorNames';
+import type { FormatHints } from './formatHints';
 
 // ─── Types ────────────────────────────────────────────────────────
 
 interface GeneratorOptions {
   nodeFormats?: Record<string, 'inline' | 'block'>;
+  formatHints?: FormatHints;
 }
 
 // ─── Color Formatting ─────────────────────────────────────────────
@@ -268,9 +270,13 @@ function formatLayout(layout: any): string {
 
 function shouldRenderBlock(node: any, options?: GeneratorOptions): boolean {
   const id = node.id;
+  // Explicit per-node format takes precedence
   if (options?.nodeFormats?.[id] === 'inline') return false;
   if (options?.nodeFormats?.[id] === 'block') return true;
-  // Heuristic: count non-children, non-id, non-geometry props
+  // FormatHints (from DSL parser)
+  if (options?.formatHints?.nodes[id]?.display === 'inline') return false;
+  if (options?.formatHints?.nodes[id]?.display === 'block') return true;
+  // Heuristic fallback
   return countProps(node) > 4;
 }
 
