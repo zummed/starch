@@ -8,16 +8,20 @@
  */
 
 import { nameToHsl, hexToHsl } from '../dsl/colorNames';
+import { parseDsl } from '../dsl/parser';
+import { generateDsl } from '../dsl/generator';
 
 // ─── Types ───────────────────────────────────────────────────────
 
 export interface DslClickTarget {
-  kind: 'dimension' | 'hsl-component' | 'color-compound' | 'key-value' | 'at-coordinate' | 'boolean';
+  kind: 'dimension' | 'hsl-component' | 'color-compound' | 'key-value' | 'at-coordinate' | 'boolean' | 'compound';
   schemaPath: string;      // for popup widget selection (e.g., "rect.w", "fill.h", "stroke.width")
   span: { from: number; to: number };  // exact text range to replace
   value: unknown;          // current extracted value
   dimHalf?: 'w' | 'h';    // which half for dimension write-back
   fullDimSpan?: { from: number; to: number }; // full NxN token span for dimensions
+  nodeIndex?: number;      // for compound targets: which node in the objects array
+  compoundProp?: string;   // for compound targets: which top-level property (e.g., 'rect', 'transform')
 }
 
 // ─── Geometry detection ──────────────────────────────────────────
@@ -106,9 +110,109 @@ const BOOLEAN_KEYWORDS = new Set(['bold', 'mono', 'closed', 'smooth', 'active'])
 // ─── Non-clickable keywords ──────────────────────────────────────
 
 const NON_CLICKABLE = new Set([
-  'at', 'rect', 'ellipse', 'text', 'image', 'camera', 'path',
   'name', 'description', 'background', 'viewport', 'images', 'style', 'animate',
+  'path', // path keyword doesn't have a useful compound popup
 ]);
+
+// ─── Compound value extraction helpers ──────────────────────────
+
+/** Count how many top-level node declarations appear before a line offset */
+function countNodesBefore(doc: string, lineStart: number): number {
+  const before = doc.slice(0, lineStart);
+  const DOC_KW = /^(name|description|background|viewport|images|style|animate)\b/;
+  let count = 0;
+  for (const line of before.split('\n')) {
+    const trimmed = line.trimStart();
+    const m = trimmed.match(/^(\w+)\s*:/);
+    if (m && !DOC_KW.test(trimmed) && line.length > 0 && line[0] !== ' ') {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Extract compound geometry values from a DSL line */
+function extractCompoundValue(line: string, geomType: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  // Dimensions
+  const dimMatch = line.match(/(\d+)x(\d+)/);
+  if (dimMatch) {
+    if (geomType === 'ellipse') {
+      result.rx = parseInt(dimMatch[1], 10);
+      result.ry = parseInt(dimMatch[2], 10);
+    } else {
+      result.w = parseInt(dimMatch[1], 10);
+      result.h = parseInt(dimMatch[2], 10);
+    }
+  }
+
+  // Text content
+  const textMatch = line.match(/"([^"]*)"/);
+  if (geomType === 'text' && textMatch) {
+    result.content = textMatch[1];
+  }
+
+  // Key=value properties that belong to this geometry
+  const kvRe = /\b(\w+)\s*=\s*([^\s,)]+)/g;
+  let m;
+  while ((m = kvRe.exec(line)) !== null) {
+    const key = m[1];
+    const val = m[2];
+    // Only include props that belong to this geometry type
+    if (geomType === 'rect' && key === 'radius') {
+      result.radius = parseFloat(val);
+    } else if (geomType === 'text' && ['size', 'lineHeight'].includes(key)) {
+      result[key] = parseFloat(val);
+    } else if (geomType === 'text' && key === 'align') {
+      result.align = val;
+    } else if (geomType === 'image' && key === 'fit') {
+      result.fit = val;
+    } else if (geomType === 'camera' && ['zoom', 'ratio'].includes(key)) {
+      result[key] = parseFloat(val);
+    } else if (geomType === 'camera' && key === 'look') {
+      result.look = val;
+    }
+  }
+
+  // Boolean keywords
+  if (geomType === 'text') {
+    if (/\bbold\b/.test(line) && !/bold\s*=/.test(line)) result.bold = true;
+    if (/\bmono\b/.test(line) && !/mono\s*=/.test(line)) result.mono = true;
+  }
+  if (geomType === 'camera') {
+    if (/\bactive\b/.test(line) && !/active\s*=/.test(line)) result.active = true;
+  }
+
+  return result;
+}
+
+/** Extract transform values from a DSL line */
+function extractTransformValue(line: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  // at X,Y
+  const atMatch = line.match(/\bat\s+(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (atMatch) {
+    result.x = parseFloat(atMatch[1]);
+    result.y = parseFloat(atMatch[2]);
+  }
+
+  // at x=N or at y=N
+  const partialX = line.match(/\bat\s+x\s*=\s*(-?\d+(?:\.\d+)?)/);
+  const partialY = line.match(/\bat\s+y\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (partialX) result.x = parseFloat(partialX[1]);
+  if (partialY) result.y = parseFloat(partialY[1]);
+
+  // Transform key=value props
+  const kvRe = /\b(rotation|scale)\s*=\s*(-?\d+(?:\.\d+)?)/g;
+  let m;
+  while ((m = kvRe.exec(line)) !== null) {
+    result[m[1]] = parseFloat(m[2]);
+  }
+
+  return result;
+}
 
 // ─── Main resolution function ────────────────────────────────────
 
@@ -132,21 +236,42 @@ export function resolveDslClick(doc: string, pos: number): DslClickTarget | null
     }
   }
 
-  // (pre-a) Geometry keyword click → redirect to dimensions on same line
+  // (pre-a) Geometry/transform keyword click → compound popup
   {
-    const geomKwRe = /\b(rect|ellipse|image)\b/g;
+    // Geometry keywords: show compound popup with all sub-properties
+    const geomKwRe = /\b(rect|ellipse|image|text|camera)\b/g;
     let gm;
     while ((gm = geomKwRe.exec(line)) !== null) {
       if (posInLine >= gm.index && posInLine <= gm.index + gm[0].length) {
-        // Cursor is on a geometry keyword — find dimensions on the same line
-        const dimRe2 = /(\d+)x(\d+)/;
-        const dm = line.match(dimRe2);
-        if (dm) {
-          // Redirect to the 'w' half of dimensions
-          const redirectPos = lineStart + dm.index! + 1;
-          return resolveDslClick(doc, redirectPos);
-        }
-        return null;
+        const kw = gm[1];
+        const nodeIdx = countNodesBefore(doc, lineStart);
+        const value = extractCompoundValue(line, kw);
+        return {
+          kind: 'compound',
+          schemaPath: kw,
+          span: { from: lineStart, to: lineEnd === -1 ? doc.length : lineEnd },
+          value,
+          nodeIndex: nodeIdx,
+          compoundProp: kw,
+        };
+      }
+    }
+
+    // "at" keyword → compound transform popup
+    const atKwRe = /\bat\b/g;
+    let am;
+    while ((am = atKwRe.exec(line)) !== null) {
+      if (posInLine >= am.index && posInLine <= am.index + 2) {
+        const nodeIdx = countNodesBefore(doc, lineStart);
+        const value = extractTransformValue(line);
+        return {
+          kind: 'compound',
+          schemaPath: 'transform',
+          span: { from: lineStart, to: lineEnd === -1 ? doc.length : lineEnd },
+          value,
+          nodeIndex: nodeIdx,
+          compoundProp: 'transform',
+        };
       }
     }
   }
@@ -495,6 +620,33 @@ export function applyDslPopupChange(doc: string, target: DslClickTarget, newValu
 
     case 'boolean': {
       return before + String(newValue) + after;
+    }
+
+    case 'compound': {
+      // Full re-parse → modify property → re-generate approach.
+      // This handles compound targets (rect, transform, etc.) where the popup
+      // sends the full merged object and the DSL tokens are disjoint.
+      try {
+        const raw = parseDsl(doc);
+        if (!raw.objects || target.nodeIndex === undefined) return doc;
+        const node = raw.objects[target.nodeIndex];
+        if (!node) return doc;
+
+        // Apply the new value to the correct property
+        const prop = target.compoundProp!;
+        const newObj = newValue as Record<string, unknown>;
+
+        if (prop === 'transform') {
+          node.transform = { ...(node.transform || {}), ...newObj };
+        } else {
+          // Geometry property (rect, ellipse, text, image, camera)
+          node[prop] = { ...(node[prop] || {}), ...newObj };
+        }
+
+        return generateDsl(raw);
+      } catch {
+        return doc;
+      }
     }
 
     default:

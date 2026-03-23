@@ -173,16 +173,20 @@ describe('resolveDslClick', () => {
   });
 
   describe('null cases', () => {
-    it('clicking on rect keyword redirects to dimensions', () => {
+    it('clicking on rect keyword opens compound popup', () => {
       const { target } = click('box: re|ct 140x80 radius=8 fill 210 70 45');
       expect(target).not.toBeNull();
-      expect(target!.kind).toBe('dimension');
-      expect(target!.schemaPath).toBe('rect.w');
+      expect(target!.kind).toBe('compound');
+      expect(target!.schemaPath).toBe('rect');
+      expect(target!.value).toMatchObject({ w: 140, h: 80, radius: 8 });
     });
 
-    it('clicking on at keyword returns null', () => {
+    it('clicking on at keyword opens compound transform popup', () => {
       const { target } = click('box: rect 140x80 a|t 200,150');
-      expect(target).toBeNull();
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe('compound');
+      expect(target!.schemaPath).toBe('transform');
+      expect(target!.value).toMatchObject({ x: 200, y: 150 });
     });
 
     it('clicking on node id returns null', () => {

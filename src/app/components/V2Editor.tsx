@@ -759,7 +759,11 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       const oldSpan = currentTarget.span;
       const replacementLen = newDoc.length - doc.length + (oldSpan.to - oldSpan.from);
 
-      if (currentTarget.kind === 'color-compound') {
+      if (currentTarget.kind === 'compound') {
+        // Compound targets re-generate the full DSL, so spans are meaningless.
+        // Just update the value; the next change will re-parse from scratch.
+        dslTargetRef.current = { ...currentTarget, value: newValue };
+      } else if (currentTarget.kind === 'color-compound') {
         dslTargetRef.current = {
           ...currentTarget,
           value: newValue,
