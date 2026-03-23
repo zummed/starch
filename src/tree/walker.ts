@@ -1,7 +1,10 @@
 import type { Node } from '../types/node';
 
-/** Property keys that are sub-objects with enumerable leaf fields */
-const SUB_OBJECT_KEYS = ['fill', 'stroke', 'transform', 'dash', 'size', 'layout', 'layoutHint'] as const;
+/** Property keys that are sub-objects with enumerable leaf fields (recursed into) */
+const SUB_OBJECT_KEYS = ['transform', 'dash', 'size', 'layout', 'layoutHint'] as const;
+
+/** Property keys that are Color values — treated as atomic leaves, not recursed */
+const COLOR_KEYS = ['fill'] as const;
 
 /** Property keys that are geometry sub-objects */
 const GEOMETRY_KEYS = ['rect', 'ellipse', 'text', 'path', 'image'] as const;
@@ -28,6 +31,22 @@ function walkNode(node: Node, parentPath: string | null, paths: string[]): void 
   for (const key of SCALAR_KEYS) {
     if (ownKeys.has(key) && node[key] !== undefined) {
       paths.push(`${nodePath}.${key}`);
+    }
+  }
+
+  // Color properties — atomic leaf values, not recursed into
+  for (const key of COLOR_KEYS) {
+    if (ownKeys.has(key) && node[key] !== undefined) {
+      paths.push(`${nodePath}.${key}`);
+    }
+  }
+
+  // Stroke — special handling: { color (leaf), width (scalar) }
+  if (ownKeys.has('stroke') && node.stroke) {
+    const stroke = node.stroke;
+    paths.push(`${nodePath}.stroke.color`);
+    if (stroke.width !== undefined) {
+      paths.push(`${nodePath}.stroke.width`);
     }
   }
 

@@ -13,15 +13,26 @@ describe('generateTrackPaths', () => {
     expect(paths).toContain('box1.transform.y');
   });
 
-  it('generates paths for fill sub-object', () => {
+  it('generates a single leaf path for fill (Color is atomic)', () => {
     const node = createNode({
       id: 'box1',
       fill: { h: 210, s: 80, l: 50 },
     });
     const paths = generateTrackPaths([node]);
-    expect(paths).toContain('box1.fill.h');
-    expect(paths).toContain('box1.fill.s');
-    expect(paths).toContain('box1.fill.l');
+    expect(paths).toContain('box1.fill');
+    // Color sub-fields should NOT be recursed into
+    expect(paths).not.toContain('box1.fill.h');
+    expect(paths).not.toContain('box1.fill.s');
+    expect(paths).not.toContain('box1.fill.l');
+  });
+
+  it('generates a single leaf path for string fill', () => {
+    const node = createNode({
+      id: 'box1',
+      fill: 'steelblue',
+    });
+    const paths = generateTrackPaths([node]);
+    expect(paths).toContain('box1.fill');
   });
 
   it('generates paths for geometry fields', () => {
@@ -47,7 +58,7 @@ describe('generateTrackPaths', () => {
       ],
     })];
     const paths = generateTrackPaths(tree);
-    expect(paths).toContain('parent.bg.fill.h');
+    expect(paths).toContain('parent.bg.fill');
     expect(paths).toContain('parent.bg.rect.w');
   });
 
@@ -70,14 +81,26 @@ describe('generateTrackPaths', () => {
     expect(paths).toContain('root.mid.leaf.opacity');
   });
 
-  it('generates paths for stroke sub-object', () => {
+  it('generates paths for stroke sub-object (color + width)', () => {
     const node = createNode({
       id: 's1',
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
     });
     const paths = generateTrackPaths([node]);
-    expect(paths).toContain('s1.stroke.h');
+    expect(paths).toContain('s1.stroke.color');
     expect(paths).toContain('s1.stroke.width');
+    // Color sub-fields should NOT be recursed into
+    expect(paths).not.toContain('s1.stroke.color.h');
+  });
+
+  it('generates stroke.color even without explicit width', () => {
+    const node = createNode({
+      id: 's1',
+      stroke: { color: 'red' },
+    });
+    const paths = generateTrackPaths([node]);
+    expect(paths).toContain('s1.stroke.color');
+    expect(paths).not.toContain('s1.stroke.width');
   });
 
   it('generates paths for layoutHint freeform keys', () => {

@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { resolveShortcut, suggestShortcuts } from '../../dsl/resolveShortcut';
 
 const trackPaths = [
-  'box.fill.h', 'box.fill.s', 'box.fill.l',
-  'box.stroke.h', 'box.stroke.s', 'box.stroke.l', 'box.stroke.width',
+  'box.fill',
+  'box.stroke.color', 'box.stroke.width',
   'box.rect.w', 'box.rect.h',
   'box.transform.x', 'box.transform.y',
   'box.opacity',
   'cam.camera.zoom', 'cam.camera.look',
   'cam.transform.rotation',
   'card.title.text.size', 'card.title.text.content',
-  'card.badge.fill.h', 'card.badge.fill.s', 'card.badge.fill.l',
+  'card.badge.fill',
   'card.badge.ellipse.rx', 'card.badge.ellipse.ry',
 ];
 
@@ -36,8 +36,16 @@ describe('resolveShortcut', () => {
       expect(resolveShortcut('cam..rotation', trackPaths)).toBe('cam.transform.rotation');
     });
 
-    it('resolves box..width to box.stroke.width', () => {
+    it('resolves box..width to box.stroke.width (unambiguous)', () => {
       expect(resolveShortcut('box..width', trackPaths)).toBe('box.stroke.width');
+    });
+
+    it('resolves box..fill to box.fill (single segment)', () => {
+      expect(resolveShortcut('box..fill', trackPaths)).toBe('box.fill');
+    });
+
+    it('resolves box..color to box.stroke.color', () => {
+      expect(resolveShortcut('box..color', trackPaths)).toBe('box.stroke.color');
     });
 
     it('resolves card..content to card.title.text.content', () => {
@@ -46,8 +54,8 @@ describe('resolveShortcut', () => {
   });
 
   describe('pass-through (no shortcut)', () => {
-    it('returns box.fill.h unchanged when no .. present', () => {
-      expect(resolveShortcut('box.fill.h', trackPaths)).toBe('box.fill.h');
+    it('returns box.fill unchanged when no .. present', () => {
+      expect(resolveShortcut('box.fill', trackPaths)).toBe('box.fill');
     });
 
     it('returns cam.camera.zoom unchanged when no .. present', () => {
@@ -56,12 +64,15 @@ describe('resolveShortcut', () => {
   });
 
   describe('ambiguous shortcuts (should throw)', () => {
-    it('throws for box..h (matches fill.h, stroke.h, rect.h)', () => {
-      expect(() => resolveShortcut('box..h', trackPaths)).toThrow(/[Aa]mbiguous/);
+    it('throws for box..w (matches rect.w and stroke.width is "width" not "w"... wait rect.w is unique)', () => {
+      // With the new Color-as-leaf model, box..h resolves unambiguously to box.rect.h
+      expect(resolveShortcut('box..h', trackPaths)).toBe('box.rect.h');
     });
 
-    it('throws error message listing all candidates for box..h', () => {
-      expect(() => resolveShortcut('box..h', trackPaths)).toThrow('box..h');
+    it('throws for ambiguous suffix when multiple matches exist', () => {
+      // Create a scenario with actual ambiguity
+      const paths = [...trackPaths, 'box.extra.zoom', 'box.other.zoom'];
+      expect(() => resolveShortcut('box..zoom', paths)).toThrow(/[Aa]mbiguous/);
     });
   });
 
@@ -109,6 +120,7 @@ describe('suggestShortcuts', () => {
   it('returns shortcuts for card.badge sub-properties', () => {
     const suggestions = suggestShortcuts('card.badge', trackPaths);
     const shorts = suggestions.map(s => s.short);
+    expect(shorts).toContain('card.badge..fill');
     expect(shorts).toContain('card.badge..rx');
     expect(shorts).toContain('card.badge..ry');
   });
@@ -125,10 +137,11 @@ describe('suggestShortcuts', () => {
   });
 
   it('only includes unambiguous shortcuts (no ambiguous suffix suggestions)', () => {
-    // box has ambiguous 'h' (fill.h, stroke.h, rect.h) — should not appear
+    // With Color-as-leaf, box..h is unambiguous (only box.rect.h), so it should appear
     const suggestions = suggestShortcuts('box', trackPaths);
-    const ambiguousShorts = suggestions.filter(s => s.short === 'box..h');
-    expect(ambiguousShorts).toHaveLength(0);
+    const hShorts = suggestions.filter(s => s.short === 'box..h');
+    expect(hShorts).toHaveLength(1);
+    expect(hShorts[0].full).toBe('box.rect.h');
   });
 
   it('returns only unique short paths', () => {

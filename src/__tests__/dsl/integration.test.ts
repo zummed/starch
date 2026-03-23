@@ -83,8 +83,8 @@ animate 4s
 
     // Track paths generated
     expect(scene.trackPaths).toContain('box1.rect.w');
-    // fill 210 70 45 is now parsed as RGB {r,g,b}
-    expect(scene.trackPaths).toContain('primary.fill.r');
+    // fill is now an atomic Color leaf (not recursed into sub-fields)
+    expect(scene.trackPaths).toContain('primary.fill');
   });
 
   it('empty DSL input does not crash', () => {
