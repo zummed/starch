@@ -33,8 +33,8 @@ describe('parseScene', () => {
     const objNode = scene.nodes.find(n => n.id === 'n1');
     expect(objNode).toBeDefined();
     expect(objNode!.style).toBe('primary');
-    // Style generates track paths for animation
-    expect(scene.trackPaths).toContain('primary.fill.h');
+    // Style generates track paths for animation (fill is now an atomic Color leaf)
+    expect(scene.trackPaths).toContain('primary.fill');
   });
 
   it('generates track paths', () => {
@@ -44,7 +44,7 @@ describe('parseScene', () => {
       ]
     }`;
     const scene = parseScene(input);
-    expect(scene.trackPaths).toContain('n1.fill.h');
+    expect(scene.trackPaths).toContain('n1.fill');
     expect(scene.trackPaths).toContain('n1.transform.x');
     expect(scene.trackPaths).toContain('n1.rect.w');
   });
@@ -92,7 +92,7 @@ describe('parseScene', () => {
     const parent = scene.nodes.find(n => n.id === 'parent')!;
     expect(parent.children).toHaveLength(1);
     expect(parent.children[0].id).toBe('child');
-    expect(scene.trackPaths).toContain('parent.child.fill.h');
+    expect(scene.trackPaths).toContain('parent.child.fill');
   });
 
   it('applies HSL fill directly', () => {
