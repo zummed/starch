@@ -132,6 +132,25 @@ export function resolveDslClick(doc: string, pos: number): DslClickTarget | null
     }
   }
 
+  // (pre-a) Geometry keyword click → redirect to dimensions on same line
+  {
+    const geomKwRe = /\b(rect|ellipse|image)\b/g;
+    let gm;
+    while ((gm = geomKwRe.exec(line)) !== null) {
+      if (posInLine >= gm.index && posInLine <= gm.index + gm[0].length) {
+        // Cursor is on a geometry keyword — find dimensions on the same line
+        const dimRe2 = /(\d+)x(\d+)/;
+        const dm = line.match(dimRe2);
+        if (dm) {
+          // Redirect to the 'w' half of dimensions
+          const redirectPos = lineStart + dm.index! + 1;
+          return resolveDslClick(doc, redirectPos);
+        }
+        return null;
+      }
+    }
+  }
+
   // (a) Dimensions NxN
   {
     const dimRe = /(\d+)x(\d+)/g;

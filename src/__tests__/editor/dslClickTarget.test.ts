@@ -173,9 +173,11 @@ describe('resolveDslClick', () => {
   });
 
   describe('null cases', () => {
-    it('clicking on rect keyword returns null', () => {
+    it('clicking on rect keyword redirects to dimensions', () => {
       const { target } = click('box: re|ct 140x80 radius=8 fill 210 70 45');
-      expect(target).toBeNull();
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe('dimension');
+      expect(target!.schemaPath).toBe('rect.w');
     });
 
     it('clicking on at keyword returns null', () => {

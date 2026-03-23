@@ -745,13 +745,40 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       popupEditingRef.current = true;
       onChangeRef.current(json5TextRef.current);
 
-      // Re-resolve the click target at the same position for continued dragging
-      const newTarget = resolveDslClick(newDoc, popup.target.span.from + 1);
+      // Update target for continued dragging.
+      // For color-compound and dimension targets, compute the new span directly
+      // from the replacement length (re-resolving would land on a sub-token like
+      // hsl-component instead of color-compound, causing type mismatch on next change).
+      // For other kinds, re-resolve at the span start.
+      let updatedTarget: DslClickTarget | null = popup.target;
+      const oldSpan = popup.target.span;
+      const replacementLen = newDoc.length - doc.length + (oldSpan.to - oldSpan.from);
+
+      if (popup.target.kind === 'color-compound') {
+        updatedTarget = {
+          ...popup.target,
+          value: newValue,
+          span: { from: oldSpan.from, to: oldSpan.from + replacementLen },
+        };
+      } else if (popup.target.kind === 'dimension' && popup.target.fullDimSpan) {
+        const oldFullLen = popup.target.fullDimSpan.to - popup.target.fullDimSpan.from;
+        const newFullLen = newDoc.length - doc.length + oldFullLen;
+        updatedTarget = {
+          ...popup.target,
+          value: newValue,
+          fullDimSpan: { from: popup.target.fullDimSpan.from, to: popup.target.fullDimSpan.from + newFullLen },
+          span: { from: popup.target.fullDimSpan.from, to: popup.target.fullDimSpan.from + newFullLen },
+        };
+      } else {
+        const reResolved = resolveDslClick(newDoc, oldSpan.from + 1);
+        updatedTarget = reResolved ?? { ...popup.target, value: newValue };
+      }
+
       setPopup(prev => prev ? {
         ...prev,
         value: newValue,
-        target: newTarget ?? prev.target,
-        cursorPos: popup.target!.span.from + 1,
+        target: updatedTarget!,
+        cursorPos: oldSpan.from + 1,
       } : null);
     } else {
       // JSON5 mode — existing behavior
