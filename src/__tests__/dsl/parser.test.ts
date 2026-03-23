@@ -1,0 +1,411 @@
+import { describe, it, expect } from 'vitest';
+import { parseDsl } from '../../dsl/parser';
+
+describe('DSL parser', () => {
+  // ── Document metadata ──────────────────────────────────────────
+  describe('document metadata', () => {
+    it('parses name', () => {
+      const result = parseDsl('name "My Diagram"');
+      expect(result.name).toBe('My Diagram');
+    });
+
+    it('parses description', () => {
+      const result = parseDsl('description "A test diagram"');
+      expect(result.description).toBe('A test diagram');
+    });
+
+    it('parses background color string', () => {
+      const result = parseDsl('background "#1a1a2e"');
+      expect(result.background).toBe('#1a1a2e');
+    });
+
+    it('parses viewport', () => {
+      const result = parseDsl('viewport 600x400');
+      expect(result.viewport).toEqual({ width: 600, height: 400 });
+    });
+
+    it('parses all metadata together', () => {
+      const result = parseDsl(`
+name "My Diagram"
+description "A test"
+background "#1a1a2e"
+viewport 600x400
+`);
+      expect(result.name).toBe('My Diagram');
+      expect(result.description).toBe('A test');
+      expect(result.background).toBe('#1a1a2e');
+      expect(result.viewport).toEqual({ width: 600, height: 400 });
+    });
+  });
+
+  // ── Images ─────────────────────────────────────────────────────
+  describe('images', () => {
+    it('parses images block', () => {
+      const result = parseDsl(`
+images
+  photo: "https://example.com/photo.png"
+  logo: "logo.svg"
+`);
+      expect(result.images).toEqual({
+        photo: 'https://example.com/photo.png',
+        logo: 'logo.svg',
+      });
+    });
+  });
+
+  // ── Styles ─────────────────────────────────────────────────────
+  describe('styles', () => {
+    it('parses a style block', () => {
+      const result = parseDsl(`
+style primary
+  fill 210 70 45
+  stroke 210 80 30 width=2
+`);
+      expect(result.styles).toEqual({
+        primary: {
+          fill: { h: 210, s: 70, l: 45 },
+          stroke: { h: 210, s: 80, l: 30, width: 2 },
+        },
+      });
+    });
+
+    it('parses multiple styles', () => {
+      const result = parseDsl(`
+style primary
+  fill 210 70 45
+
+style danger
+  fill 0 80 50
+`);
+      expect(result.styles.primary).toBeDefined();
+      expect(result.styles.danger).toBeDefined();
+      expect(result.styles.danger.fill).toEqual({ h: 0, s: 80, l: 50 });
+    });
+  });
+
+  // ── Geometry types ─────────────────────────────────────────────
+  describe('geometry types', () => {
+    it('parses rect with dimensions and radius', () => {
+      const result = parseDsl('box: rect 160x100 radius=8');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('box');
+      expect(obj.rect).toEqual({ w: 160, h: 100, radius: 8 });
+    });
+
+    it('parses ellipse with dimensions', () => {
+      const result = parseDsl('dot: ellipse 8x8');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('dot');
+      expect(obj.ellipse).toEqual({ rx: 4, ry: 4 });
+    });
+
+    it('parses text with content', () => {
+      const result = parseDsl('title: text "Hello" size=14 bold');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('title');
+      expect(obj.text).toEqual({ content: 'Hello', size: 14, bold: true });
+    });
+
+    it('parses image with src and dimensions', () => {
+      const result = parseDsl('pic: image "photo.png" 200x150 fit=cover');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('pic');
+      expect(obj.image).toEqual({ src: 'photo.png', w: 200, h: 150, fit: 'cover' });
+    });
+
+    it('parses camera', () => {
+      const result = parseDsl('cam: camera look=all zoom=1.5 active');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('cam');
+      expect(obj.camera).toEqual({ look: 'all', zoom: 1.5, active: true });
+    });
+
+    it('parses container (group with at)', () => {
+      const result = parseDsl('group: at 100,100');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('group');
+      expect(obj.transform).toEqual({ x: 100, y: 100 });
+    });
+  });
+
+  // ── Inline properties ──────────────────────────────────────────
+  describe('inline properties', () => {
+    it('parses fill with HSL', () => {
+      const result = parseDsl('box: rect 10x10 fill 210 70 45');
+      expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+    });
+
+    it('parses fill with HSL and alpha', () => {
+      const result = parseDsl('box: rect 10x10 fill 210 70 45 a=0.5');
+      expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45, a: 0.5 });
+    });
+
+    it('parses fill with named color', () => {
+      const result = parseDsl('box: rect 10x10 fill white');
+      expect(result.objects[0].fill).toEqual({ h: 0, s: 0, l: 100 });
+    });
+
+    it('parses fill with hex color', () => {
+      const result = parseDsl('box: rect 10x10 fill #3B82F6');
+      const fill = result.objects[0].fill;
+      expect(fill.h).toBeDefined();
+      expect(fill.s).toBeDefined();
+      expect(fill.l).toBeDefined();
+    });
+
+    it('parses stroke with width', () => {
+      const result = parseDsl('box: rect 10x10 stroke 210 80 30 width=2');
+      expect(result.objects[0].stroke).toEqual({ h: 210, s: 80, l: 30, width: 2 });
+    });
+
+    it('parses stroke with alpha', () => {
+      const result = parseDsl('box: rect 10x10 stroke 0 0 60 a=0.5 width=3');
+      expect(result.objects[0].stroke).toEqual({ h: 0, s: 0, l: 60, a: 0.5, width: 3 });
+    });
+
+    it('parses at position x,y', () => {
+      const result = parseDsl('box: rect 10x10 at 200,150');
+      expect(result.objects[0].transform).toEqual({ x: 200, y: 150 });
+    });
+
+    it('parses partial at position y=-20', () => {
+      const result = parseDsl('title: text "Hi" at y=-20');
+      expect(result.objects[0].transform).toEqual({ y: -20 });
+    });
+
+    it('parses style reference with @', () => {
+      const result = parseDsl('box: rect 10x10 @primary');
+      expect(result.objects[0].style).toBe('primary');
+    });
+
+    it('parses key=value properties', () => {
+      const result = parseDsl('box: rect 10x10 opacity=0.8 depth=5');
+      expect(result.objects[0].opacity).toBe(0.8);
+      expect(result.objects[0].depth).toBe(5);
+    });
+
+    it('parses boolean properties', () => {
+      const result = parseDsl('title: text "Hi" bold mono');
+      expect(result.objects[0].text.bold).toBe(true);
+      expect(result.objects[0].text.mono).toBe(true);
+    });
+
+    it('parses visible=false', () => {
+      const result = parseDsl('box: rect 10x10 visible=false');
+      expect(result.objects[0].visible).toBe(false);
+    });
+
+    it('parses slot', () => {
+      const result = parseDsl('box: rect 10x10 slot=container');
+      expect(result.objects[0].slot).toBe('container');
+    });
+
+    it('parses multiple properties on one node', () => {
+      const result = parseDsl('box: rect 160x100 radius=8 @primary fill 210 70 45 at 200,150');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('box');
+      expect(obj.rect).toEqual({ w: 160, h: 100, radius: 8 });
+      expect(obj.style).toBe('primary');
+      expect(obj.fill).toEqual({ h: 210, s: 70, l: 45 });
+      expect(obj.transform).toEqual({ x: 200, y: 150 });
+    });
+  });
+
+  // ── Children ───────────────────────────────────────────────────
+  describe('children', () => {
+    it('parses indented children', () => {
+      const result = parseDsl(`
+card: rect 160x100 at 200,150
+  title: text "Hello" size=14
+  badge: ellipse 8x8
+`);
+      const card = result.objects[0];
+      expect(card.id).toBe('card');
+      expect(card.children).toHaveLength(2);
+      expect(card.children[0].id).toBe('title');
+      expect(card.children[0].text.content).toBe('Hello');
+      expect(card.children[1].id).toBe('badge');
+      expect(card.children[1].ellipse).toEqual({ rx: 4, ry: 4 });
+    });
+
+    it('parses nested children (multi-level)', () => {
+      const result = parseDsl(`
+outer: rect 200x200
+  inner: rect 100x100
+    deep: ellipse 10x10
+`);
+      const outer = result.objects[0];
+      expect(outer.children).toHaveLength(1);
+      expect(outer.children[0].id).toBe('inner');
+      expect(outer.children[0].children).toHaveLength(1);
+      expect(outer.children[0].children[0].id).toBe('deep');
+    });
+  });
+
+  // ── Block properties ───────────────────────────────────────────
+  describe('block properties', () => {
+    it('parses fill as block property', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  fill 210 70 45
+`);
+      expect(result.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+    });
+
+    it('parses stroke as block property', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  stroke 210 80 30 width=2
+`);
+      expect(result.objects[0].stroke).toEqual({ h: 210, s: 80, l: 30, width: 2 });
+    });
+
+    it('parses layout as block property', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  layout flex row gap=10
+`);
+      expect(result.objects[0].layout).toEqual({ type: 'flex', direction: 'row', gap: 10 });
+    });
+
+    it('parses dash as block property', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  dash dashed length=10 gap=5
+`);
+      expect(result.objects[0].dash).toEqual({ pattern: 'dashed', length: 10, gap: 5 });
+    });
+
+    it('distinguishes block properties from child nodes', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  fill 210 70 45
+  stroke 0 0 0
+  title: text "Hello"
+`);
+      const card = result.objects[0];
+      expect(card.fill).toEqual({ h: 210, s: 70, l: 45 });
+      expect(card.stroke).toEqual({ h: 0, s: 0, l: 0 });
+      expect(card.children).toHaveLength(1);
+      expect(card.children[0].id).toBe('title');
+    });
+  });
+
+  // ── Connections ────────────────────────────────────────────────
+  describe('connections', () => {
+    it('parses simple connection a -> b', () => {
+      const result = parseDsl('link: a -> b');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('link');
+      expect(obj.path).toEqual({ route: ['a', 'b'] });
+    });
+
+    it('parses connection with properties', () => {
+      const result = parseDsl('link: a -> b stroke 0 0 60 width=2');
+      const obj = result.objects[0];
+      expect(obj.path).toEqual({ route: ['a', 'b'] });
+      expect(obj.stroke).toEqual({ h: 0, s: 0, l: 60, width: 2 });
+    });
+
+    it('parses connection with waypoints', () => {
+      const result = parseDsl('link: a -> (250,100) -> (250,200) -> b smooth radius=15');
+      const obj = result.objects[0];
+      expect(obj.path).toEqual({
+        route: ['a', [250, 100], [250, 200], 'b'],
+        smooth: true,
+        radius: 15,
+      });
+    });
+
+    it('parses connection with node+offset PointRef', () => {
+      const result = parseDsl('link: a -> ("b", 0, -30)');
+      const obj = result.objects[0];
+      expect(obj.path).toEqual({ route: ['a', ['b', 0, -30]] });
+    });
+  });
+
+  // ── Explicit point paths ───────────────────────────────────────
+  describe('explicit point paths', () => {
+    it('parses path with points', () => {
+      const result = parseDsl('tri: path (0,-40) (40,30) (-40,30) closed fill 280 60 45');
+      const obj = result.objects[0];
+      expect(obj.id).toBe('tri');
+      expect(obj.path).toEqual({
+        points: [[0, -40], [40, 30], [-40, 30]],
+        closed: true,
+      });
+      expect(obj.fill).toEqual({ h: 280, s: 60, l: 45 });
+    });
+  });
+
+  // ── Flat references ────────────────────────────────────────────
+  describe('flat references', () => {
+    it('applies flat reference to nested property', () => {
+      const result = parseDsl(`
+card: rect 160x100
+  badge: ellipse 8x8
+
+card.badge.fill: 120 70 45
+`);
+      const card = result.objects[0];
+      expect(card.children[0].fill).toEqual({ h: 120, s: 70, l: 45 });
+    });
+  });
+
+  // ── JSON escape hatch ─────────────────────────────────────────
+  describe('JSON escape hatch', () => {
+    it('parses JSON object in braces', () => {
+      const result = parseDsl('box: rect 10x10 layout={ type: "flex", direction: "row" }');
+      expect(result.objects[0].layout).toEqual({ type: 'flex', direction: 'row' });
+    });
+  });
+
+  // ── Multiple objects ───────────────────────────────────────────
+  describe('multiple objects', () => {
+    it('parses multiple top-level objects', () => {
+      const result = parseDsl(`
+a: rect 10x10
+b: ellipse 20x20
+c: text "hello"
+`);
+      expect(result.objects).toHaveLength(3);
+      expect(result.objects[0].id).toBe('a');
+      expect(result.objects[1].id).toBe('b');
+      expect(result.objects[2].id).toBe('c');
+    });
+  });
+
+  // ── Transform extras ──────────────────────────────────────────
+  describe('transform extras', () => {
+    it('parses rotation and scale in at', () => {
+      const result = parseDsl('box: rect 10x10 at 100,200 rotation=45 scale=2');
+      expect(result.objects[0].transform).toEqual({ x: 100, y: 200, rotation: 45, scale: 2 });
+    });
+  });
+
+  // ── Complete scene ─────────────────────────────────────────────
+  describe('complete scene', () => {
+    it('parses a complete scene with metadata, styles, and objects', () => {
+      const result = parseDsl(`
+name "Test"
+viewport 800x600
+background "#000"
+
+style primary
+  fill 210 70 45
+
+box: rect 160x100 @primary at 200,150
+  label: text "Hi" size=12
+`);
+      expect(result.name).toBe('Test');
+      expect(result.viewport).toEqual({ width: 800, height: 600 });
+      expect(result.background).toBe('#000');
+      expect(result.styles.primary).toBeDefined();
+      expect(result.objects).toHaveLength(1);
+      expect(result.objects[0].id).toBe('box');
+      expect(result.objects[0].style).toBe('primary');
+      expect(result.objects[0].children[0].id).toBe('label');
+    });
+  });
+
+});
