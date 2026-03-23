@@ -362,6 +362,10 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     position: { x: number; y: number };
   } | null>(null);
   const popupOpenRef = useRef(false);
+  // Sync ref for the DSL click target — updated synchronously on every popup change,
+  // avoiding stale closure issues during rapid slider drags where multiple onChange
+  // calls fire before React re-renders with the updated popup state.
+  const dslTargetRef = useRef<DslClickTarget | null>(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -425,6 +429,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
 
       const coords = view.coordsAtPos(pos);
       if (coords) {
+        dslTargetRef.current = target;
         setPopup({
           schemaPath: target.schemaPath,
           target,
@@ -724,9 +729,11 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     const doc = view.state.doc.toString();
     const isDsl = formatRef.current === 'dsl';
 
-    if (isDsl && popup.target) {
-      // DSL mode: use applyDslPopupChange with the resolved target
-      const newDoc = applyDslPopupChange(doc, popup.target, newValue);
+    const currentTarget = dslTargetRef.current;
+    if (isDsl && currentTarget) {
+      // DSL mode: use applyDslPopupChange with the ref-based target
+      // (ref avoids stale closure during rapid slider drags)
+      const newDoc = applyDslPopupChange(doc, currentTarget, newValue);
 
       externalUpdate.current = true;
       view.dispatch({
@@ -745,39 +752,38 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       popupEditingRef.current = true;
       onChangeRef.current(json5TextRef.current);
 
-      // Update target for continued dragging.
+      // Update target ref SYNCHRONOUSLY for the next rapid onChange call.
       // For color-compound and dimension targets, compute the new span directly
       // from the replacement length (re-resolving would land on a sub-token like
-      // hsl-component instead of color-compound, causing type mismatch on next change).
-      // For other kinds, re-resolve at the span start.
-      let updatedTarget: DslClickTarget | null = popup.target;
-      const oldSpan = popup.target.span;
+      // hsl-component instead of color-compound, causing type mismatch).
+      const oldSpan = currentTarget.span;
       const replacementLen = newDoc.length - doc.length + (oldSpan.to - oldSpan.from);
 
-      if (popup.target.kind === 'color-compound') {
-        updatedTarget = {
-          ...popup.target,
+      if (currentTarget.kind === 'color-compound') {
+        dslTargetRef.current = {
+          ...currentTarget,
           value: newValue,
           span: { from: oldSpan.from, to: oldSpan.from + replacementLen },
         };
-      } else if (popup.target.kind === 'dimension' && popup.target.fullDimSpan) {
-        const oldFullLen = popup.target.fullDimSpan.to - popup.target.fullDimSpan.from;
+      } else if (currentTarget.kind === 'dimension' && currentTarget.fullDimSpan) {
+        const oldFullLen = currentTarget.fullDimSpan.to - currentTarget.fullDimSpan.from;
         const newFullLen = newDoc.length - doc.length + oldFullLen;
-        updatedTarget = {
-          ...popup.target,
+        dslTargetRef.current = {
+          ...currentTarget,
           value: newValue,
-          fullDimSpan: { from: popup.target.fullDimSpan.from, to: popup.target.fullDimSpan.from + newFullLen },
-          span: { from: popup.target.fullDimSpan.from, to: popup.target.fullDimSpan.from + newFullLen },
+          fullDimSpan: { from: currentTarget.fullDimSpan.from, to: currentTarget.fullDimSpan.from + newFullLen },
+          span: { from: currentTarget.fullDimSpan.from, to: currentTarget.fullDimSpan.from + newFullLen },
         };
       } else {
         const reResolved = resolveDslClick(newDoc, oldSpan.from + 1);
-        updatedTarget = reResolved ?? { ...popup.target, value: newValue };
+        dslTargetRef.current = reResolved ?? { ...currentTarget, value: newValue };
       }
 
+      // Also update React state for re-render (non-critical path)
       setPopup(prev => prev ? {
         ...prev,
         value: newValue,
-        target: updatedTarget!,
+        target: dslTargetRef.current!,
         cursorPos: oldSpan.from + 1,
       } : null);
     } else {
@@ -843,7 +849,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
           value={popup.value}
           position={popup.position}
           onChange={handlePopupChange}
-          onClose={() => setPopup(null)}
+          onClose={() => { dslTargetRef.current = null; setPopup(null); }}
         />,
         document.body,
       )}
