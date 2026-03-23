@@ -99,7 +99,7 @@ describe('emitFrame', () => {
     const node = createNode({
       id: 'p',
       path: { points: [[0,0],[100,100]], closed: false },
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
     });
     emitFrame(backend, [node], [node]);
     const drawCall = calls.find(c => c.method === 'drawPath');
@@ -221,7 +221,7 @@ describe('emitFrame', () => {
     const node = createNode({
       id: 'p',
       path: { points: [[0,0],[100,0]], closed: false },
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
       dash: { pattern: 'dashed', length: 8, gap: 4 },
     });
     emitFrame(backend, [node], [node]);
@@ -240,7 +240,7 @@ describe('emitFrame', () => {
     const conn = createNode({
       id: 'conn',
       path: { route: ['a', 'b'] },
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
     });
     emitFrame(backend, [a, b, conn], [a, b, conn]);
     const drawCall = calls.find(c => c.method === 'drawPath');
@@ -257,7 +257,7 @@ describe('emitFrame', () => {
     const conn = createNode({
       id: 'conn',
       path: { route: ['a', 'b'] },
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
     });
     emitFrame(backend, [a, b, conn], [a, b, conn]);
     const drawCall = calls.find(c => c.method === 'drawPath');

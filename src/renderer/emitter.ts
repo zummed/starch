@@ -3,17 +3,15 @@
  * This is the only code that bridges the node model and the renderer interface.
  */
 import type { Node, PathGeom } from '../types/node';
-import type { HslColor, Stroke } from '../types/properties';
+import type { Color, Stroke } from '../types/properties';
 import type { RenderBackend, RgbaColor, StrokeStyle, PathSegment } from './backend';
 import type { ViewBox } from './camera';
-import { hslToRgba } from './colorConvert';
+import { colorToRgba } from '../types/color';
 import { resolvePathGeometry } from './pathGeometry';
 
-function hslFillToRgba(fill: HslColor | undefined): RgbaColor | null {
-  if (!fill) return null;
-  const rgba = hslToRgba(fill);
-  if (fill.a !== undefined) rgba.a = fill.a;
-  return rgba;
+function fillToRgba(fill: Color | undefined): RgbaColor | null {
+  if (fill === undefined || fill === null) return null;
+  return colorToRgba(fill);
 }
 
 function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number; pattern: string } | undefined {
@@ -31,8 +29,7 @@ function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number;
 
 function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeStyle | null {
   if (!stroke) return null;
-  const color = hslToRgba({ h: stroke.h, s: stroke.s, l: stroke.l });
-  if (stroke.a !== undefined) color.a = stroke.a;
+  const color = colorToRgba(stroke.color);
   const style: StrokeStyle = {
     color,
     width: stroke.width ?? 1,
@@ -122,7 +119,7 @@ function emitNode(
   backend: RenderBackend,
   node: Node,
   allRoots: Node[],
-  parentFill: HslColor | undefined,
+  parentFill: Color | undefined,
   parentStroke: Stroke | undefined,
   parentOpacity: number,
 ): void {
@@ -132,7 +129,7 @@ function emitNode(
   if (node._isStyle) return;
 
   // Resolve style: look up style node and use its properties as defaults
-  let styleFill: HslColor | undefined;
+  let styleFill: Color | undefined;
   let styleStroke: Stroke | undefined;
   let styleOpacity: number | undefined;
   if (node.style) {
@@ -172,7 +169,7 @@ function emitNode(
 
   const fill = node.fill ?? styleFill ?? parentFill;
   const stroke = node.stroke ?? styleStroke ?? parentStroke;
-  const fillRgba = hslFillToRgba(fill);
+  const fillRgba = fillToRgba(fill);
   const strokeStyle = strokeToStyle(stroke, node.dash);
 
   // Emit geometry

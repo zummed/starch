@@ -1,15 +1,15 @@
 import type { Node } from '../types/node';
-import type { HslColor, Stroke } from '../types/properties';
-import { hslToCSS, strokeToCSS } from './hslToCSS';
+import type { Color, Stroke } from '../types/properties';
+import { colorToCSS, strokeToCSS } from './hslToCSS';
 
 export interface SvgAttrs {
   tag: string;
   attrs: Record<string, string | number>;
 }
 
-function resolveColor(fill: HslColor | undefined, parentFill: HslColor | undefined): string | undefined {
+function resolveColor(fill: Color | undefined, parentFill: Color | undefined): string | undefined {
   const color = fill ?? parentFill;
-  return color ? hslToCSS(color) : undefined;
+  return color !== undefined ? colorToCSS(color) : undefined;
 }
 
 function resolveStroke(stroke: Stroke | undefined, parentStroke: Stroke | undefined): { color?: string; width?: number } {
@@ -21,7 +21,7 @@ function resolveStroke(stroke: Stroke | undefined, parentStroke: Stroke | undefi
 
 export function geometryToSvg(
   node: Node,
-  inheritedFill?: HslColor,
+  inheritedFill?: Color,
   inheritedStroke?: Stroke,
 ): SvgAttrs | null {
   const fill = resolveColor(node.fill, inheritedFill);

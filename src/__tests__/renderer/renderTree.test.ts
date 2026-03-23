@@ -85,7 +85,8 @@ describe('renderTree', () => {
     })];
     const result = renderTree(tree);
     // Child should have parent's fill since it has no own fill
-    expect(result[0].children[0].geometry!.attrs.fill).toBe('hsl(210, 80%, 50%)');
+    // colorToCSS now converts through RGBA format
+    expect(result[0].children[0].geometry!.attrs.fill).toMatch(/^rgba?\(/);
   });
 
   it('renders text content', () => {

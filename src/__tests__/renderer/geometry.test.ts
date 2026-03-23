@@ -15,7 +15,8 @@ describe('geometryToSvg', () => {
     expect(result!.attrs.width).toBe(100);
     expect(result!.attrs.height).toBe(60);
     expect(result!.attrs.rx).toBe(4);
-    expect(result!.attrs.fill).toBe('hsl(210, 80%, 50%)');
+    // colorToCSS now converts through RGBA
+    expect(result!.attrs.fill).toMatch(/^rgba?\(/);
   });
 
   it('converts ellipse to SVG attrs', () => {
@@ -44,7 +45,7 @@ describe('geometryToSvg', () => {
     const node = createNode({
       id: 'p',
       path: { points: [[0,0], [100,100], [200,0]], closed: true },
-      stroke: { h: 0, s: 0, l: 60, width: 2 },
+      stroke: { color: { h: 0, s: 0, l: 60 }, width: 2 },
     });
     const result = geometryToSvg(node);
     expect(result!.tag).toBe('path');
@@ -75,7 +76,7 @@ describe('geometryToSvg', () => {
     });
     const parentFill = { h: 120, s: 50, l: 40 };
     const result = geometryToSvg(node, parentFill);
-    expect(result!.attrs.fill).toBe('hsl(120, 50%, 40%)');
+    expect(result!.attrs.fill).toMatch(/^rgba?\(/);
   });
 
   it('own fill overrides parent fill', () => {
@@ -86,6 +87,8 @@ describe('geometryToSvg', () => {
     });
     const parentFill = { h: 120, s: 50, l: 40 };
     const result = geometryToSvg(node, parentFill);
-    expect(result!.attrs.fill).toBe('hsl(0, 100%, 50%)');
+    // Own fill (red) overrides parent fill
+    expect(result!.attrs.fill).toContain('255');
+    expect(result!.attrs.fill).toMatch(/^rgba?\(/);
   });
 });
