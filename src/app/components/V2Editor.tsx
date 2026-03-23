@@ -546,9 +546,8 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
       const isDsl = formatRef.current === 'dsl';
       return [
         // Language: JSON for JSON5 mode, DSL language for DSL mode
-        langCompartment.current.of(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : json()),
+        langCompartment.current.of(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : [json(), starchHighlight]),
         starchTheme,
-        starchHighlight,
         lineNumbers(),
         highlightActiveLine(),
         bracketMatching(),
@@ -712,7 +711,7 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
     const isDsl = newFormat === 'dsl';
     view.dispatch({
       effects: [
-        langCompartment.current.reconfigure(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : json()),
+        langCompartment.current.reconfigure(isDsl ? [dslLanguage, dslHighlight, dslInteractiveTheme] : [json(), starchHighlight]),
         linterCompartment.current.reconfigure(isDsl ? dslEditorLinter : v2EditorLinter),
         completionCompartment.current.reconfigure(
           autocompletion({
