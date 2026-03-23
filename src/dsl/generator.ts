@@ -155,42 +155,57 @@ function formatExplicitPath(node: any): string {
   return s;
 }
 
-// ─── Inline Property Fragments ────────────────────────────────────
+// ─── Properties that the parser handles inline vs block ───────────
+// The parser's parseInlineProps handles: fill, stroke, at, @style, key=value, booleans
+// The parser's parseBlockProperty handles: fill, stroke, layout, dash
+// So: fill/stroke work both inline and block. layout/dash ONLY work as block props.
 
+/**
+ * Format properties that are safe for inline (single-line) rendering.
+ * Excludes layout and dash which require block property syntax.
+ */
 function formatInlineProps(node: any): string {
   const parts: string[] = [];
 
   if (node.style) parts.push(`@${node.style}`);
   if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
   if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.dash) parts.push(formatDash(node.dash));
   if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
   if (node.visible === false) parts.push(`visible=false`);
   if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
   if (node.slot !== undefined) parts.push(`slot=${node.slot}`);
-  if (node.layout) parts.push(formatLayout(node.layout));
-  if (node.transform) parts.push(formatTransform(node.transform));
+  if (node.transform) {
+    const t = formatTransform(node.transform);
+    if (t) parts.push(t);
+  }
 
   return parts.join(' ');
 }
 
-// ─── Block Property Lines ─────────────────────────────────────────
-
-function formatBlockProps(node: any, indent: string): string[] {
+/**
+ * Format properties that must be rendered as indented block lines.
+ * These are properties that the parser only handles via parseBlockProperty.
+ */
+function formatBlockOnlyProps(node: any, indent: string): string[] {
   const lines: string[] = [];
+  if (node.dash) lines.push(`${indent}${formatDashBlock(node.dash)}`);
+  if (node.layout) lines.push(`${indent}${formatLayout(node.layout)}`);
+  return lines;
+}
 
-  if (node.style) lines.push(`${indent}@${node.style}`);
+/**
+ * In full block mode, emit fill/stroke as indented block properties too.
+ */
+function formatBlockVisualProps(node: any, indent: string): string[] {
+  const lines: string[] = [];
   if (node.fill) lines.push(`${indent}fill ${formatColor(node.fill)}`);
   if (node.stroke) lines.push(`${indent}stroke ${formatStroke(node.stroke)}`);
-  if (node.dash) lines.push(`${indent}${formatDash(node.dash)}`);
-  if (node.opacity !== undefined) lines.push(`${indent}opacity=${node.opacity}`);
-  if (node.visible === false) lines.push(`${indent}visible=false`);
-  if (node.depth !== undefined) lines.push(`${indent}depth=${node.depth}`);
-  if (node.slot !== undefined) lines.push(`${indent}slot=${node.slot}`);
-  if (node.layout) lines.push(`${indent}${formatLayout(node.layout)}`);
-  if (node.transform) lines.push(`${indent}${formatTransform(node.transform)}`);
-
   return lines;
+}
+
+/** Check if a node has properties that require block rendering. */
+function hasBlockOnlyProps(node: any): boolean {
+  return !!(node.dash || node.layout);
 }
 
 // ─── Transform Formatting ─────────────────────────────────────────
@@ -229,8 +244,9 @@ function formatTransform(transform: any): string {
 
 // ─── Dash Formatting ──────────────────────────────────────────────
 
-function formatDash(dash: any): string {
-  let s = `dash=${dash.pattern}`;
+/** Block form: `dash dashed length=10 gap=5` — used as indented block property. */
+function formatDashBlock(dash: any): string {
+  let s = `dash ${dash.pattern}`;
   if (dash.length !== undefined) s += ` length=${dash.length}`;
   if (dash.gap !== undefined) s += ` gap=${dash.gap}`;
   return s;
@@ -272,6 +288,8 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
     } else {
       lines.push(connLine);
     }
+    // Block-only props (dash, layout) even on connections
+    lines.push(...formatBlockOnlyProps(node, childIndent));
     return lines;
   }
 
@@ -284,36 +302,56 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
     } else {
       lines.push(pathLine);
     }
+    lines.push(...formatBlockOnlyProps(node, childIndent));
     return lines;
   }
 
   const geom = formatGeometry(node);
   const isBlock = shouldRenderBlock(node, options);
+  const needsBlockBody = hasBlockOnlyProps(node);
 
   if (isBlock) {
-    // Block mode: geometry on first line, props on subsequent indented lines
+    // Block mode: geometry + inline-safe props on first line,
+    // fill/stroke/dash/layout as indented block properties
+    const inlineOnlyParts: string[] = [];
+    if (node.style) inlineOnlyParts.push(`@${node.style}`);
+    if (node.opacity !== undefined) inlineOnlyParts.push(`opacity=${node.opacity}`);
+    if (node.visible === false) inlineOnlyParts.push(`visible=false`);
+    if (node.depth !== undefined) inlineOnlyParts.push(`depth=${node.depth}`);
+    if (node.slot !== undefined) inlineOnlyParts.push(`slot=${node.slot}`);
+    if (node.transform) {
+      const t = formatTransform(node.transform);
+      if (t) inlineOnlyParts.push(t);
+    }
+
+    const inlineSuffix = inlineOnlyParts.length > 0 ? ' ' + inlineOnlyParts.join(' ') : '';
+
     if (geom) {
-      lines.push(`${indent}${node.id}: ${geom}`);
-    } else if (node.transform && (node.transform.x !== undefined || node.transform.y !== undefined)) {
-      // Container with just position — put geometry-less form
-      lines.push(`${indent}${node.id}:`);
+      lines.push(`${indent}${node.id}: ${geom}${inlineSuffix}`);
+    } else if (inlineSuffix) {
+      lines.push(`${indent}${node.id}:${inlineSuffix}`);
     } else {
       lines.push(`${indent}${node.id}:`);
     }
-    const propLines = formatBlockProps(node, childIndent);
-    lines.push(...propLines);
+
+    // Block properties
+    lines.push(...formatBlockVisualProps(node, childIndent));
+    lines.push(...formatBlockOnlyProps(node, childIndent));
   } else {
-    // Inline mode: everything on one line
+    // Inline mode: everything inline-safe on one line
     const propsStr = formatInlineProps(node);
     if (geom && propsStr) {
       lines.push(`${indent}${node.id}: ${geom} ${propsStr}`);
     } else if (geom) {
       lines.push(`${indent}${node.id}: ${geom}`);
     } else if (propsStr) {
-      // No geometry — check if transform has position (container)
       lines.push(`${indent}${node.id}: ${propsStr}`);
     } else {
       lines.push(`${indent}${node.id}:`);
+    }
+    // Block-only props (dash, layout) always need indented lines
+    if (needsBlockBody) {
+      lines.push(...formatBlockOnlyProps(node, childIndent));
     }
   }
 
@@ -334,7 +372,6 @@ function formatInlinePropsWithoutPathAndTransform(node: any): string {
   if (node.style) parts.push(`@${node.style}`);
   if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
   if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.dash) parts.push(formatDash(node.dash));
   if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
   if (node.visible === false) parts.push(`visible=false`);
   if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
@@ -349,7 +386,6 @@ function formatInlinePropsWithoutPath(node: any): string {
   if (node.style) parts.push(`@${node.style}`);
   if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
   if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.dash) parts.push(formatDash(node.dash));
   if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
   if (node.visible === false) parts.push(`visible=false`);
   if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
@@ -367,7 +403,7 @@ function formatStyle(name: string, style: any): string[] {
   const lines: string[] = [`style ${name}`];
   if (style.fill) lines.push(`  fill ${formatColor(style.fill)}`);
   if (style.stroke) lines.push(`  stroke ${formatStroke(style.stroke)}`);
-  if (style.dash) lines.push(`  ${formatDash(style.dash)}`);
+  if (style.dash) lines.push(`  ${formatDashBlock(style.dash)}`);
 
   // Other style properties
   const skip = new Set(['fill', 'stroke', 'dash', 'layout']);

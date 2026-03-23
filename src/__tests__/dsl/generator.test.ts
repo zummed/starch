@@ -202,11 +202,11 @@ describe('DSL generator', () => {
       expect(dsl).toContain('@primary');
     });
 
-    it('generates dash', () => {
+    it('generates dash as block property', () => {
       const dsl = generateDsl({
         objects: [{ id: 'box', rect: { w: 10, h: 10 }, dash: { pattern: 'dashed' } }],
       });
-      expect(dsl).toContain('dash=dashed');
+      expect(dsl).toContain('dash dashed');
     });
 
     it('generates opacity', () => {
