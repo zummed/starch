@@ -438,7 +438,11 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         if (schema) {
           const type = detectSchemaType(schema);
 
-          if (['color', 'object'].includes(type)) {
+          // In DSL mode, skip 'object' popups for geometry/compound keywords —
+          // their sub-properties (dimensions, radius=) are clickable individually.
+          // Color popups still work (fill/stroke keywords open the color picker).
+          const allowPopup = type === 'color' || (type === 'object' && formatRef.current !== 'dsl');
+          if (allowPopup) {
             const currentValue = formatRef.current === 'dsl'
               ? extractDslValue(doc, pos, clickedWord, schemaPath, type)
               : extractValueAtCursor(doc, pos, type, clickedWord);
@@ -717,8 +721,9 @@ export function V2Editor({ value, onChange, viewFormat = 'json5', onViewFormatCh
         } else {
           replacement = formatDslValue(newValue, popup.key, popup.schemaPath);
         }
-      } else if (typeof newValue === 'object' && newValue !== null && 'h' in newValue) {
-        // Color object — format as "H S L"
+      } else if (typeof newValue === 'object' && newValue !== null && 'h' in newValue && 's' in newValue && 'l' in newValue) {
+        // Color object (HSL) — format as "H S L". Check for s and l too to avoid
+        // false-positives on rect objects which also have an 'h' (height) property.
         const c = newValue as { h: number; s: number; l: number; a?: number };
         replacement = `${Math.round(c.h)} ${Math.round(c.s)} ${Math.round(c.l)}`;
         if (c.a !== undefined && c.a !== 1) replacement += ` a=${c.a}`;

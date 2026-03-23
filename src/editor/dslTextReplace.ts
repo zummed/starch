@@ -176,7 +176,11 @@ export function formatDslValue(value: unknown, key: string, schemaPath: string):
   }
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'string') return value;
-  return String(value);
+  if (typeof value === 'object' && value !== null) {
+    // Safety net: serialize objects as JSON rather than "[object Object]"
+    return JSON.stringify(value);
+  }
+  return String(value ?? '');
 }
 
 function isFillOrStrokePath(schemaPath: string): boolean {
