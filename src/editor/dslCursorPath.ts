@@ -236,6 +236,11 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
   const atStyleMatch = !equalsMatch && /@(\w*)$/.test(line);
   const hasArrow = line.includes('->');
 
+  // Detect if cursor is on a dimensions token (e.g., 55x100)
+  const dimMatch = !equalsMatch && !fillStrokeMatch && detectDimensionsAtCursor(fullText, cursorOffset);
+  // Detect if cursor is on a positional number (e.g., the 3rd number after "fill")
+  const fillStrokeNumberMatch = !equalsMatch && detectFillStrokeNumber(fullText, cursorOffset);
+
   switch (info.section) {
     case 'top': {
       isPropertyName = true;
@@ -246,7 +251,29 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
       parts.push('objects');
       parts.push(String(info.nodeIndex ?? 0));
 
-      if (equalsMatch) {
+      if (dimMatch) {
+        // Cursor is on a dimensions token like 55x100 — map to geometry w/h
+        if (info.geomType === 'rect') {
+          parts.push('rect');
+          currentKey = dimMatch.half === 'w' ? 'w' : 'h';
+          parts.push(currentKey);
+        } else if (info.geomType === 'ellipse') {
+          parts.push('ellipse');
+          currentKey = dimMatch.half === 'w' ? 'rx' : 'ry';
+          parts.push(currentKey);
+        } else if (info.geomType === 'image') {
+          parts.push('image');
+          currentKey = dimMatch.half === 'w' ? 'w' : 'h';
+          parts.push(currentKey);
+        } else {
+          isPropertyName = true;
+        }
+      } else if (fillStrokeNumberMatch) {
+        // Cursor is on a number that's part of fill/stroke HSL values
+        parts.push(fillStrokeNumberMatch.prop);
+        currentKey = fillStrokeNumberMatch.component;
+        parts.push(currentKey);
+      } else if (equalsMatch) {
         const key = equalsMatch[1];
         currentKey = key;
         appendPropertyPath(parts, key, info.geomType);
@@ -273,7 +300,11 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
       parts.push('styles');
       if (info.styleName) parts.push(info.styleName);
 
-      if (equalsMatch) {
+      if (fillStrokeNumberMatch) {
+        parts.push(fillStrokeNumberMatch.prop);
+        currentKey = fillStrokeNumberMatch.component;
+        parts.push(currentKey);
+      } else if (equalsMatch) {
         parts.push(equalsMatch[1]);
         currentKey = equalsMatch[1];
       } else if (fillStrokeMatch) {
@@ -334,4 +365,74 @@ function appendPropertyPath(parts: string[], key: string, geomType?: string): vo
   } else {
     parts.push(key);
   }
+}
+
+/**
+ * Detect if the cursor is on a dimensions token (e.g., "160x100").
+ * Returns which half the cursor is in: 'w' (left of x) or 'h' (right of x).
+ */
+function detectDimensionsAtCursor(text: string, cursorOffset: number): { half: 'w' | 'h' } | null {
+  // Search around cursor for a NxN pattern
+  const start = Math.max(0, cursorOffset - 15);
+  const end = Math.min(text.length, cursorOffset + 15);
+  const region = text.slice(start, end);
+  const localOffset = cursorOffset - start;
+
+  // Find all dimension tokens in the region
+  const re = /\d+x\d+/g;
+  let m;
+  while ((m = re.exec(region)) !== null) {
+    const matchStart = m.index;
+    const matchEnd = matchStart + m[0].length;
+    if (localOffset >= matchStart && localOffset <= matchEnd) {
+      const xPos = m[0].indexOf('x');
+      const posInMatch = localOffset - matchStart;
+      return { half: posInMatch <= xPos ? 'w' : 'h' };
+    }
+  }
+  return null;
+}
+
+/**
+ * Detect if the cursor is on one of the HSL number values after fill/stroke.
+ * e.g., in "fill 210 70 45", clicking on "70" should resolve to fill.s
+ */
+function detectFillStrokeNumber(text: string, cursorOffset: number): { prop: string; component: string } | null {
+  // Get the current line
+  const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+  const lineEnd = text.indexOf('\n', cursorOffset);
+  const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+  const posInLine = cursorOffset - lineStart;
+
+  // Match fill/stroke followed by numbers
+  const re = /\b(fill|stroke)\s+(\d+)\s+(\d+)\s+(\d+)/g;
+  let m;
+  while ((m = re.exec(line)) !== null) {
+    const prop = m[1];
+    // Find the positions of each number capture group
+    let searchFrom = m.index + prop.length;
+
+    // Find position of first number (h)
+    const n1Start = line.indexOf(m[2], searchFrom);
+    const n1End = n1Start + m[2].length;
+
+    // Find position of second number (s)
+    const n2Start = line.indexOf(m[3], n1End);
+    const n2End = n2Start + m[3].length;
+
+    // Find position of third number (l)
+    const n3Start = line.indexOf(m[4], n2End);
+    const n3End = n3Start + m[4].length;
+
+    if (posInLine >= n1Start && posInLine <= n1End) {
+      return { prop, component: 'h' };
+    }
+    if (posInLine >= n2Start && posInLine <= n2End) {
+      return { prop, component: 's' };
+    }
+    if (posInLine >= n3Start && posInLine <= n3End) {
+      return { prop, component: 'l' };
+    }
+  }
+  return null;
 }

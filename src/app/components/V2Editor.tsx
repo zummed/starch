@@ -140,18 +140,17 @@ function v2CompletionSource(context: CompletionContext): CompletionResult | null
 // ─── V2 Completion Source (DSL mode) ────────────────────────────
 
 function dslCompletionSource(context: CompletionContext): CompletionResult | null {
+  // Only activate if there's a word being typed or it's explicit (Ctrl+Space)
+  const wordBefore = context.matchBefore(/[\w@]+/);
+  if (!context.explicit && !wordBefore) return null;
+
   const doc = context.state.doc.toString();
   const pos = context.pos;
 
   const items = getDslCompletions(doc, pos);
   if (items.length === 0) return null;
 
-  let from = pos;
-  const textBefore = doc.slice(Math.max(0, pos - 50), pos);
-  const wordMatch = textBefore.match(/[\w]+$/);
-  if (wordMatch) {
-    from = pos - wordMatch[0].length;
-  }
+  const from = wordBefore ? wordBefore.from : pos;
 
   return {
     from,
