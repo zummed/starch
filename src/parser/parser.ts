@@ -35,6 +35,32 @@ function stylesToNodes(styles: Record<string, any>): Node[] {
   return nodes;
 }
 
+/**
+ * Normalize path from/to into unified route arrays.
+ * If a path has from/to, constructs route = [from, ...oldRoute, to] and deletes from/to.
+ * Walks all nodes recursively.
+ */
+export function normalizeRoutes(nodes: Node[]): Node[] {
+  for (const node of nodes) {
+    if (node.path) {
+      const { from, to, route: oldRoute } = node.path;
+      if (from !== undefined || to !== undefined) {
+        const newRoute: any[] = [];
+        if (from !== undefined) newRoute.push(from);
+        if (oldRoute) newRoute.push(...oldRoute);
+        if (to !== undefined) newRoute.push(to);
+        node.path.route = newRoute;
+        delete (node.path as any).from;
+        delete (node.path as any).to;
+      }
+    }
+    if (node.children.length > 0) {
+      normalizeRoutes(node.children);
+    }
+  }
+  return nodes;
+}
+
 export function parseScene(input: string): ParsedScene {
   registerBuiltinTemplates();
 

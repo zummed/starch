@@ -249,4 +249,21 @@ describe('emitFrame', () => {
     expect(segments[0].type).toBe('moveTo');
     expect(segments.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('resolves connection paths via unified route', () => {
+    const { backend, calls } = createMockBackend();
+    const a = createNode({ id: 'a', transform: { x: 0, y: 0 } });
+    const b = createNode({ id: 'b', transform: { x: 200, y: 0 } });
+    const conn = createNode({
+      id: 'conn',
+      path: { route: ['a', 'b'] },
+      stroke: { h: 0, s: 0, l: 60, width: 2 },
+    });
+    emitFrame(backend, [a, b, conn], [a, b, conn]);
+    const drawCall = calls.find(c => c.method === 'drawPath');
+    expect(drawCall).toBeDefined();
+    const segments = drawCall!.args[0] as any[];
+    expect(segments[0].type).toBe('moveTo');
+    expect(segments.length).toBeGreaterThanOrEqual(2);
+  });
 });

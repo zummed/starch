@@ -53,8 +53,23 @@ describe('resolveConnectionPath', () => {
     expect(points).toEqual([[0, 0], [50, 50], [100, 0]]);
   });
 
-  it('returns null without from/to', () => {
+  it('returns null without from/to or route', () => {
     const points = resolveConnectionPath({ points: [[0,0],[1,1]] }, roots);
+    expect(points).toBeNull();
+  });
+
+  it('resolves unified route (no from/to)', () => {
+    const points = resolveConnectionPath({ route: ['a', 'b'] }, roots);
+    expect(points).toEqual([[0, 0], [100, 0]]);
+  });
+
+  it('resolves unified route with intermediates', () => {
+    const points = resolveConnectionPath({ route: ['a', [50, 50], 'b'] }, roots);
+    expect(points).toEqual([[0, 0], [50, 50], [100, 0]]);
+  });
+
+  it('returns null for route with fewer than 2 entries', () => {
+    const points = resolveConnectionPath({ route: ['a'] }, roots);
     expect(points).toBeNull();
   });
 });

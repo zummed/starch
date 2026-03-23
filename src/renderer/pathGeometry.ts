@@ -435,23 +435,32 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
   let rawPoints: [number, number][] | null = null;
 
   if (path.points && path.points.length > 0) {
-    // Resolve each point — may be [x,y], "objectId", or ["objectId", dx, dy]
+    // Resolve each point — [x,y] coordinate tuples
     const resolved: [number, number][] = [];
     for (const pt of path.points) {
       const r = resolvePointRef(pt, allRoots);
       if (r) resolved.push(r);
     }
     rawPoints = resolved.length > 0 ? resolved : null;
-  } else if (path.from || path.to) {
-    const fromCenter = path.from ? resolvePointRef(path.from, allRoots) : null;
-    const toCenter = path.to ? resolvePointRef(path.to, allRoots) : null;
+  } else if (path.from || path.to || (path.route && path.route.length >= 2)) {
+    // Determine from/to: prefer explicit from/to, fall back to route[0]/route[last]
+    const fromRef = path.from ?? (path.route && path.route.length >= 2 ? path.route[0] : undefined);
+    const toRef = path.to ?? (path.route && path.route.length >= 2 ? path.route[path.route.length - 1] : undefined);
+
+    const fromCenter = fromRef ? resolvePointRef(fromRef, allRoots) : null;
+    const toCenter = toRef ? resolvePointRef(toRef, allRoots) : null;
     if (!fromCenter || !toCenter) return { segments: [], startPoint: null, endPoint: null, startTangent: null, endTangent: null };
 
-    // Resolve route waypoints
+    // Resolve route waypoints (intermediates only — skip first/last when from/to come from route)
     const waypoints: [number, number][] = [];
-    if (path.route) {
-      for (const wp of path.route) {
-        const resolved = resolvePointRef(wp, allRoots);
+    if (path.route && path.route.length > 0) {
+      // If from/to came from route, skip first and last elements (they are from/to)
+      const hasExplicitFrom = path.from !== undefined;
+      const hasExplicitTo = path.to !== undefined;
+      const startIdx = hasExplicitFrom ? 0 : 1;
+      const endIdx = hasExplicitTo ? path.route.length : path.route.length - 1;
+      for (let i = startIdx; i < endIdx; i++) {
+        const resolved = resolvePointRef(path.route[i], allRoots);
         if (resolved) waypoints.push(resolved);
       }
     }
@@ -460,15 +469,18 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
     let fromPoint = fromCenter;
     let toPoint = toCenter;
 
-    if (path.fromAnchor && typeof path.from === 'string') {
-      const fromNode = findNodeById(allRoots, path.from);
+    const fromRefForAnchor = fromRef;
+    const toRefForAnchor = toRef;
+
+    if (path.fromAnchor && typeof fromRefForAnchor === 'string') {
+      const fromNode = findNodeById(allRoots, fromRefForAnchor);
       if (fromNode) {
         const anchor = resolveAnchorOnBounds(path.fromAnchor, getNodeBounds(fromNode));
         if (anchor) fromPoint = anchor;
       }
     }
-    if (path.toAnchor && typeof path.to === 'string') {
-      const toNode = findNodeById(allRoots, path.to);
+    if (path.toAnchor && typeof toRefForAnchor === 'string') {
+      const toNode = findNodeById(allRoots, toRefForAnchor);
       if (toNode) {
         const anchor = resolveAnchorOnBounds(path.toAnchor, getNodeBounds(toNode));
         if (anchor) toPoint = anchor;
@@ -482,8 +494,8 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
     const fromGap = path.fromGap ?? path.gap ?? 0;
     const toGap = path.toGap ?? path.gap ?? 0;
 
-    if (typeof path.from === 'string') {
-      const fromNode = findNodeById(allRoots, path.from);
+    if (typeof fromRefForAnchor === 'string') {
+      const fromNode = findNodeById(allRoots, fromRefForAnchor);
       if (fromNode) {
         const bounds = getNodeBounds(fromNode);
         if (bounds.hw > 0 || bounds.hh > 0) {
@@ -491,8 +503,8 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
         }
       }
     }
-    if (typeof path.to === 'string') {
-      const toNode = findNodeById(allRoots, path.to);
+    if (typeof toRefForAnchor === 'string') {
+      const toNode = findNodeById(allRoots, toRefForAnchor);
       if (toNode) {
         const bounds = getNodeBounds(toNode);
         if (bounds.hw > 0 || bounds.hh > 0) {
