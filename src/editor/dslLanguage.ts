@@ -253,22 +253,8 @@ export const dslHighlight = syntaxHighlighting(
 
 // (Custom token styles are now handled via tokenTable + HighlightStyle tags above)
 
-export const dslInteractiveTheme = EditorView.theme({
-  // All syntax-highlighted spans in DSL mode get hover affordance.
-  // StreamLanguage wraps tokens in <span class="ͼ..."> elements.
-  // We target any span with a class inside .cm-line.
-  '.cm-line span[class]:hover': {
-    textDecoration: 'underline',
-    textDecorationColor: 'rgba(122, 162, 247, 0.35)',
-    textDecorationThickness: '1px',
-    textUnderlineOffset: '3px',
-    cursor: 'pointer',
-  },
-  // Slightly stronger affordance for numbers, dimensions, colors
-  '.cm-line .tok-number:hover, .cm-line .tok-dsl-dimension:hover, .cm-line .tok-dsl-color:hover': {
-    textDecorationColor: 'rgba(224, 175, 104, 0.5)',
-  },
-  '.cm-line .tok-keyword:hover': {
-    textDecorationColor: 'rgba(122, 162, 247, 0.5)',
-  },
-});
+// Interactive hover affordance is intentionally omitted — the syntax coloring
+// itself communicates what's clickable (keywords, numbers, dimensions, colors).
+// A blanket hover rule would show pointer/underline on non-clickable tokens
+// (node IDs, animation identifiers, comments) creating false expectations.
+export const dslInteractiveTheme = EditorView.theme({});
