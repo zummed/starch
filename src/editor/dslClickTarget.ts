@@ -640,7 +640,20 @@ export function applyDslPopupChange(doc: string, target: DslClickTarget, newValu
     }
 
     case 'boolean': {
-      return before + String(newValue) + after;
+      // DSL booleans are bare keywords: "bold" = true, absent = false.
+      // Toggling off removes the keyword; toggling on re-inserts it.
+      if (newValue) {
+        // Already present (the span IS the keyword) — no change needed
+        return doc;
+      } else {
+        // Remove the keyword and clean up surrounding whitespace
+        // (avoid leaving double spaces)
+        let from = target.span.from;
+        let to = target.span.to;
+        if (from > 0 && doc[from - 1] === ' ') from--;
+        else if (to < doc.length && doc[to] === ' ') to++;
+        return doc.slice(0, from) + doc.slice(to);
+      }
     }
 
     case 'compound': {
