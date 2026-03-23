@@ -34,7 +34,7 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
         ...(bend !== undefined ? { bend } : {}),
         ...(progress !== undefined ? { drawProgress: progress } : {}),
       },
-      stroke: { ...stroke, width: strokeWidth },
+      stroke: { color: stroke, width: strokeWidth },
       ...(dashed ? { dash: { pattern: 'dashed', length: 8, gap: 4 } } : {}),
     }),
   ];
@@ -44,7 +44,7 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
       id: `${id}.arrowEnd`,
       path: { points: [[-8, -4], [0, 0], [-8, 4]], closed: false },
       fill: stroke,
-      stroke: { ...stroke, width: 1 },
+      stroke: { color: stroke, width: 1 },
     }));
   }
 

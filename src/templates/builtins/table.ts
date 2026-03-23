@@ -27,7 +27,7 @@ export function tableTemplate(id: string, props: Record<string, unknown>): Node 
     id: `${id}.bg`,
     rect: { w: totalW, h: totalH },
     fill: { h: 0, s: 0, l: 15 },
-    stroke: { ...stroke, width: strokeWidth },
+    stroke: { color: stroke, width: strokeWidth },
   }));
 
   // Header row

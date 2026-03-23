@@ -1,5 +1,5 @@
 import type { Node } from '../types/node';
-import type { HslColor, Stroke } from '../types/properties';
+import type { Color, Stroke } from '../types/properties';
 import { geometryToSvg, type SvgAttrs } from './geometry';
 
 export interface RenderNode {
@@ -35,7 +35,7 @@ function buildTransform(node: Node): string {
 function renderNode(
   node: Node,
   parentOpacity: number,
-  parentFill?: HslColor,
+  parentFill?: Color,
   parentStroke?: Stroke,
 ): RenderNode | null {
   if (!node.visible) return null;

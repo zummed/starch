@@ -1,7 +1,7 @@
 import type { Node } from '../types/node';
 
 /** Property keys that are sub-objects with enumerable leaf fields (recursed into) */
-const SUB_OBJECT_KEYS = ['transform', 'dash', 'size', 'layout', 'layoutHint'] as const;
+const SUB_OBJECT_KEYS = ['transform', 'dash', 'layout', 'layoutHint'] as const;
 
 /** Property keys that are Color values — treated as atomic leaves, not recursed */
 const COLOR_KEYS = ['fill'] as const;

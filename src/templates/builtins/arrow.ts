@@ -49,7 +49,7 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
       ...(arrow ? { toGap: gap + ARROW_SIZE } : { toGap: gap }),
       ...(arrowStart ? { fromGap: gap + ARROW_SIZE } : { fromGap: gap }),
     },
-    stroke: { ...stroke, width: strokeWidth },
+    stroke: { color: stroke, width: strokeWidth },
     ...(dashed ? { dash: { pattern: 'dashed', length: 8, gap: 4 } } : {}),
   }));
 

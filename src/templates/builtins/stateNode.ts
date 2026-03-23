@@ -32,7 +32,7 @@ export function stateNodeTemplate(id: string, props: Record<string, unknown>): N
       id: `${id}.bg`,
       rect: { w, h, radius: 16 },
       fill,
-      stroke: { ...stroke, width: strokeWidth },
+      stroke: { color: stroke, width: strokeWidth },
     }),
     // State name
     createNode({
@@ -48,7 +48,7 @@ export function stateNodeTemplate(id: string, props: Record<string, unknown>): N
     children.push(createNode({
       id: `${id}.divider`,
       path: { points: [[8, 30], [w - 8, 30]], closed: false },
-      stroke: { ...stroke, width: 1 },
+      stroke: { color: stroke, width: 1 },
     }));
 
     let actionY = 40;

@@ -41,7 +41,7 @@ export function flowchartNodeTemplate(id: string, props: Record<string, unknown>
       id: `${id}.body`,
       rect: { w, h, radius },
       fill: bodyFill,
-      stroke: { ...stroke, width: 2 },
+      stroke: { color: stroke, width: 2 },
     }),
     // Header bar
     createNode({

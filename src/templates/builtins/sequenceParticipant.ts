@@ -28,7 +28,7 @@ export function sequenceParticipantTemplate(id: string, props: Record<string, un
       id: `${id}.header`,
       rect: { w, h, radius: 4 },
       fill,
-      stroke: { ...stroke, width: 2 },
+      stroke: { color: stroke, width: 2 },
     }),
     // Name text
     createNode({
@@ -41,7 +41,7 @@ export function sequenceParticipantTemplate(id: string, props: Record<string, un
     createNode({
       id: `${id}.lifeline`,
       path: { points: [[w / 2, h], [w / 2, h + lifelineHeight]], closed: false },
-      stroke: { ...stroke, width: 1 },
+      stroke: { color: stroke, width: 1 },
       dash: { pattern: 'dashed', length: 6, gap: 4 },
     }),
   ];

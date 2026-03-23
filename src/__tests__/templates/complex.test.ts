@@ -21,7 +21,8 @@ describe('flowchartNodeTemplate', () => {
     const status = node.children.find(c => c.id === 's.status');
     expect(status).toBeDefined();
     expect(status!.ellipse).toBeDefined();
-    expect(status!.fill!.h).toBe(120); // green
+    const statusFill = status!.fill as { h: number; s: number; l: number };
+    expect(statusFill.h).toBe(120); // green
   });
 
   it('works with colour prop', () => {

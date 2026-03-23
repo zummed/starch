@@ -24,7 +24,7 @@ export function circleTemplate(id: string, props: Record<string, unknown>): Node
       id: `${id}.shape`,
       ellipse: { rx: r, ry: r },
       ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { ...stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
+      ...(stroke ? { stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
     }),
   ];
 

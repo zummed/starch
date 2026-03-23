@@ -40,7 +40,7 @@ export function boxTemplate(id: string, props: Record<string, unknown>): Node {
       id: `${id}.bg`,
       rect: { w, h, radius },
       ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { ...stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
+      ...(stroke ? { stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
     }),
   ];
 

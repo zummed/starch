@@ -28,7 +28,8 @@ describe('boxTemplate', () => {
     expect(node.children[0].fill).toBeDefined();
     expect(node.children[0].stroke).toBeDefined();
     // Derived fill should have lower saturation/lightness
-    expect(node.children[0].fill!.s).toBeLessThan(node.children[0].stroke!.h !== undefined ? 100 : 0);
+    const fill = node.children[0].fill as { h: number; s: number; l: number };
+    expect(fill.s).toBeLessThan(100);
   });
 
   it('uses default dimensions', () => {
