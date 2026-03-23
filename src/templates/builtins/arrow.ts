@@ -39,11 +39,11 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
   children.push(createNode({
     id: `${id}.route`,
     path: {
-      from, to, smooth, closed,
+      route: route ? [from, ...route, to] : [from, to],
+      smooth, closed,
       ...(fromAnchor ? { fromAnchor } : {}),
       ...(toAnchor ? { toAnchor } : {}),
       ...(bend !== undefined ? { bend } : {}),
-      ...(route ? { route } : {}),
       ...(radius !== undefined ? { radius } : {}),
       ...(drawProgress !== undefined ? { drawProgress } : {}),
       ...(arrow ? { toGap: gap + ARROW_SIZE } : { toGap: gap }),

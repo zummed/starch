@@ -29,9 +29,9 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
     createNode({
       id: `${id}.route`,
       path: {
-        from, to, smooth,
+        route: route ? [from, ...route, to] : [from, to],
+        smooth,
         ...(bend !== undefined ? { bend } : {}),
-        ...(route ? { route } : {}),
         ...(progress !== undefined ? { drawProgress: progress } : {}),
       },
       stroke: { ...stroke, width: strokeWidth },

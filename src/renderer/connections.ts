@@ -48,9 +48,8 @@ export function resolveConnectionPath(
   path: PathGeom,
   roots: Node[],
 ): [number, number][] | null {
-  // Determine from/to: prefer explicit from/to, fall back to route[0]/route[last]
-  const fromRef = path.from ?? (path.route && path.route.length >= 2 ? path.route[0] : undefined);
-  const toRef = path.to ?? (path.route && path.route.length >= 2 ? path.route[path.route.length - 1] : undefined);
+  const fromRef = path.route && path.route.length >= 2 ? path.route[0] : undefined;
+  const toRef = path.route && path.route.length >= 2 ? path.route[path.route.length - 1] : undefined;
 
   if (!fromRef && !toRef) return null;
 
@@ -74,13 +73,9 @@ export function resolveConnectionPath(
   }
 
   if (path.route && path.route.length > 0) {
-    // Resolve intermediate waypoints (skip first/last if they served as from/to)
-    const hasExplicitFrom = path.from !== undefined;
-    const hasExplicitTo = path.to !== undefined;
-    const startIdx = hasExplicitFrom ? 0 : 1;
-    const endIdx = hasExplicitTo ? path.route.length : path.route.length - 1;
+    // Resolve intermediate waypoints (first and last are endpoints)
     const resolvedWaypoints = path.route
-      .slice(startIdx, endIdx)
+      .slice(1, path.route.length - 1)
       .map(wp => resolveEndpoint(wp, roots))
       .filter((ep): ep is { x: number; y: number } => ep !== null)
       .map((ep): [number, number] => [ep.x, ep.y]);

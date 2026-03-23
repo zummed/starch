@@ -35,8 +35,6 @@ export const PointRefSchema = z.union([
 
 export const PathGeomSchema = z.object({
   points: z.array(z.tuple([z.number(), z.number()])).describe('Ordered path vertices — array of [x, y] coordinate tuples').optional(),
-  from: PointRefSchema.describe('Start endpoint — node ID, [x, y], or [id, dx, dy] (deprecated: use route)').optional(),
-  to: PointRefSchema.describe('End endpoint — node ID, [x, y], or [id, dx, dy] (deprecated: use route)').optional(),
   fromAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Anchor on start node — named ("N","E","S","W",...) or [0-1, 0-1] tuple').optional(),
   toAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Anchor on end node — named ("N","E","S","W",...) or [0-1, 0-1] tuple').optional(),
   closed: z.boolean().describe('Close the path into a loop (boolean, default false)').optional(),
@@ -84,7 +82,7 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   rect: RectGeomSchema.describe('Rectangle geometry — w, h, optional radius').optional(),
   ellipse: EllipseGeomSchema.describe('Ellipse geometry — rx, ry').optional(),
   text: TextGeomSchema.describe('Text geometry — content, size, alignment, font options').optional(),
-  path: PathGeomSchema.describe('Path/connection geometry — points, route, or from/to endpoints').optional(),
+  path: PathGeomSchema.describe('Path/connection geometry — points for shapes, route for connections').optional(),
   image: ImageGeomSchema.describe('Image geometry — src URL, w, h, fit mode').optional(),
 
   // Visual properties

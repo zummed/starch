@@ -233,13 +233,13 @@ describe('emitFrame', () => {
     expect(stroke.dash!.pattern).toBe('dashed');
   });
 
-  it('resolves connection paths from/to', () => {
+  it('resolves connection paths via route', () => {
     const { backend, calls } = createMockBackend();
     const a = createNode({ id: 'a', transform: { x: 0, y: 0 } });
     const b = createNode({ id: 'b', transform: { x: 200, y: 0 } });
     const conn = createNode({
       id: 'conn',
-      path: { from: 'a', to: 'b' },
+      path: { route: ['a', 'b'] },
       stroke: { h: 0, s: 0, l: 60, width: 2 },
     });
     emitFrame(backend, [a, b, conn], [a, b, conn]);

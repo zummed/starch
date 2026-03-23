@@ -61,8 +61,7 @@ describe('lineTemplate', () => {
     const node = lineTemplate('conn', { from: 'a', to: 'b', label: 'calls' });
     expect(node.children.length).toBeGreaterThanOrEqual(2); // route + arrowEnd + label
     expect(node.children[0].id).toBe('conn.route');
-    expect(node.children[0].path!.from).toBe('a');
-    expect(node.children[0].path!.to).toBe('b');
+    expect(node.children[0].path!.route).toEqual(['a', 'b']);
 
     const labelChild = node.children.find(c => c.id === 'conn.label');
     expect(labelChild).toBeDefined();

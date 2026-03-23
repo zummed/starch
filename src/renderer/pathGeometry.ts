@@ -442,27 +442,19 @@ export function resolvePathGeometry(path: PathGeom, allRoots: Node[]): ResolvedP
       if (r) resolved.push(r);
     }
     rawPoints = resolved.length > 0 ? resolved : null;
-  } else if (path.from || path.to || (path.route && path.route.length >= 2)) {
-    // Determine from/to: prefer explicit from/to, fall back to route[0]/route[last]
-    const fromRef = path.from ?? (path.route && path.route.length >= 2 ? path.route[0] : undefined);
-    const toRef = path.to ?? (path.route && path.route.length >= 2 ? path.route[path.route.length - 1] : undefined);
+  } else if (path.route && path.route.length >= 2) {
+    const fromRef = path.route[0];
+    const toRef = path.route[path.route.length - 1];
 
-    const fromCenter = fromRef ? resolvePointRef(fromRef, allRoots) : null;
-    const toCenter = toRef ? resolvePointRef(toRef, allRoots) : null;
+    const fromCenter = resolvePointRef(fromRef, allRoots);
+    const toCenter = resolvePointRef(toRef, allRoots);
     if (!fromCenter || !toCenter) return { segments: [], startPoint: null, endPoint: null, startTangent: null, endTangent: null };
 
-    // Resolve route waypoints (intermediates only — skip first/last when from/to come from route)
+    // Resolve intermediate waypoints (first and last are endpoints)
     const waypoints: [number, number][] = [];
-    if (path.route && path.route.length > 0) {
-      // If from/to came from route, skip first and last elements (they are from/to)
-      const hasExplicitFrom = path.from !== undefined;
-      const hasExplicitTo = path.to !== undefined;
-      const startIdx = hasExplicitFrom ? 0 : 1;
-      const endIdx = hasExplicitTo ? path.route.length : path.route.length - 1;
-      for (let i = startIdx; i < endIdx; i++) {
-        const resolved = resolvePointRef(path.route[i], allRoots);
-        if (resolved) waypoints.push(resolved);
-      }
+    for (let i = 1; i < path.route.length - 1; i++) {
+      const resolved = resolvePointRef(path.route[i], allRoots);
+      if (resolved) waypoints.push(resolved);
     }
 
     // Resolve anchor positions (or use center)
