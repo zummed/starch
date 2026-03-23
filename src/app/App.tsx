@@ -33,6 +33,7 @@ interface StoredTabs {
 function createModelManager(text: string, format: 'json5' | 'dsl'): ModelManager {
   const mm = new ModelManager(100);
   mm.setTextImmediate(text, format);
+  mm.setViewFormat(format);  // sync view format (no listeners yet, so emitText is a no-op)
   return mm;
 }
 

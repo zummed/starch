@@ -152,8 +152,12 @@ export class ModelManager {
   // ── Internal ──
 
   private _processText(text: string, format: 'json5' | 'dsl'): void {
+    // Auto-detect: if text starts with {, it's JSON5 regardless of format parameter.
+    // This matches parseScene's auto-detection and handles samples/loads that
+    // may contain JSON5 text even when the view format is set to DSL.
+    const actualFormat = text.trim().startsWith('{') ? 'json5' : format;
     try {
-      if (format === 'json5') {
+      if (actualFormat === 'json5') {
         const parsed = JSON5.parse(text);
         this._json = parsed;
         // json5 path does NOT update formatHints
