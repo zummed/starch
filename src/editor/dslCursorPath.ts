@@ -329,6 +329,9 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
         if (fullWord && CLICKABLE_PROPS.has(fullWord)) {
           appendPropertyPath(parts, fullWord, info.geomType);
           currentKey = fullWord;
+        } else if (fullWord === 'at') {
+          parts.push('transform');
+          currentKey = 'transform';
         } else {
           isPropertyName = true;
         }
