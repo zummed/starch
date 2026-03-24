@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AnimConfig, KeyframeBlock, TrackKeyframe, Tracks, EasingName, PropertyChange } from '../types/animation';
 import type { Node } from '../types/node';
 import { computeLayoutPlacements, registerStrategy, getStrategy } from '../layout/registry';
@@ -7,6 +8,7 @@ import { evaluateAllTracks } from './evaluator';
 import { applyTrackValues } from './applyTracks';
 import { resolveCameraView } from './cameraExpansion';
 import { isColor } from '../types/color';
+import { getPropertySchema } from '../types/schemaRegistry';
 
 // Ensure layout strategies are available for slot expansion
 function ensureStrategies(): void {
@@ -97,6 +99,69 @@ function computeSlotLayoutState(
   return { x: p.targetX, y: p.targetY, containerSizes };
 }
 
+function getInitialValue(nodes: Node[], trackPath: string): unknown {
+  const segments = trackPath.split('.');
+  let current: Node | undefined;
+  let propStart = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    if (i === 0) {
+      current = nodes.find(n => n.id === segments[0]);
+      propStart = 1;
+      continue;
+    }
+    if (current) {
+      const child = current.children.find(c => c.id === segments[i]);
+      if (child) {
+        current = child;
+        propStart = i + 1;
+      } else {
+        break;
+      }
+    }
+  }
+
+  if (!current) return undefined;
+
+  let value: unknown = current;
+  for (let i = propStart; i < segments.length; i++) {
+    if (value && typeof value === 'object') {
+      value = (value as any)[segments[i]];
+    } else {
+      return undefined;
+    }
+  }
+  return value;
+}
+
+/**
+ * Look up the Zod schema default for a track path.
+ * Track paths are like "box.transform.rotation" — strip the node ID prefix(es)
+ * to get the schema path "transform.rotation", then check for a Zod .default().
+ */
+function getSchemaDefault(trackPath: string): unknown {
+  const segments = trackPath.split('.');
+
+  // Try progressively longer node-ID prefixes: the property path starts after the node ID(s).
+  for (let i = 1; i < segments.length; i++) {
+    const schemaPath = segments.slice(i).join('.');
+    const schema = getPropertySchema(schemaPath);
+    if (schema) {
+      // Unwrap Optional → Default chain
+      let s: z.ZodType = schema;
+      if (s instanceof z.ZodOptional) {
+        s = (s as any)._def.innerType;
+      }
+      if (s instanceof z.ZodDefault) {
+        const dv = (s as any)._def.defaultValue;
+        return typeof dv === 'function' ? dv() : dv;
+      }
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 export interface TimelineResult {
   tracks: Tracks;
   animatedSlotNodeIds: Set<string>;
@@ -169,6 +234,22 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
         }
       }
       keyframes.sort((a, b) => a.time - b.time);
+    }
+  }
+
+  // Prepend initial-value keyframes for tracks that don't start at time 0
+  if (nodes) {
+    for (const [path, keyframes] of tracks) {
+      if (keyframes.length > 0 && keyframes[0].time > 0) {
+        let initial = getInitialValue(nodes, path);
+        // If property doesn't exist on node, look up Zod schema default
+        if (initial === undefined) {
+          initial = getSchemaDefault(path);
+        }
+        if (initial !== undefined) {
+          keyframes.unshift({ time: 0, value: initial, easing: 'linear' });
+        }
+      }
     }
   }
 

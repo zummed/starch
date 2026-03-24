@@ -42,10 +42,10 @@ export const StrokeSchema = z.object({
 });
 
 export const TransformSchema = z.object({
-  x: z.number().describe('X position in pixels (number)').optional(),
-  y: z.number().describe('Y position in pixels (number)').optional(),
-  rotation: z.number().describe('Rotation angle in degrees (number)').optional(),
-  scale: z.number().min(0).max(10).describe('Uniform scale factor (number, 0-10, default 1)').optional(),
+  x: z.number().describe('X position in pixels (number)').default(0),
+  y: z.number().describe('Y position in pixels (number)').default(0),
+  rotation: z.number().describe('Rotation angle in degrees (number)').default(0),
+  scale: z.number().min(0).max(10).describe('Uniform scale factor (number, 0-10, default 1)').default(1),
   anchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Pivot point — named anchor string or [x, y] tuple').optional(),
   pathFollow: z.string().describe('ID of a path node to follow (string)').optional(),
   pathProgress: z.number().min(0).max(1).describe('Position along followed path (number, 0-1)').optional(),
@@ -80,5 +80,6 @@ export type HexAlphaColor = z.infer<typeof HexAlphaColorSchema>;
 export type Color = z.infer<typeof ColorSchema>;
 export type Stroke = z.infer<typeof StrokeSchema>;
 export type Transform = z.infer<typeof TransformSchema>;
+export type TransformInput = z.input<typeof TransformSchema>;
 export type Dash = z.infer<typeof DashSchema>;
 export type Layout = z.infer<typeof LayoutSchema>;

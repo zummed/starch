@@ -83,6 +83,19 @@ function formatPointRef(ref: any): string {
   return String(ref);
 }
 
+// ─── Own Key Checks ──────────────────────────────────────────────
+
+/**
+ * Check if a property should be emitted for a node.
+ * When _ownKeys is present (Node objects from createNode), only emit if the key is in _ownKeys.
+ * When _ownKeys is absent (style objects, raw JSON), fall back to truthiness/existence checks.
+ */
+function hasOwn(node: any, key: string): boolean {
+  const own: Set<string> | undefined = node._ownKeys;
+  if (own) return own.has(key);
+  return true; // No _ownKeys — fall back to caller's existence check
+}
+
 // ─── Property Count ───────────────────────────────────────────────
 
 /** Count the number of property items a node has (excluding children and id). */
@@ -186,17 +199,17 @@ function formatExplicitPath(node: any): string {
 function formatInlineProps(node: any): string {
   const parts: string[] = [];
 
-  if (node.style) parts.push(`@${node.style}`);
-  if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
-  if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (node.visible === false) parts.push(`visible=false`);
-  if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.layout && !isBlockLayout(node.layout)) {
+  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
+  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColor(node.fill)}`);
+  if (node.stroke && hasOwn(node, 'stroke')) parts.push(`stroke ${formatStroke(node.stroke)}`);
+  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
+  if (hasOwn(node, 'visible') && node.visible === false) parts.push(`visible=false`);
+  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
+  if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
     const hint = formatLayoutHintInline(node.layout);
     if (hint) parts.push(hint);
   }
-  if (node.transform) {
+  if (node.transform && hasOwn(node, 'transform')) {
     const t = formatTransform(node.transform);
     if (t) parts.push(t);
   }
@@ -210,8 +223,8 @@ function formatInlineProps(node: any): string {
  */
 function formatBlockOnlyProps(node: any, indent: string): string[] {
   const lines: string[] = [];
-  if (node.dash) lines.push(`${indent}${formatDashBlock(node.dash)}`);
-  if (node.layout && isBlockLayout(node.layout)) lines.push(`${indent}${formatLayout(node.layout)}`);
+  if (node.dash && hasOwn(node, 'dash')) lines.push(`${indent}${formatDashBlock(node.dash)}`);
+  if (node.layout && hasOwn(node, 'layout') && isBlockLayout(node.layout)) lines.push(`${indent}${formatLayout(node.layout)}`);
   return lines;
 }
 
@@ -220,8 +233,8 @@ function formatBlockOnlyProps(node: any, indent: string): string[] {
  */
 function formatBlockVisualProps(node: any, indent: string): string[] {
   const lines: string[] = [];
-  if (node.fill) lines.push(`${indent}fill ${formatColor(node.fill)}`);
-  if (node.stroke) lines.push(`${indent}stroke ${formatStroke(node.stroke)}`);
+  if (node.fill && hasOwn(node, 'fill')) lines.push(`${indent}fill ${formatColor(node.fill)}`);
+  if (node.stroke && hasOwn(node, 'stroke')) lines.push(`${indent}stroke ${formatStroke(node.stroke)}`);
   return lines;
 }
 
@@ -245,7 +258,7 @@ function isBlockLayout(layout: any): boolean {
 
 /** Check if a node has properties that require block rendering. */
 function hasBlockOnlyProps(node: any): boolean {
-  return !!(node.dash || (node.layout && isBlockLayout(node.layout)));
+  return !!((node.dash && hasOwn(node, 'dash')) || (node.layout && hasOwn(node, 'layout') && isBlockLayout(node.layout)));
 }
 
 // ─── Transform Formatting ─────────────────────────────────────────
@@ -359,15 +372,15 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
     // Block mode: geometry + inline-safe props on first line,
     // fill/stroke/dash/layout as indented block properties
     const inlineOnlyParts: string[] = [];
-    if (node.style) inlineOnlyParts.push(`@${node.style}`);
-    if (node.opacity !== undefined) inlineOnlyParts.push(`opacity=${node.opacity}`);
-    if (node.visible === false) inlineOnlyParts.push(`visible=false`);
-    if (node.depth !== undefined) inlineOnlyParts.push(`depth=${node.depth}`);
-    if (node.layout && !isBlockLayout(node.layout)) {
+    if (node.style && hasOwn(node, 'style')) inlineOnlyParts.push(`@${node.style}`);
+    if (hasOwn(node, 'opacity') && node.opacity !== undefined) inlineOnlyParts.push(`opacity=${node.opacity}`);
+    if (hasOwn(node, 'visible') && node.visible === false) inlineOnlyParts.push(`visible=false`);
+    if (hasOwn(node, 'depth') && node.depth !== undefined) inlineOnlyParts.push(`depth=${node.depth}`);
+    if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
       const hint = formatLayoutHintInline(node.layout);
       if (hint) inlineOnlyParts.push(hint);
     }
-    if (node.transform) {
+    if (node.transform && hasOwn(node, 'transform')) {
       const t = formatTransform(node.transform);
       if (t) inlineOnlyParts.push(t);
     }
@@ -417,12 +430,12 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
 function formatInlinePropsWithoutPathAndTransform(node: any): string {
   const parts: string[] = [];
 
-  if (node.style) parts.push(`@${node.style}`);
-  if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
-  if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (node.visible === false) parts.push(`visible=false`);
-  if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
+  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
+  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColor(node.fill)}`);
+  if (node.stroke && hasOwn(node, 'stroke')) parts.push(`stroke ${formatStroke(node.stroke)}`);
+  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
+  if (hasOwn(node, 'visible') && node.visible === false) parts.push(`visible=false`);
+  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
 
   return parts.join(' ');
 }
@@ -431,13 +444,13 @@ function formatInlinePropsWithoutPathAndTransform(node: any): string {
 function formatInlinePropsWithoutPath(node: any): string {
   const parts: string[] = [];
 
-  if (node.style) parts.push(`@${node.style}`);
-  if (node.fill) parts.push(`fill ${formatColor(node.fill)}`);
-  if (node.stroke) parts.push(`stroke ${formatStroke(node.stroke)}`);
-  if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (node.visible === false) parts.push(`visible=false`);
-  if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.transform) {
+  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
+  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColor(node.fill)}`);
+  if (node.stroke && hasOwn(node, 'stroke')) parts.push(`stroke ${formatStroke(node.stroke)}`);
+  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
+  if (hasOwn(node, 'visible') && node.visible === false) parts.push(`visible=false`);
+  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
+  if (node.transform && hasOwn(node, 'transform')) {
     const t = formatTransform(node.transform);
     if (t) parts.push(t);
   }

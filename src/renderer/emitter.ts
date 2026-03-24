@@ -141,17 +141,19 @@ function emitNode(
     }
   }
 
-  // Resolve transform
-  let x = node.transform?.x ?? 0;
-  let y = node.transform?.y ?? 0;
-  let rotation = node.transform?.rotation ?? 0;
-  const scale = node.transform?.scale ?? 1;
+  // Resolve transform — ?? fallbacks handle the case when node has no transform at all.
+  // Within a transform object, Zod defaults guarantee x/y/rotation/scale are present.
+  const t = node.transform;
+  let x = t?.x ?? 0;
+  let y = t?.y ?? 0;
+  let rotation = t?.rotation ?? 0;
+  const scale = t?.scale ?? 1;
 
   // PathFollow resolution
-  if (node.transform?.pathFollow) {
+  if (t?.pathFollow) {
     const resolved = resolvePathFollowPosition(
-      node.transform.pathFollow,
-      node.transform.pathProgress ?? 0,
+      t.pathFollow,
+      t.pathProgress ?? 0,
       allRoots,
     );
     if (resolved) {

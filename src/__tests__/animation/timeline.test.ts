@@ -161,4 +161,88 @@ describe('buildTimeline', () => {
     expect(kfs.some(kf => kf.time === 2 && kf.value === 1)).toBe(true);
     expect(kfs.some(kf => kf.time === 2.5 && kf.value === 0)).toBe(true);
   });
+
+  // ── Auto keyframe at time 0 from initial values ────────────
+
+  it('prepends time-0 keyframe from initial node value', () => {
+    const nodes = [{ id: 'box', transform: { x: 100 }, children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'box.transform.x': 400 } }],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('box.transform.x')!;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0]).toEqual({ time: 0, value: 100, easing: 'linear' });
+    expect(kfs[1]).toEqual({ time: 2, value: 400, easing: 'linear' });
+  });
+
+  it('does not prepend when first keyframe is at time 0', () => {
+    const nodes = [{ id: 'box', transform: { x: 100 }, children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [
+        { time: 0, changes: { 'box.transform.x': 0 } },
+        { time: 2, changes: { 'box.transform.x': 400 } },
+      ],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('box.transform.x')!;
+    expect(kfs[0].value).toBe(0);
+  });
+
+  it('prepends initial color value', () => {
+    const nodes = [{ id: 'box', fill: 'red', children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'box.fill': 'blue' } }],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('box.fill')!;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0]).toEqual({ time: 0, value: 'red', easing: 'linear' });
+  });
+
+  it('uses Zod schema default for numeric properties when node property is missing', () => {
+    const nodes = [{ id: 'a', children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'a.transform.rotation': 10 } }],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('a.transform.rotation')!;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0]).toEqual({ time: 0, value: 0, easing: 'linear' });
+    expect(kfs[1]).toEqual({ time: 2, value: 10, easing: 'linear' });
+  });
+
+  it('uses Zod schema default of 1 for scale when node property is missing', () => {
+    const nodes = [{ id: 'a', children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'a.transform.scale': 2 } }],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('a.transform.scale')!;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0]).toEqual({ time: 0, value: 1, easing: 'linear' });
+    expect(kfs[1]).toEqual({ time: 2, value: 2, easing: 'linear' });
+  });
+
+  it('uses Zod schema default of 1 for opacity when node property is missing', () => {
+    const nodes = [{ id: 'a', children: [] }] as any[];
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'a.opacity': 0 } }],
+    });
+    const { tracks } = buildTimeline(config, nodes);
+    const kfs = tracks.get('a.opacity')!;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0]).toEqual({ time: 0, value: 1, easing: 'linear' });
+    expect(kfs[1]).toEqual({ time: 2, value: 0, easing: 'linear' });
+  });
+
+  it('does not prepend when nodes are not provided', () => {
+    const config = makeConfig({
+      keyframes: [{ time: 2, changes: { 'box.transform.x': 400 } }],
+    });
+    const { tracks } = buildTimeline(config);
+    const kfs = tracks.get('box.transform.x')!;
+    expect(kfs).toHaveLength(1);
+    expect(kfs[0].time).toBe(2);
+  });
 });

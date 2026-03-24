@@ -3,7 +3,7 @@ import {
   ColorSchema, StrokeSchema, TransformSchema, DashSchema,
   LayoutSchema,
 } from './properties';
-import type { Color, Stroke, Transform, Dash, Layout } from './properties';
+import type { Color, Stroke, Transform, TransformInput, Dash, Layout } from './properties';
 
 // ─── Geometry Schemas ───────────────────────────────────────────
 
@@ -76,7 +76,7 @@ export const CameraSchema = z.object({
 export const NodeSchema: z.ZodType<NodeInput> = z.object({
   id: z.string().describe('Unique node identifier (string, required)'),
   children: z.lazy(() => z.array(NodeSchema)).describe('Nested child nodes (array of Node)').optional(),
-  visible: z.boolean().describe('Whether node is rendered (boolean, default true)').optional(),
+  visible: z.boolean().describe('Whether node is rendered (boolean, default true)').default(true),
 
   // Geometry (at most one)
   rect: RectGeomSchema.describe('Rectangle geometry — w, h, optional radius').optional(),
@@ -88,7 +88,7 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   // Visual properties
   fill: ColorSchema.describe('Fill color — string, RGB, HSL, named+alpha, or hex+alpha (inherits from parent)').optional(),
   stroke: StrokeSchema.describe('Stroke — { color, width? } (inherits from parent)').optional(),
-  opacity: z.number().min(0).max(1).describe('Node opacity, multiplied with parent (number, 0-1, default 1)').optional(),
+  opacity: z.number().min(0).max(1).describe('Node opacity, multiplied with parent (number, 0-1, default 1)').default(1),
 
   // Transform
   transform: TransformSchema.describe('Position, rotation, and scale transform').optional(),
@@ -131,7 +131,7 @@ export interface NodeInput {
   fill?: Color;
   stroke?: Stroke;
   opacity?: number;
-  transform?: Transform;
+  transform?: TransformInput;
   depth?: number;
   dash?: Dash;
 
@@ -142,7 +142,9 @@ export interface NodeInput {
   props?: Record<string, unknown>;
 }
 
-// Node is the runtime type with resolved defaults
+// Node is the runtime type with resolved defaults.
+// transform uses TransformInput because nodes don't go through Zod parsing at runtime;
+// Zod defaults serve as the source of truth for schema-based lookups (e.g. animation timeline).
 export interface Node {
   id: string;
   children: Node[];
@@ -155,7 +157,7 @@ export interface Node {
   fill?: Color;
   stroke?: Stroke;
   opacity?: number;
-  transform?: Transform;
+  transform?: TransformInput;
   depth?: number;
   dash?: Dash;
 
