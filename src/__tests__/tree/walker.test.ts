@@ -103,14 +103,14 @@ describe('generateTrackPaths', () => {
     expect(paths).not.toContain('s1.stroke.width');
   });
 
-  it('generates paths for layoutHint freeform keys', () => {
+  it('generates paths for layout hint keys (grow, order)', () => {
     const node = createNode({
       id: 'item',
-      layoutHint: { grow: 1, order: 2 },
+      layout: { grow: 1, order: 2 },
     });
     const paths = generateTrackPaths([node]);
-    expect(paths).toContain('item.layoutHint.grow');
-    expect(paths).toContain('item.layoutHint.order');
+    expect(paths).toContain('item.layout.grow');
+    expect(paths).toContain('item.layout.order');
   });
 
   it('generates paths for dash sub-object', () => {

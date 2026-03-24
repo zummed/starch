@@ -27,7 +27,7 @@ function collectSlotMembers(roots: Node[], containerId: string): Node[] {
   const members: Node[] = [];
   function walk(nodes: Node[]): void {
     for (const node of nodes) {
-      if (node.slot === containerId) {
+      if (node.layout?.slot === containerId) {
         members.push(node);
       }
       walk(node.children);
@@ -54,7 +54,7 @@ export function computeLayoutPlacements(roots: Node[]): LayoutResult[] {
   const results: LayoutResult[] = [];
 
   function processNode(node: Node, allRoots: Node[]): void {
-    if (node.layout) {
+    if (node.layout && node.layout.type) {
       const strategy = getStrategy(node.layout.type);
       if (strategy) {
         const slotMembers = collectSlotMembers(allRoots, node.id);

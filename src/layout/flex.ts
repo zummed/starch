@@ -22,15 +22,15 @@ function getNodeSize(node: Node, isRow: boolean): { main: number; cross: number 
 }
 
 function getHint(node: Node, key: string, fallback: number): number {
-  if (node.layoutHint && key in node.layoutHint) {
-    return node.layoutHint[key] as number;
+  if (node.layout && key in node.layout) {
+    return (node.layout as any)[key] as number;
   }
   return fallback;
 }
 
 function getHintStr(node: Node, key: string, fallback: string): string {
-  if (node.layoutHint && key in node.layoutHint) {
-    return node.layoutHint[key] as string;
+  if (node.layout && key in node.layout) {
+    return (node.layout as any)[key] as string;
   }
   return fallback;
 }

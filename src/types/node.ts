@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   ColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema,
+  LayoutSchema,
 } from './properties';
-import type { Color, Stroke, Transform, Dash, Layout, LayoutHint } from './properties';
+import type { Color, Stroke, Transform, Dash, Layout } from './properties';
 
 // ─── Geometry Schemas ───────────────────────────────────────────
 
@@ -97,8 +97,6 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   depth: z.number().describe('Z-order depth for sibling sorting (number, default 0)').optional(),
   dash: DashSchema.describe('Stroke dash pattern — pattern, length, gap').optional(),
   layout: LayoutSchema.describe('Layout strategy for positioning children').optional(),
-  layoutHint: LayoutHintSchema.describe('Hints passed to parent layout strategy (Record<string, number|string|boolean>)').optional(),
-  slot: z.string().describe('Container ID for layout slot membership — animatable to move between containers (string)').optional(),
 
   // Styling
   style: z.string().describe('Name of a style node whose properties serve as defaults (string)').optional(),
@@ -138,8 +136,6 @@ export interface NodeInput {
   dash?: Dash;
 
   layout?: Layout;
-  layoutHint?: LayoutHint;
-  slot?: string;
   style?: string;
   camera?: { look?: PointRef | string[] | 'all'; zoom?: number; ratio?: number; active?: boolean };
   template?: string;
@@ -164,8 +160,6 @@ export interface Node {
   dash?: Dash;
 
   layout?: Layout;
-  layoutHint?: LayoutHint;
-  slot?: string;
   style?: string;
   camera?: { look?: PointRef | string[] | 'all'; zoom?: number; ratio?: number; active?: boolean };
   _ownKeys?: Set<string>;

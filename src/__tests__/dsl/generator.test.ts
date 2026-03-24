@@ -230,11 +230,11 @@ describe('DSL generator', () => {
       expect(dsl).toContain('depth=3');
     });
 
-    it('generates slot', () => {
+    it('generates slot under layout', () => {
       const dsl = generateDsl({
-        objects: [{ id: 'box', rect: { w: 10, h: 10 }, slot: 'container' }],
+        objects: [{ id: 'box', rect: { w: 10, h: 10 }, layout: { slot: 'container' } }],
       });
-      expect(dsl).toContain('slot=container');
+      expect(dsl).toContain('layout slot=container');
     });
 
     it('generates layout', () => {

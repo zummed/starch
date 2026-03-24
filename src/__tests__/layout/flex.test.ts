@@ -46,8 +46,8 @@ describe('flexStrategy', () => {
       rect: { w: 300, h: 100 },
     });
     const children = [
-      createNode({ id: 'a', rect: { w: 50, h: 30 }, layoutHint: { order: 2 } }),
-      createNode({ id: 'b', rect: { w: 50, h: 30 }, layoutHint: { order: 1 } }),
+      createNode({ id: 'a', rect: { w: 50, h: 30 }, layout: { order: 2 } }),
+      createNode({ id: 'b', rect: { w: 50, h: 30 }, layout: { order: 1 } }),
     ];
     const placements = flexStrategy(container, children);
     expect(placements[0].id).toBe('b');
@@ -61,8 +61,8 @@ describe('flexStrategy', () => {
       rect: { w: 200, h: 100 },
     });
     const children = [
-      createNode({ id: 'a', rect: { w: 50, h: 30 }, layoutHint: { grow: 1 } }),
-      createNode({ id: 'b', rect: { w: 50, h: 30 }, layoutHint: { grow: 1 } }),
+      createNode({ id: 'a', rect: { w: 50, h: 30 }, layout: { grow: 1 } }),
+      createNode({ id: 'b', rect: { w: 50, h: 30 }, layout: { grow: 1 } }),
     ];
     const placements = flexStrategy(container, children);
     // 200 - 100 base = 100 extra, split 50/50 → each 100 wide

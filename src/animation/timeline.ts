@@ -58,7 +58,7 @@ function cloneWithSlot(nodes: Node[], nodeId: string, slotValue: string): Node[]
     // Deep-clone mutable geometry so layout auto-sizing doesn't leak back to originals
     if (clone.rect) clone.rect = { ...clone.rect };
     if (clone.id === nodeId) {
-      clone.slot = slotValue;
+      clone.layout = { ...clone.layout, slot: slotValue };
     }
     return clone;
   }
@@ -178,7 +178,7 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
   if (nodes) {
     const slotTracks: string[] = [];
     for (const [path] of tracks) {
-      if (path.endsWith('.slot')) {
+      if (path.endsWith('.layout.slot')) {
         slotTracks.push(path);
       }
     }
@@ -187,7 +187,7 @@ export function buildTimeline(config: AnimConfig, nodes?: Node[]): TimelineResul
     const containerSizeKfs = new Map<string, { wKfs: TrackKeyframe[]; hKfs: TrackKeyframe[] }>();
 
     for (const slotPath of slotTracks) {
-      const nodeId = slotPath.replace(/\.slot$/, '');
+      const nodeId = slotPath.replace(/\.layout\.slot$/, '');
       const slotKeyframes = tracks.get(slotPath)!;
 
       const xPath = `${nodeId}.transform.x`;

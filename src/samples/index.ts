@@ -547,7 +547,7 @@ animate 6s loop
       transform: { x: 200, y: 150 },
       children: [
         { id: "fixed", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 210, s: 70, l: 45 } },
-        { id: "grows", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 120, s: 70, l: 45 }, layoutHint: { grow: 1 } },
+        { id: "grows", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 120, s: 70, l: 45 }, layout: { grow: 1 } },
         { id: "fixed2", rect: { w: 60, h: 40, radius: 4 }, fill: { h: 0, s: 70, l: 45 } }
       ]
     }
@@ -574,18 +574,18 @@ animate 6s loop
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 350, y: 150 }
     },
-    { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 210, s: 60, l: 45 }, slot: "left" },
-    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 120, s: 60, l: 45 }, slot: "right" },
-    { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 40, s: 80, l: 50 }, slot: "left" }
+    { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 210, s: 60, l: 45 }, layout: { slot: "left" } },
+    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 120, s: 60, l: 45 }, layout: { slot: "right" } },
+    { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: { h: 40, s: 80, l: 50 }, layout: { slot: "left" } }
   ],
   animate: {
     duration: 4,
     loop: true,
     easing: "easeInOut",
     keyframes: [
-      { time: 0, changes: { "mover.slot": "left" } },
-      { time: 2, changes: { "mover.slot": "right" } },
-      { time: 4, changes: { "mover.slot": "left" } }
+      { time: 0, changes: { "mover.layout.slot": "left" } },
+      { time: 2, changes: { "mover.layout.slot": "right" } },
+      { time: 4, changes: { "mover.layout.slot": "left" } }
     ]
   }
 }`,

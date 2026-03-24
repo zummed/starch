@@ -212,9 +212,9 @@ style danger
       expect(result.objects[0].visible).toBe(false);
     });
 
-    it('parses slot', () => {
-      const result = parseDsl('box: rect 10x10 slot=container');
-      expect(result.objects[0].slot).toBe('container');
+    it('parses slot under layout keyword', () => {
+      const result = parseDsl('box: rect 10x10 layout slot=container');
+      expect(result.objects[0].layout).toEqual({ slot: 'container' });
     });
 
     it('parses multiple properties on one node', () => {

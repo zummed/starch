@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema,
+  LayoutSchema,
 } from './properties';
 import {
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
@@ -33,7 +33,6 @@ const PROPERTY_CATEGORIES: Record<string, PropertyDescriptor['category']> = {
   depth: 'visual',
   dash: 'visual',
   layout: 'layout',
-  layoutHint: 'layout',
   style: 'meta',
   camera: 'meta',
   template: 'meta',
@@ -294,7 +293,7 @@ export function getPropertyDescription(path: string, rootSchema?: z.ZodType): st
 
 export {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema, LayoutHintSchema,
+  LayoutSchema,
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
   ImageGeomSchema, CameraSchema, NodeSchema,
   AnimConfigSchema, KeyframeBlockSchema, ChapterSchema, EasingNameSchema,

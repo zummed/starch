@@ -86,6 +86,15 @@ const TRANSFORM_PROPS = new Set(['rotation', 'scale', 'anchor', 'pathFollow', 'p
 // Properties that go into camera
 const CAMERA_PROPS = new Set(['look', 'zoom', 'ratio', 'active']);
 
+// Free-floating key=value properties allowed at the node level
+const FREE_FLOATING_PROPS = new Set(['opacity', 'depth', 'visible']);
+
+// Geometry-scoped key=value properties
+const RECT_PROPS = new Set(['radius']);
+const TEXT_PROPS = new Set(['size', 'lineHeight', 'align']);
+const IMAGE_PROPS = new Set(['fit']);
+const PATH_PROPS = new Set(['radius', 'bend', 'drawProgress', 'gap', 'fromGap', 'toGap']);
+
 // Top-level document keywords (not node IDs)
 const DOC_KEYWORDS = new Set([
   'name', 'description', 'background', 'viewport', 'images', 'style', 'animate',
@@ -289,30 +298,6 @@ function parsePointRef(s: TokenStream): any {
   throw new Error(`Expected point reference at line ${s.peek().line}`);
 }
 
-// ─── Property Application ────────────────────────────────────────
-
-function applyKeyValueToNode(node: any, key: string, value: any): void {
-  if (TRANSFORM_PROPS.has(key)) {
-    if (!node.transform) node.transform = {};
-    node.transform[key] = value;
-  } else if (key === 'x' || key === 'y') {
-    if (!node.transform) node.transform = {};
-    node.transform[key] = value;
-  } else if (CAMERA_PROPS.has(key) && node.camera !== undefined) {
-    node.camera[key] = value;
-  } else if (node.text && (key === 'size' || key === 'lineHeight' || key === 'align')) {
-    node.text[key] = value;
-  } else if (node.rect && key === 'radius') {
-    node.rect[key] = value;
-  } else if (node.image && key === 'fit') {
-    node.image[key] = value;
-  } else if (node.path && (key === 'radius' || key === 'bend' || key === 'drawProgress' || key === 'gap' || key === 'fromGap' || key === 'toGap')) {
-    node.path[key] = value;
-  } else {
-    node[key] = value;
-  }
-}
-
 // ─── Inline Property Parsing ─────────────────────────────────────
 
 /**
@@ -359,7 +344,7 @@ function parseInlineProps(s: TokenStream, node: any): void {
       continue;
     }
 
-    // at keyword (position)
+    // at keyword (position) + transform key=value pairs
     if (s.is('identifier', 'at')) {
       s.next();
       if (!node.transform) node.transform = {};
@@ -379,6 +364,53 @@ function parseInlineProps(s: TokenStream, node: any): void {
         const y = parseFloat(s.next().value);
         node.transform.x = x;
         node.transform.y = y;
+      }
+      // Consume trailing transform key=value pairs (rotation=, scale=, etc.)
+      while (s.is('identifier') && s.peek(1).type === 'equals' && TRANSFORM_PROPS.has(s.peek().value)) {
+        const kv = parseKeyValue(s);
+        if (kv) node.transform[kv[0]] = kv[1];
+      }
+      continue;
+    }
+
+    // layout keyword (inline form: layout slot=X, layout grow=1, etc.)
+    // Also handles layout={...} JSON escape hatch
+    if (s.is('identifier', 'layout') && !(s.peek(1).type === 'colon')) {
+      // Check if it's layout=... (JSON escape hatch)
+      if (s.peek(1).type === 'equals') {
+        const kv = parseKeyValue(s);
+        if (kv) { node.layout = kv[1]; continue; }
+      }
+      s.next();
+      if (!node.layout) node.layout = {};
+      // JSON escape hatch: layout {...}
+      if (s.is('braceOpen')) {
+        node.layout = parseJsonEscapeHatch(s);
+        continue;
+      }
+      // Optional type identifier
+      if (s.is('identifier') && s.peek(1).type !== 'equals') {
+        const val = s.peek().value;
+        // Only consume if it's a known layout type, not a keyword for something else
+        if (val !== 'fill' && val !== 'stroke' && val !== 'at' && !GEOM_KEYWORDS.has(val)) {
+          node.layout.type = s.next().value;
+          // Optional direction
+          if (s.is('identifier') && s.peek(1).type !== 'equals') {
+            const dir = s.peek().value;
+            if (dir === 'row' || dir === 'column') {
+              node.layout.direction = s.next().value;
+            }
+          }
+        }
+      }
+      // Key=value pairs for layout properties
+      while (!s.atEnd() && !s.is('newline') && !s.is('dedent') && !s.is('eof')) {
+        const kv = parseKeyValue(s);
+        if (kv) {
+          node.layout[kv[0]] = kv[1];
+        } else {
+          break;
+        }
       }
       continue;
     }
@@ -415,11 +447,46 @@ function parseInlineProps(s: TokenStream, node: any): void {
       }
     }
 
-    // key=value
-    const kv = parseKeyValue(s);
-    if (kv) {
-      applyKeyValueToNode(node, kv[0], kv[1]);
-      continue;
+    // Whitelisted free-floating key=value properties
+    if (s.is('identifier') && s.peek(1).type === 'equals') {
+      const key = s.peek().value;
+      if (FREE_FLOATING_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) {
+          node[kv[0]] = kv[1];
+          continue;
+        }
+      }
+      // Geometry-scoped key=value (e.g., radius=, size=, etc.)
+      if (node.rect && RECT_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) { node.rect[kv[0]] = kv[1]; continue; }
+      }
+      if (node.text && TEXT_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) { node.text[kv[0]] = kv[1]; continue; }
+      }
+      if (node.image && IMAGE_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) { node.image[kv[0]] = kv[1]; continue; }
+      }
+      if (node.path && PATH_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) { node.path[kv[0]] = kv[1]; continue; }
+      }
+      if (node.camera !== undefined && CAMERA_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) { node.camera[kv[0]] = kv[1]; continue; }
+      }
+      // Transform props without 'at' prefix
+      if (TRANSFORM_PROPS.has(key)) {
+        const kv = parseKeyValue(s);
+        if (kv) {
+          if (!node.transform) node.transform = {};
+          node.transform[kv[0]] = kv[1];
+          continue;
+        }
+      }
     }
 
     // If nothing matched, break

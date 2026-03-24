@@ -192,7 +192,7 @@ function formatInlineProps(node: any): string {
   if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
   if (node.visible === false) parts.push(`visible=false`);
   if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.slot !== undefined) parts.push(`slot=${node.slot}`);
+  if (node.layout?.slot !== undefined) parts.push(`layout slot=${node.layout.slot}`);
   if (node.transform) {
     const t = formatTransform(node.transform);
     if (t) parts.push(t);
@@ -208,7 +208,7 @@ function formatInlineProps(node: any): string {
 function formatBlockOnlyProps(node: any, indent: string): string[] {
   const lines: string[] = [];
   if (node.dash) lines.push(`${indent}${formatDashBlock(node.dash)}`);
-  if (node.layout) lines.push(`${indent}${formatLayout(node.layout)}`);
+  if (node.layout && isBlockLayout(node.layout)) lines.push(`${indent}${formatLayout(node.layout)}`);
   return lines;
 }
 
@@ -222,9 +222,17 @@ function formatBlockVisualProps(node: any, indent: string): string[] {
   return lines;
 }
 
+/** A layout object that has type or direction (container layout) needs block rendering.
+ *  A layout with only hint props (grow, order, alignSelf, slot) is emitted inline. */
+function isBlockLayout(layout: any): boolean {
+  return !!(layout.type || layout.direction || layout.gap !== undefined ||
+    layout.justify || layout.align || layout.wrap !== undefined ||
+    layout.padding !== undefined);
+}
+
 /** Check if a node has properties that require block rendering. */
 function hasBlockOnlyProps(node: any): boolean {
-  return !!(node.dash || node.layout);
+  return !!(node.dash || (node.layout && isBlockLayout(node.layout)));
 }
 
 // ─── Transform Formatting ─────────────────────────────────────────
@@ -274,7 +282,8 @@ function formatDashBlock(dash: any): string {
 // ─── Layout Formatting ────────────────────────────────────────────
 
 function formatLayout(layout: any): string {
-  let s = `layout ${layout.type}`;
+  let s = 'layout';
+  if (layout.type) s += ` ${layout.type}`;
   if (layout.direction) s += ` ${layout.direction}`;
   const skip = new Set(['type', 'direction']);
   for (const [k, v] of Object.entries(layout)) {
@@ -341,7 +350,7 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
     if (node.opacity !== undefined) inlineOnlyParts.push(`opacity=${node.opacity}`);
     if (node.visible === false) inlineOnlyParts.push(`visible=false`);
     if (node.depth !== undefined) inlineOnlyParts.push(`depth=${node.depth}`);
-    if (node.slot !== undefined) inlineOnlyParts.push(`slot=${node.slot}`);
+    if (node.layout?.slot !== undefined && !node.layout?.type) inlineOnlyParts.push(`layout slot=${node.layout.slot}`);
     if (node.transform) {
       const t = formatTransform(node.transform);
       if (t) inlineOnlyParts.push(t);

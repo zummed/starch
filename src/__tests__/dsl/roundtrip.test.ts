@@ -426,7 +426,7 @@ describe('DSL round-trip fidelity', () => {
           opacity: 0.8,
           depth: 5,
           visible: false,
-          slot: 'container',
+          layout: { slot: 'container' },
         },
       ],
     };
@@ -435,7 +435,7 @@ describe('DSL round-trip fidelity', () => {
     expect(obj.opacity).toBe(0.8);
     expect(obj.depth).toBe(5);
     expect(obj.visible).toBe(false);
-    expect(obj.slot).toBe('container');
+    expect(obj.layout?.slot).toBe('container');
   });
 
   // ── Complete scene ─────────────────────────────────────────────
