@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ModelManager } from '../../editor/modelManager';
+import { ModelManager, resolveIdPath } from '../../editor/modelManager';
 
 describe('ModelManager', () => {
   it('starts with empty model', () => {
@@ -127,13 +127,12 @@ describe('ModelManager', () => {
     mm.destroy();
   });
 
-  it('getDisplayText returns JSON5 when in JSON5 mode', () => {
+  it('getDisplayText always returns DSL (JSON5 mode removed)', () => {
     const mm = new ModelManager(0);
-    mm.setViewFormat('json5');
     mm.setText('{ objects: [{ id: "a", rect: { w: 100, h: 60 } }] }', 'json5');
     const display = mm.getDisplayText();
-    // JSON5.stringify uses single quotes for strings
-    expect(display).toContain("'a'");
+    // Always DSL now, regardless of viewFormat
+    expect(display).toContain('a: rect 100x60');
     mm.destroy();
   });
 
@@ -192,5 +191,89 @@ describe('ModelManager', () => {
     mm.setText('{ objects: [{ id: "a", rect: { w: 10, h: 10 } }], animate: { duration: 3, keyframes: [] } }', 'json5');
     expect(mm.realModel.animate?.duration).toBe(3);
     mm.destroy();
+  });
+
+  it('getDisplayResult returns text and spans', () => {
+    const mm = new ModelManager(0);
+    mm.setText('box: rect 100x60', 'dsl');
+    const result = mm.getDisplayResult();
+    expect(result.text).toContain('box: rect 100x60');
+    expect(result.spans.length).toBeGreaterThan(0);
+    const wSpan = result.spans.find(s => s.schemaPath === 'rect.w');
+    expect(wSpan).toBeDefined();
+    expect(result.text.slice(wSpan!.from, wSpan!.to)).toBe('100');
+    mm.destroy();
+  });
+
+  it('updateProperty resolves ID-based paths', () => {
+    const mm = new ModelManager(0);
+    mm.setText('box: rect 100x60', 'dsl');
+    const onText = vi.fn();
+    mm.onTextChange(onText);
+    // Use ID-based path instead of index-based
+    mm.updateProperty('objects.box.rect.w', 200);
+    expect(onText).toHaveBeenCalled();
+    expect(mm.json.objects[0].rect.w).toBe(200);
+    mm.destroy();
+  });
+
+  it('removeProperty resolves ID-based paths', () => {
+    const mm = new ModelManager(0);
+    mm.setText('box: rect 100x60 fill red', 'dsl');
+    mm.removeProperty('objects.box.fill');
+    expect(mm.json.objects[0].fill).toBeUndefined();
+    mm.destroy();
+  });
+});
+
+describe('resolveIdPath', () => {
+  const json = {
+    objects: [
+      { id: 'box', rect: { w: 100 } },
+      { id: 'circle', ellipse: { rx: 50 } },
+    ],
+    styles: { primary: { fill: 'blue' } },
+    animate: { duration: 2 },
+  };
+
+  it('resolves objects.<id> to objects.<index>', () => {
+    expect(resolveIdPath(json, 'objects.box.rect.w')).toBe('objects.0.rect.w');
+    expect(resolveIdPath(json, 'objects.circle.ellipse.rx')).toBe('objects.1.ellipse.rx');
+  });
+
+  it('passes through style paths unchanged', () => {
+    expect(resolveIdPath(json, 'styles.primary.fill')).toBe('styles.primary.fill');
+  });
+
+  it('passes through animate paths unchanged', () => {
+    expect(resolveIdPath(json, 'animate.duration')).toBe('animate.duration');
+  });
+
+  it('handles nested children', () => {
+    const withChildren = {
+      objects: [
+        { id: 'parent', children: [{ id: 'child', rect: { w: 50 } }] },
+      ],
+    };
+    expect(resolveIdPath(withChildren, 'objects.parent.child.rect.w'))
+      .toBe('objects.0.children.0.rect.w');
+  });
+
+  it('handles grandchild nesting', () => {
+    const withGrandchildren = {
+      objects: [
+        { id: 'root', children: [
+          { id: 'mid', children: [
+            { id: 'leaf', fill: 'red' },
+          ]},
+        ]},
+      ],
+    };
+    expect(resolveIdPath(withGrandchildren, 'objects.root.mid.leaf.fill'))
+      .toBe('objects.0.children.0.children.0.fill');
+  });
+
+  it('passes through index-based paths unchanged', () => {
+    expect(resolveIdPath(json, 'objects.0.rect.w')).toBe('objects.0.rect.w');
   });
 });

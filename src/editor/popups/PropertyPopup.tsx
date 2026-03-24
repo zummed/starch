@@ -31,6 +31,9 @@ const stop = (e: React.MouseEvent | React.PointerEvent) => e.stopPropagation();
 /** Properties filtered from compound editors (identity/structural). */
 const EXCLUDED_PROPS = new Set(['id', 'children']);
 
+/** Geometry types — mutually exclusive per node. */
+const GEOMETRY_PROPS = new Set(['rect', 'ellipse', 'text', 'path', 'image', 'camera']);
+
 // ─── Value summaries for compact compound rows ────────────────────
 
 function getValueSummary(value: unknown, type: SchemaType): string {
@@ -316,7 +319,13 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
   }, []);
 
   const allProps = getAvailableProperties(schemaPath);
-  const editableProps = allProps.filter(p => !EXCLUDED_PROPS.has(p.name));
+  // Exclude identity/structural props, and geometry types that conflict with the existing one
+  const existingGeom = Object.keys(value).find(k => GEOMETRY_PROPS.has(k));
+  const editableProps = allProps.filter(p => {
+    if (EXCLUDED_PROPS.has(p.name)) return false;
+    if (existingGeom && GEOMETRY_PROPS.has(p.name) && p.name !== existingGeom) return false;
+    return true;
+  });
 
   const activeProps = editableProps.filter(p => activeKeys.has(p.name));
   const inactiveProps = editableProps.filter(p => !activeKeys.has(p.name));

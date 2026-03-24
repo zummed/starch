@@ -12,10 +12,11 @@ import type { Node } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { parseScene } from '../parser/parser';
 import { parseDslWithHints } from '../dsl/parser';
-import { generateDsl } from '../dsl/generator';
 import type { FormatHints } from '../dsl/formatHints';
 import { emptyFormatHints } from '../dsl/formatHints';
 import type { ZodError } from 'zod';
+import { SchemaRenderer } from './schemaRenderer';
+import type { RenderResult } from './schemaSpan';
 
 export interface ModelState {
   nodes: Node[];
@@ -96,7 +97,8 @@ export class ModelManager {
     // overwriting _json and _formatHints after this mutation
     if (this._debounceTimer) { clearTimeout(this._debounceTimer); this._debounceTimer = null; }
 
-    setNestedValue(this._json, path.split('.'), value);
+    const resolvedPath = resolveIdPath(this._json, path);
+    setNestedValue(this._json, resolvedPath.split('.'), value);
 
     try {
       const jsonStr = JSON5.stringify(this._json, null, 2);
@@ -118,11 +120,12 @@ export class ModelManager {
     }
   }
 
-  /** Remove a property by path (e.g., "objects.0.visible"). */
+  /** Remove a property by path (e.g., "objects.0.visible" or "objects.box.visible"). */
   removeProperty(path: string): void {
     if (this._json == null) return;
     if (this._debounceTimer) { clearTimeout(this._debounceTimer); this._debounceTimer = null; }
-    const keys = path.split('.');
+    const resolvedPath = resolveIdPath(this._json, path);
+    const keys = resolvedPath.split('.');
     const parentKeys = keys.slice(0, -1);
     const propKey = keys[keys.length - 1];
     let parent = this._json;
@@ -162,11 +165,12 @@ export class ModelManager {
 
   // ── Display Text ──
 
+  getDisplayResult(): RenderResult {
+    return new SchemaRenderer().render(this._json, this._formatHints);
+  }
+
   getDisplayText(): string {
-    if (this._viewFormat === 'dsl') {
-      return generateDsl(this._json, { formatHints: this._formatHints });
-    }
-    return JSON5.stringify(this._json, null, 2);
+    return this.getDisplayResult().text;
   }
 
   // ── Events ──
@@ -273,4 +277,47 @@ export function getNestedValue(obj: any, path: string): unknown {
     current = current[key];
   }
   return current;
+}
+
+/**
+ * Resolve an ID-based model path to an index-based path.
+ * "objects.box.rect.w" -> "objects.0.rect.w"
+ * "objects.parent.child.rect.w" -> "objects.0.children.0.rect.w"
+ * "objects.parent.child.grandchild.fill" -> "objects.0.children.0.children.0.fill"
+ * Style and animate paths pass through unchanged.
+ */
+export function resolveIdPath(json: any, idPath: string): string {
+  const segments = idPath.split('.');
+  if (segments[0] !== 'objects' || !json.objects) return idPath;
+
+  const result: string[] = ['objects'];
+  let nodes: any[] = json.objects;
+
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i];
+    const idx = nodes.findIndex((n: any) => n.id === seg);
+    if (idx >= 0) {
+      result.push(String(idx));
+      const node = nodes[idx];
+      // Check if next segment is a child ID
+      if (node.children && i + 1 < segments.length) {
+        const nextSeg = segments[i + 1];
+        const childIdx = node.children.findIndex((c: any) => c.id === nextSeg);
+        if (childIdx >= 0) {
+          result.push('children');
+          nodes = node.children;
+          continue; // next iteration finds the child ID in the now-updated nodes array
+        }
+      }
+      // Remaining segments are property path
+      result.push(...segments.slice(i + 1));
+      break;
+    } else {
+      // Not a node ID — must be a property path
+      result.push(...segments.slice(i));
+      break;
+    }
+  }
+
+  return result.join('.');
 }
