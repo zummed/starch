@@ -540,11 +540,11 @@ describe('DSL generator', () => {
         animate: {
           duration: 3,
           keyframes: [
-            { time: 0, changes: { 'box.transform.anchor': [0.5, 0.5] } },
+            { time: 0, changes: { 'box.transform.anchor': [0.5, -0.5] } },
           ],
         },
       });
-      expect(dsl).toContain('0  box.transform.anchor: (0.5,0.5)');
+      expect(dsl).toContain('0  box.transform.anchor: (0.5,-0.5)');
     });
   });
 

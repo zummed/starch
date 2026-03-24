@@ -2,14 +2,15 @@ import type { Node, PointRef } from '../../types/node';
 import { createNode } from '../../types/node';
 import { parseColor } from '../../types/color';
 import type { HslColor } from '../../types/properties';
+import type { AnchorPoint } from '../../types/anchor';
 
 const ARROW_SIZE = 8;
 
 export function arrowTemplate(id: string, props: Record<string, unknown>): Node {
   const from = props.from as PointRef;
   const to = props.to as PointRef;
-  const fromAnchor = props.fromAnchor as string | [number, number] | undefined;
-  const toAnchor = props.toAnchor as string | [number, number] | undefined;
+  const fromAnchor = props.fromAnchor as AnchorPoint | undefined;
+  const toAnchor = props.toAnchor as AnchorPoint | undefined;
   const smooth = (props.smooth as boolean) ?? false;
   const bend = props.bend as number | undefined;
   const route = props.route as PointRef[] | undefined;

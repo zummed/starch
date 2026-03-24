@@ -1,7 +1,5 @@
 export const NAMED_ANCHORS = [
   'center', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW',
-  'top', 'bottom', 'left', 'right',
-  'topleft', 'topright', 'bottomleft', 'bottomright',
 ] as const;
 
 export type NamedAnchor = typeof NAMED_ANCHORS[number];

@@ -45,7 +45,7 @@ export interface RenderBackend {
   setBackground(color: RgbaColor | 'transparent'): void;
 
   // Transform stack
-  pushTransform(x: number, y: number, rotation: number, scale: number): void;
+  pushTransform(x: number, y: number, rotation: number, scale: number, anchorX?: number, anchorY?: number): void;
   popTransform(): void;
 
   // Opacity stack (multiplicative — implementations must maintain internal composed product)

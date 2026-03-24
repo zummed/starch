@@ -190,14 +190,14 @@ function resolvePointRef(ref: unknown, roots: Node[]): [number, number] | null {
 
 const NAMED_ANCHOR_OFFSETS: Record<string, [number, number]> = {
   center: [0, 0],
-  N: [0, -1], top: [0, -1],
-  NE: [1, -1], topright: [1, -1],
-  E: [1, 0], right: [1, 0],
-  SE: [1, 1], bottomright: [1, 1],
-  S: [0, 1], bottom: [0, 1],
-  SW: [-1, 1], bottomleft: [-1, 1],
-  W: [-1, 0], left: [-1, 0],
-  NW: [-1, -1], topleft: [-1, -1],
+  N: [0, -1],
+  NE: [1, -1],
+  E: [1, 0],
+  SE: [1, 1],
+  S: [0, 1],
+  SW: [-1, 1],
+  W: [-1, 0],
+  NW: [-1, -1],
 };
 
 function resolveAnchorOnBounds(
@@ -206,7 +206,8 @@ function resolveAnchorOnBounds(
 ): [number, number] | null {
   if (!anchor) return null;
   if (Array.isArray(anchor)) {
-    return [bounds.cx + (anchor[0] - 0.5) * bounds.hw * 2, bounds.cy + (anchor[1] - 0.5) * bounds.hh * 2];
+    // Float anchor [-1..1, -1..1] where 0,0 is center
+    return [bounds.cx + anchor[0] * bounds.hw, bounds.cy + anchor[1] * bounds.hh];
   }
   const offsets = NAMED_ANCHOR_OFFSETS[anchor];
   if (!offsets) return null;
@@ -223,8 +224,8 @@ function anchorDirection(
 ): [number, number] {
   const FAR = 10000;
   if (Array.isArray(anchor)) {
-    // Float anchor [0-1, 0-1] → direction from center
-    return [bounds.cx + (anchor[0] - 0.5) * FAR, bounds.cy + (anchor[1] - 0.5) * FAR];
+    // Float anchor [-1..1, -1..1] where 0,0 is center
+    return [bounds.cx + anchor[0] * FAR, bounds.cy + anchor[1] * FAR];
   }
   const offsets = NAMED_ANCHOR_OFFSETS[anchor];
   if (!offsets || (offsets[0] === 0 && offsets[1] === 0)) {

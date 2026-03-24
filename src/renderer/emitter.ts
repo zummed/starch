@@ -4,10 +4,39 @@
  */
 import type { Node, PathGeom } from '../types/node';
 import type { Color, Stroke } from '../types/properties';
+import type { AnchorPoint } from '../types/anchor';
 import type { RenderBackend, RgbaColor, StrokeStyle, PathSegment } from './backend';
 import type { ViewBox } from './camera';
 import { colorToRgba } from '../types/color';
 import { resolvePathGeometry } from './pathGeometry';
+import { isNamedAnchor } from '../types/anchor';
+
+const NAMED_ANCHOR_XY: Record<string, [number, number]> = {
+  center: [0, 0],
+  N: [0, -1], NE: [1, -1], E: [1, 0], SE: [1, 1],
+  S: [0, 1], SW: [-1, 1], W: [-1, 0], NW: [-1, -1],
+};
+
+/** Resolve an anchor to pixel offsets relative to the node's geometry center. */
+function resolveAnchorPixels(anchor: AnchorPoint | undefined, node: Node): [number, number] {
+  if (!anchor) return [0, 0];
+  let ax: number, ay: number;
+  if (Array.isArray(anchor)) {
+    ax = anchor[0]; ay = anchor[1];
+  } else if (isNamedAnchor(anchor)) {
+    const pos = NAMED_ANCHOR_XY[anchor];
+    if (!pos) return [0, 0];
+    ax = pos[0]; ay = pos[1];
+  } else {
+    return [0, 0];
+  }
+  // Get geometry half-extents
+  let hw = 0, hh = 0;
+  if (node.rect) { hw = node.rect.w / 2; hh = node.rect.h / 2; }
+  else if (node.ellipse) { hw = node.ellipse.rx; hh = node.ellipse.ry; }
+  else if (node.image) { hw = node.image.w / 2; hh = node.image.h / 2; }
+  return [ax * hw, ay * hh];
+}
 
 function fillToRgba(fill: Color | undefined): RgbaColor | null {
   if (fill === undefined || fill === null) return null;
@@ -163,7 +192,9 @@ function emitNode(
     }
   }
 
-  backend.pushTransform(x, y, rotation, scale);
+  // Resolve anchor pivot for rotation/scale
+  const [anchorX, anchorY] = resolveAnchorPixels(t?.anchor as AnchorPoint | undefined, node);
+  backend.pushTransform(x, y, rotation, scale, anchorX, anchorY);
 
   // Priority: own > style > parent (same for all visual properties including opacity)
   const opacity = node.opacity ?? styleOpacity ?? parentOpacity;

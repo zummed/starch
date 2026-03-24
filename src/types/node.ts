@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   ColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema,
+  LayoutSchema, AnchorSchema,
 } from './properties';
 import type { Color, Stroke, Transform, TransformInput, Dash, Layout } from './properties';
 
@@ -35,8 +35,8 @@ export const PointRefSchema = z.union([
 
 export const PathGeomSchema = z.object({
   points: z.array(z.tuple([z.number(), z.number()])).describe('Ordered path vertices — array of [x, y] coordinate tuples').optional(),
-  fromAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Anchor on start node — named ("N","E","S","W",...) or [0-1, 0-1] tuple').optional(),
-  toAnchor: z.union([z.string(), z.tuple([z.number(), z.number()])]).describe('Anchor on end node — named ("N","E","S","W",...) or [0-1, 0-1] tuple').optional(),
+  fromAnchor: AnchorSchema.describe('Anchor on start node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
+  toAnchor: AnchorSchema.describe('Anchor on end node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
   closed: z.boolean().describe('Close the path into a loop (boolean, default false)').optional(),
   smooth: z.boolean().describe('Use Catmull-Rom spline interpolation (boolean, default false)').optional(),
   bend: z.number().min(-5).max(5).describe('Quadratic curve bend factor (number, -5 to 5, 0 = straight)').optional(),

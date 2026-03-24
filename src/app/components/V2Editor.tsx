@@ -24,6 +24,8 @@ import {
   getPropertySchema,
   getPropertyDescription,
   detectSchemaType,
+  isBubblableType,
+  isLeafType,
   AnimConfigSchema,
 } from '../../types/schemaRegistry';
 import { PropertyPopup } from '../../editor/popups/PropertyPopup';
@@ -353,7 +355,7 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
     if (!ctx.path || ctx.isPropertyName) return;
 
     // Resolve schema path (strip objects.N. / styles.NAME. prefix)
-    const schemaPath = stripModelPrefix(ctx.path);
+    let schemaPath = stripModelPrefix(ctx.path);
 
     // Handle animate section with AnimConfigSchema as root
     let rootSchema: import('zod').ZodType | undefined;
@@ -361,27 +363,52 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
       rootSchema = AnimConfigSchema;
     }
 
-    // Get current value from model
-    const value = getNestedValue(modelManagerRef.current.json, ctx.path);
+    // Compute model prefix (the part of ctx.path before schemaPath)
+    // e.g., ctx.path="objects.0.rect.w", schemaPath="rect.w" → modelPrefix="objects.0."
+    const modelPrefix = schemaPath
+      ? ctx.path.slice(0, ctx.path.length - schemaPath.length)
+      : ctx.path;
 
     // Get schema for popup widget selection
-    const schema = rootSchema
+    let schema = rootSchema
       ? getPropertySchema(schemaPath, rootSchema)
       : getPropertySchema(schemaPath);
 
     if (!schema) return;
 
-    const type = detectSchemaType(schema);
+    let type = detectSchemaType(schema);
+
+    // Bubble up: if this is a leaf type, check if the parent is a compound object/color
+    if (isLeafType(type)) {
+      const parentSchemaPath = schemaPath.includes('.')
+        ? schemaPath.split('.').slice(0, -1).join('.')
+        : '';  // empty string = node root
+      const parentSchema = rootSchema
+        ? getPropertySchema(parentSchemaPath, rootSchema)
+        : getPropertySchema(parentSchemaPath);
+      if (parentSchema && isBubblableType(detectSchemaType(parentSchema))) {
+        schemaPath = parentSchemaPath;
+        schema = parentSchema;
+        type = detectSchemaType(schema);
+      }
+    }
 
     // Only show popup for types that have widgets
-    if (!['number', 'color', 'enum', 'boolean', 'object', 'pointref'].includes(type)) return;
+    if (!['number', 'color', 'enum', 'boolean', 'object', 'pointref', 'anchor', 'string'].includes(type)) return;
+
+    // Reconstruct model path after bubbling
+    const finalPath = schemaPath
+      ? modelPrefix + schemaPath
+      : modelPrefix.endsWith('.') ? modelPrefix.slice(0, -1) : modelPrefix;
+
+    const value = getNestedValue(modelManagerRef.current.json, finalPath);
 
     const coords = view.coordsAtPos(pos);
     if (!coords) return;
 
     popupOpenRef.current = true;
     setPopup({
-      path: ctx.path,
+      path: finalPath,
       schemaPath,
       value,
       position: { x: coords.left, y: coords.bottom + 4 },

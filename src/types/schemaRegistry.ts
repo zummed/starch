@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema,
+  LayoutSchema, AnchorSchema,
 } from './properties';
+import { NAMED_ANCHORS } from './anchor';
 import {
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
   ImageGeomSchema, CameraSchema, NodeSchema,
@@ -43,7 +44,7 @@ function getDescription(schema: z.ZodType): string {
   return schema.description ?? '';
 }
 
-function isOptional(schema: z.ZodType): boolean {
+export function isOptional(schema: z.ZodType): boolean {
   return schema instanceof z.ZodOptional || schema instanceof z.ZodDefault;
 }
 
@@ -183,7 +184,7 @@ export function getAvailableProperties(path: string, rootSchema?: z.ZodType): Pr
 /**
  * Detect the "type" of a schema for popup selection.
  */
-export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'record' | 'pointref' | 'unknown';
+export type SchemaType = 'number' | 'string' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'record' | 'pointref' | 'anchor' | 'unknown';
 
 export function detectSchemaType(schema: z.ZodType): SchemaType {
   const unwrapped = unwrap(schema);
@@ -209,9 +210,12 @@ export function detectSchemaType(schema: z.ZodType): SchemaType {
       for (const opt of options) {
         if (detectSchemaType(opt) === 'color') return 'color';
       }
+      // Anchor: union of enum (named anchors) + [number, number] tuple
+      const hasEnum = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodEnum);
+      const hasTuple = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodTuple);
+      if (hasEnum && hasTuple) return 'anchor';
       // PointRef: union of string, [number,number], [string,number,number]
       const hasString = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodString);
-      const hasTuple = options.some((o: z.ZodType) => unwrap(o) instanceof z.ZodTuple);
       if (hasString && hasTuple) return 'pointref';
     }
   }
@@ -291,10 +295,38 @@ export function getPropertyDescription(path: string, rootSchema?: z.ZodType): st
   return schema.description;
 }
 
+/**
+ * Extract the Zod default value from a schema, if declared.
+ */
+export function getSchemaDefault(schema: z.ZodType): unknown {
+  let s = schema;
+  if (s instanceof z.ZodOptional) s = (s as any)._def.innerType;
+  if (s instanceof z.ZodDefault) {
+    const dv = (s as any)._def.defaultValue;
+    return typeof dv === 'function' ? dv() : dv;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a schema type is a compound type worth bubbling into.
+ */
+export function isBubblableType(type: SchemaType): boolean {
+  return type === 'object' || type === 'color';
+}
+
+/** Leaf schema types that should bubble up to a compound parent. */
+const LEAF_TYPES: Set<SchemaType> = new Set(['number', 'string', 'boolean', 'enum', 'pointref', 'anchor']);
+
+export function isLeafType(type: SchemaType): boolean {
+  return LEAF_TYPES.has(type);
+}
+
 export {
   HslColorSchema, StrokeSchema, TransformSchema, DashSchema,
-  LayoutSchema,
+  LayoutSchema, AnchorSchema,
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, PathGeomSchema,
   ImageGeomSchema, CameraSchema, NodeSchema,
   AnimConfigSchema, KeyframeBlockSchema, ChapterSchema, EasingNameSchema,
+  NAMED_ANCHORS,
 };

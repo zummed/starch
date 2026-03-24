@@ -157,12 +157,15 @@ export class SvgRenderBackend implements RenderBackend {
     }
   }
 
-  pushTransform(x: number, y: number, rotation: number, scale: number): void {
+  pushTransform(x: number, y: number, rotation: number, scale: number, anchorX?: number, anchorY?: number): void {
     const g = svgEl('g') as SVGGElement;
     const parts: string[] = [];
     if (x !== 0 || y !== 0) parts.push(`translate(${x}, ${y})`);
     if (rotation !== 0) parts.push(`rotate(${rotation})`);
     if (scale !== 1) parts.push(`scale(${scale})`);
+    const ax = anchorX ?? 0;
+    const ay = anchorY ?? 0;
+    if (ax !== 0 || ay !== 0) parts.push(`translate(${-ax}, ${-ay})`);
     if (parts.length > 0) g.setAttribute('transform', parts.join(' '));
 
     this._currentGroup().appendChild(g);
