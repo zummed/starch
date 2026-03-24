@@ -340,7 +340,7 @@ describe('DSL generator', () => {
       expect(lines[0]).toContain('box: rect 10x10 fill white');
     });
 
-    it('renders block when props > 4', () => {
+    it('renders block when props > 6', () => {
       const dsl = generateDsl({
         objects: [{
           id: 'box',
@@ -349,6 +349,8 @@ describe('DSL generator', () => {
           stroke: { color: 'black' },
           opacity: 0.8,
           depth: 5,
+          visible: false,
+          transform: { x: 10, y: 20 },
         }],
       });
       const lines = dsl.trim().split('\n');
@@ -561,8 +563,12 @@ describe('DSL generator', () => {
           opacity: 0.5,
         }],
       };
-      // Without hints, this has 5+ props → heuristic renders block
-      const blockDsl = generateDsl(scene);
+      // Without hints, this has 5 props → under threshold, renders inline
+      // Add more props to push it over the 6-prop threshold for block
+      const blockScene = {
+        objects: [{ ...scene.objects[0], depth: 3, visible: false, dash: { pattern: 'dashed' } }],
+      };
+      const blockDsl = generateDsl(blockScene);
       expect(blockDsl).toContain('\n  fill');
 
       // With inline hint, force single line

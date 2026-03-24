@@ -92,6 +92,10 @@ export class ModelManager {
     // If _json is empty, no-op
     if (this._json == null || Object.keys(this._json).length === 0) return;
 
+    // Cancel any pending setText debounce to prevent stale text from
+    // overwriting _json and _formatHints after this mutation
+    if (this._debounceTimer) { clearTimeout(this._debounceTimer); this._debounceTimer = null; }
+
     setNestedValue(this._json, path.split('.'), value);
 
     try {
@@ -110,6 +114,41 @@ export class ModelManager {
       this._emitText(this.getDisplayText());
     } catch (e) {
       // If parse fails after mutation, still emit textChange so editor updates
+      this._emitText(this.getDisplayText());
+    }
+  }
+
+  /** Remove a property by path (e.g., "objects.0.visible"). */
+  removeProperty(path: string): void {
+    if (this._json == null) return;
+    if (this._debounceTimer) { clearTimeout(this._debounceTimer); this._debounceTimer = null; }
+    const keys = path.split('.');
+    const parentKeys = keys.slice(0, -1);
+    const propKey = keys[keys.length - 1];
+    let parent = this._json;
+    for (const k of parentKeys) {
+      if (parent == null || typeof parent !== 'object') return;
+      parent = parent[k];
+    }
+    if (parent != null && typeof parent === 'object') {
+      delete parent[propKey];
+    }
+
+    try {
+      const jsonStr = JSON5.stringify(this._json, null, 2);
+      const scene = parseScene(jsonStr);
+      this._model = {
+        nodes: scene.nodes,
+        styles: scene.styles,
+        animate: scene.animate,
+        background: scene.background,
+        viewport: scene.viewport,
+        images: scene.images,
+        trackPaths: scene.trackPaths,
+      };
+      this._emitModel(this._model);
+      this._emitText(this.getDisplayText());
+    } catch (e) {
       this._emitText(this.getDisplayText());
     }
   }

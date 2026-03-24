@@ -98,12 +98,12 @@ function hasOwn(node: any, key: string): boolean {
 
 // ─── Property Count ───────────────────────────────────────────────
 
-/** Count the number of property items a node has (excluding children and id). */
+/** Count the number of emittable property items a node has (excluding children, id, internals). */
 function countProps(node: any): number {
   let count = 0;
-  const skip = new Set(['id', 'children']);
   for (const key of Object.keys(node)) {
-    if (!skip.has(key)) count++;
+    if (key === 'id' || key === 'children' || key.startsWith('_')) continue;
+    if (hasOwn(node, key)) count++;
   }
   return count;
 }
@@ -328,8 +328,8 @@ function shouldRenderBlock(node: any, options?: GeneratorOptions): boolean {
   // FormatHints (from DSL parser)
   if (options?.formatHints?.nodes[id]?.display === 'inline') return false;
   if (options?.formatHints?.nodes[id]?.display === 'block') return true;
-  // Heuristic fallback
-  return countProps(node) > 4;
+  // Heuristic fallback — generous threshold since inline is the common case
+  return countProps(node) > 6;
 }
 
 function formatNode(node: any, depth: number, options?: GeneratorOptions): string[] {

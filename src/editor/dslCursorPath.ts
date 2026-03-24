@@ -186,7 +186,9 @@ function determineSectionAtCursor(tokens: Token[], cursorOffset: number): Sectio
         }
 
         // Node definition: identifier followed by colon
-        if (tokens[i + 1]?.type === 'colon' && tokens[i + 1]?.offset < cursorOffset) {
+        // Also match when cursor is on the identifier itself (colon at/after cursor)
+        if (tokens[i + 1]?.type === 'colon' &&
+            (tokens[i + 1].offset < cursorOffset || tok.offset + val.length >= cursorOffset)) {
           const isTopLevel = indentLevel === 0 && frameStack.length === 0;
           const isInNode = currentFrame.type === 'node';
 
@@ -281,6 +283,20 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
       parts.push('objects');
       parts.push(String(info.nodeIndex ?? 0));
 
+      // Detect the nearest preceding compound keyword on the line.
+      // On inline nodes like "box: rect 140x80 stroke blue width=2", the compound keyword
+      // isn't at line start — find the last one before cursor to determine context.
+      let lineCompound: string | undefined;
+      let lineIsAt = false;
+      {
+        const compoundRe = /\b(stroke|fill|dash|layout|at)\b/g;
+        let m;
+        while ((m = compoundRe.exec(line)) !== null) {
+          if (m[1] === 'at') { lineIsAt = true; lineCompound = undefined; }
+          else { lineCompound = m[1]; lineIsAt = false; }
+        }
+      }
+
       if (dimMatch) {
         // Cursor is on a dimensions token like 55x100 — map to geometry w/h
         if (info.geomType === 'rect') {
@@ -306,7 +322,13 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
       } else if (equalsMatch) {
         const key = equalsMatch[1];
         currentKey = key;
-        appendPropertyPath(parts, key, info.geomType);
+        if (lineCompound) {
+          parts.push(lineCompound, key);
+        } else if (lineIsAt) {
+          parts.push('transform', key);
+        } else {
+          appendPropertyPath(parts, key, info.geomType);
+        }
       } else if (fillStrokeMatch) {
         parts.push(fillStrokeMatch[1]);
         currentKey = fillStrokeMatch[1];
@@ -332,6 +354,15 @@ function buildContext(info: SectionInfo, lineTextToCursor: string, fullText: str
         } else if (fullWord === 'at') {
           parts.push('transform');
           currentKey = 'transform';
+        } else if (fullWord === info.nodeId) {
+          // Cursor is on the node ID — return node root path (no property segments)
+        } else if (lineCompound && fullWord) {
+          // Unrecognized word on a compound line → route to compound.word
+          parts.push(lineCompound, fullWord);
+          currentKey = fullWord;
+        } else if (lineIsAt && fullWord) {
+          parts.push('transform', fullWord);
+          currentKey = fullWord;
         } else {
           isPropertyName = true;
         }
@@ -442,10 +473,10 @@ function detectDimensionsAtCursor(text: string, cursorOffset: number): { half: '
  * "styles.primary.fill.h" -> "fill.h"
  */
 export function stripModelPrefix(path: string): string {
-  const objMatch = path.match(/^objects\.\d+\.(.+)$/);
-  if (objMatch) return objMatch[1];
-  const styleMatch = path.match(/^styles\.[^.]+\.(.+)$/);
-  if (styleMatch) return styleMatch[1];
+  const objMatch = path.match(/^objects\.\d+(?:\.(.+))?$/);
+  if (objMatch) return objMatch[1] ?? '';
+  const styleMatch = path.match(/^styles\.[^.]+(?:\.(.+))?$/);
+  if (styleMatch) return styleMatch[1] ?? '';
   return path;
 }
 

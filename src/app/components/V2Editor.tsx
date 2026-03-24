@@ -352,27 +352,41 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
       ? getDslCursorContext(doc, pos)
       : getCursorContext(doc, pos);
 
-    if (!ctx.path || ctx.isPropertyName) return;
+    // Try to build a usable path, even when cursor is on a property name
+    let path = ctx.path;
+    if (ctx.isPropertyName && ctx.prefix) {
+      // Extend path with the property name under cursor (e.g., clicking on "opacity" key)
+      path = path ? `${path}.${ctx.prefix}` : ctx.prefix;
+    }
+    if (!path) return;
 
     // Resolve schema path (strip objects.N. / styles.NAME. prefix)
-    let schemaPath = stripModelPrefix(ctx.path);
+    let schemaPath = stripModelPrefix(path);
 
     // Handle animate section with AnimConfigSchema as root
     let rootSchema: import('zod').ZodType | undefined;
-    if (ctx.path.startsWith('animate.')) {
+    if (path.startsWith('animate.')) {
       rootSchema = AnimConfigSchema;
     }
 
-    // Compute model prefix (the part of ctx.path before schemaPath)
-    // e.g., ctx.path="objects.0.rect.w", schemaPath="rect.w" → modelPrefix="objects.0."
+    // Compute model prefix (the part of path before schemaPath)
+    // e.g., path="objects.0.rect.w", schemaPath="rect.w" → modelPrefix="objects.0."
     const modelPrefix = schemaPath
-      ? ctx.path.slice(0, ctx.path.length - schemaPath.length)
-      : ctx.path;
+      ? path.slice(0, path.length - schemaPath.length)
+      : path;
 
     // Get schema for popup widget selection
     let schema = rootSchema
       ? getPropertySchema(schemaPath, rootSchema)
       : getPropertySchema(schemaPath);
+
+    // If extended path didn't resolve, fall back to the original ctx.path
+    if (!schema && ctx.isPropertyName && ctx.path) {
+      schemaPath = stripModelPrefix(ctx.path);
+      schema = rootSchema
+        ? getPropertySchema(schemaPath, rootSchema)
+        : getPropertySchema(schemaPath);
+    }
 
     if (!schema) return;
 
@@ -416,11 +430,39 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
   }, []);
 
   // Popup change handler — delegates to ModelManager
+  // For compound objects, uses per-property updates to avoid replacing the whole
+  // object (which causes DSL format disruption and potential data loss).
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
-    modelManagerRef.current.updateProperty(popup.path, newValue);
-    // Update popup's displayed value
-    setPopup(prev => prev ? { ...prev, value: newValue } : null);
+    const mm = modelManagerRef.current;
+    const oldValue = popup.value;
+
+    if (
+      typeof newValue === 'object' && newValue !== null && !Array.isArray(newValue) &&
+      typeof oldValue === 'object' && oldValue !== null && !Array.isArray(oldValue)
+    ) {
+      const oldObj = oldValue as Record<string, unknown>;
+      const newObj = newValue as Record<string, unknown>;
+
+      // Update changed or added properties individually
+      for (const key of Object.keys(newObj)) {
+        if (newObj[key] !== oldObj[key]) {
+          mm.updateProperty(`${popup.path}.${key}`, newObj[key]);
+        }
+      }
+      // Remove deleted properties
+      for (const key of Object.keys(oldObj)) {
+        if (!(key in newObj) && key !== 'id' && key !== 'children') {
+          mm.removeProperty(`${popup.path}.${key}`);
+        }
+      }
+    } else {
+      mm.updateProperty(popup.path, newValue);
+    }
+
+    // Re-read canonical value from model (avoids stale references)
+    const fresh = getNestedValue(mm.json, popup.path);
+    setPopup(prev => prev ? { ...prev, value: fresh ?? newValue } : null);
   }, [popup]);
 
   // Handle format toggle
