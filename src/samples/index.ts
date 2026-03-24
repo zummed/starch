@@ -19,16 +19,12 @@ const ALL_EASINGS = [
   'snap', 'step',
 ];
 
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return '#' + f(0) + f(8) + f(4);
-}
+const EASING_COLORS = [
+  'red', 'orangered', 'orange', 'gold', 'yellow',
+  'lawngreen', 'lime', 'springgreen', 'mediumspringgreen',
+  'cyan', 'deepskyblue', 'dodgerblue', 'blue',
+  'slateblue', 'purple', 'magenta', 'deeppink',
+];
 
 function buildEasingSample(): V2Sample {
   const startX = 120;
@@ -38,11 +34,10 @@ function buildEasingSample(): V2Sample {
 
   const objects = ALL_EASINGS.flatMap((name, i) => {
     const y = startY + i * spacing;
-    const hue = Math.round((i / ALL_EASINGS.length) * 360);
-    const hex = hslToHex(hue, 70, 50);
+    const color = EASING_COLORS[i];
     return [
-      `{ id: "${name}", rect: { w: 16, h: 16, radius: 3 }, fill: "${hex}", transform: { x: ${startX}, y: ${y} } }`,
-      `{ id: "l_${name}", text: { content: "${name}", size: 9, align: "end" }, fill: "#737373", transform: { x: ${startX - 10}, y: ${y} } }`,
+      `{ id: "${name}", rect: { w: 16, h: 16, radius: 3 }, fill: "${color}", transform: { x: ${startX}, y: ${y} } }`,
+      `{ id: "l_${name}", text: { content: "${name}", size: 9, align: "end" }, fill: "gray", transform: { x: ${startX - 10}, y: ${y} } }`,
     ];
   });
 
@@ -83,8 +78,8 @@ export const v2Samples: V2Sample[] = [
     {
       id: "box",
       rect: { w: 140, h: 80, radius: 8 },
-      fill: "#2273c3",
-      stroke: { color: "#0f4d8a", width: 2 },
+      fill: "steelblue",
+      stroke: { color: "darkblue", width: 2 },
       transform: { x: 200, y: 150 }
     }
   ]
@@ -99,15 +94,15 @@ export const v2Samples: V2Sample[] = [
     {
       id: "circle",
       ellipse: { rx: 50, ry: 50 },
-      fill: "#29a329",
-      stroke: { color: "#178217", width: 2 },
+      fill: "forestgreen",
+      stroke: { color: "darkgreen", width: 2 },
       transform: { x: 200, y: 150 }
     },
     {
       id: "oval",
       ellipse: { rx: 70, ry: 35 },
-      fill: "#e68019",
-      stroke: { color: "#aa5909", width: 2 },
+      fill: "darkorange",
+      stroke: { color: "saddlebrown", width: 2 },
       transform: { x: 400, y: 150 }
     }
   ]
@@ -119,8 +114,8 @@ export const v2Samples: V2Sample[] = [
     description: 'Text node with size, bold, and alignment',
     dsl: `{
   objects: [
-    { id: "title", text: { content: "Hello World", size: 24, bold: true }, fill: "#f2f2f2", transform: { x: 200, y: 100 } },
-    { id: "subtitle", text: { content: "A subtitle in monospace", size: 14, mono: true }, fill: "#999999", transform: { x: 200, y: 140 } }
+    { id: "title", text: { content: "Hello World", size: 24, bold: true }, fill: "whitesmoke", transform: { x: 200, y: 100 } },
+    { id: "subtitle", text: { content: "A subtitle in monospace", size: 14, mono: true }, fill: "darkgray", transform: { x: 200, y: 140 } }
   ]
 }`,
   },
@@ -133,14 +128,14 @@ export const v2Samples: V2Sample[] = [
     {
       id: "triangle",
       path: { points: [[0, -40], [40, 30], [-40, 30]], closed: true },
-      fill: "#8a2eb8",
-      stroke: { color: "#5e1782", width: 2 },
+      fill: "darkorchid",
+      stroke: { color: "indigo", width: 2 },
       transform: { x: 150, y: 150 }
     },
     {
       id: "zigzag",
       path: { points: [[0, 0], [30, -30], [60, 0], [90, -30], [120, 0]], closed: false },
-      stroke: { color: "#f2a60d", width: 2 },
+      stroke: { color: "goldenrod", width: 2 },
       transform: { x: 280, y: 150 }
     }
   ]
@@ -152,12 +147,12 @@ export const v2Samples: V2Sample[] = [
     description: 'Dash patterns on paths — solid, dashed, dotted',
     dsl: `{
   objects: [
-    { id: "solid", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "#b3b3b3", width: 2 }, transform: { x: 100, y: 100 } },
-    { id: "dashed", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "#b3b3b3", width: 2 }, dash: { pattern: "dashed", length: 10, gap: 5 }, transform: { x: 100, y: 140 } },
-    { id: "dotted", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "#b3b3b3", width: 2 }, dash: { pattern: "dotted", length: 2, gap: 6 }, transform: { x: 100, y: 180 } },
-    { id: "l1", text: { content: "solid", size: 11 }, fill: "#808080", transform: { x: 50, y: 100 } },
-    { id: "l2", text: { content: "dashed", size: 11 }, fill: "#808080", transform: { x: 42, y: 140 } },
-    { id: "l3", text: { content: "dotted", size: 11 }, fill: "#808080", transform: { x: 42, y: 180 } }
+    { id: "solid", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "silver", width: 2 }, transform: { x: 100, y: 100 } },
+    { id: "dashed", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "silver", width: 2 }, dash: { pattern: "dashed", length: 10, gap: 5 }, transform: { x: 100, y: 140 } },
+    { id: "dotted", path: { points: [[0, 0], [250, 0]] }, stroke: { color: "silver", width: 2 }, dash: { pattern: "dotted", length: 2, gap: 6 }, transform: { x: 100, y: 180 } },
+    { id: "l1", text: { content: "solid", size: 11 }, fill: "gray", transform: { x: 50, y: 100 } },
+    { id: "l2", text: { content: "dashed", size: 11 }, fill: "gray", transform: { x: 42, y: 140 } },
+    { id: "l3", text: { content: "dotted", size: 11 }, fill: "gray", transform: { x: 42, y: 180 } }
   ]
 }`,
   },
@@ -173,8 +168,8 @@ export const v2Samples: V2Sample[] = [
       id: "mybox",
       transform: { x: 200, y: 150 },
       children: [
-        { id: "bg", rect: { w: 160, h: 70, radius: 8 }, fill: "#1a334d", stroke: { color: "#2680d9", width: 2 } },
-        { id: "label", text: { content: "Composed Box", size: 14, align: "middle" }, fill: "#e6e6e6" }
+        { id: "bg", rect: { w: 160, h: 70, radius: 8 }, fill: "midnightblue", stroke: { color: "dodgerblue", width: 2 } },
+        { id: "label", text: { content: "Composed Box", size: 14, align: "middle" }, fill: "gainsboro" }
       ]
     }
   ]
@@ -190,20 +185,20 @@ export const v2Samples: V2Sample[] = [
       id: "a",
       transform: { x: 100, y: 150 },
       children: [
-        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "#1a334d", stroke: { color: "#2680d9", width: 2 } },
-        { id: "a.label", text: { content: "Source", size: 12, align: "middle" }, fill: "#e6e6e6" }
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "midnightblue", stroke: { color: "dodgerblue", width: 2 } },
+        { id: "a.label", text: { content: "Source", size: 12, align: "middle" }, fill: "gainsboro" }
       ]
     },
     {
       id: "b",
       transform: { x: 400, y: 150 },
       children: [
-        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "#4d1a1a", stroke: { color: "#d92626", width: 2 } },
-        { id: "b.label", text: { content: "Target", size: 12, align: "middle" }, fill: "#e6e6e6" }
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "darkred", stroke: { color: "crimson", width: 2 } },
+        { id: "b.label", text: { content: "Target", size: 12, align: "middle" }, fill: "gainsboro" }
       ]
     },
-    { id: "line", path: { route: ["a", "b"] }, stroke: { color: "#999999", width: 2 } },
-    { id: "lineLabel", text: { content: "sends data", size: 11 }, fill: "#999999", transform: { x: 250, y: 130 } }
+    { id: "line", path: { route: ["a", "b"] }, stroke: { color: "darkgray", width: 2 } },
+    { id: "lineLabel", text: { content: "sends data", size: 11 }, fill: "darkgray", transform: { x: 250, y: 130 } }
   ]
 }`,
   },
@@ -217,10 +212,10 @@ export const v2Samples: V2Sample[] = [
       id: "card",
       transform: { x: 200, y: 150 },
       children: [
-        { id: "bg", rect: { w: 160, h: 100, radius: 6 }, fill: "#172e45", stroke: { color: "#2273c3", width: 2 } },
-        { id: "title", text: { content: "Card Title", size: 14, bold: true }, fill: "#e6e6e6", transform: { y: -20 } },
-        { id: "badge", ellipse: { rx: 8, ry: 8 }, fill: "#22c322", transform: { x: 55, y: -30 } },
-        { id: "body", text: { content: "Some description text", size: 11 }, fill: "#999999", transform: { y: 15 } }
+        { id: "bg", rect: { w: 160, h: 100, radius: 6 }, fill: "midnightblue", stroke: { color: "steelblue", width: 2 } },
+        { id: "title", text: { content: "Card Title", size: 14, bold: true }, fill: "gainsboro", transform: { y: -20 } },
+        { id: "badge", ellipse: { rx: 8, ry: 8 }, fill: "limegreen", transform: { x: 55, y: -30 } },
+        { id: "body", text: { content: "Some description text", size: 11 }, fill: "darkgray", transform: { y: 15 } }
       ]
     }
   ],
@@ -228,8 +223,8 @@ export const v2Samples: V2Sample[] = [
     duration: 3,
     loop: true,
     keyframes: [
-      { time: 1.5, changes: { "card.bg.fill": "#451717", "card.badge.fill": "#c32222" } },
-      { time: 3, changes: { "card.bg.fill": "#172e45", "card.badge.fill": "#22c322" } }
+      { time: 1.5, changes: { "card.bg.fill": "darkred", "card.badge.fill": "crimson" } },
+      { time: 3, changes: { "card.bg.fill": "midnightblue", "card.badge.fill": "limegreen" } }
     ]
   }
 }`,
@@ -263,15 +258,15 @@ animate 6s loop
     description: 'Hue interpolation takes the shortest arc — 350 to 10 goes through 0, not 180',
     dsl: `{
   objects: [
-    { id: "box", rect: { w: 100, h: 80, radius: 8 }, fill: "#f20d33", transform: { x: 200, y: 150 } },
-    { id: "label", text: { content: "350 → 10 (short arc)", size: 11 }, fill: "#999999", transform: { x: 200, y: 210 } }
+    { id: "box", rect: { w: 100, h: 80, radius: 8 }, fill: "crimson", transform: { x: 200, y: 150 } },
+    { id: "label", text: { content: "350 → 10 (short arc)", size: 11 }, fill: "darkgray", transform: { x: 200, y: 210 } }
   ],
   animate: {
     duration: 3,
     loop: true,
     keyframes: [
-      { time: 1.5, changes: { "box.fill": "#f2330d" } },
-      { time: 3, changes: { "box.fill": "#f20d33" } }
+      { time: 1.5, changes: { "box.fill": "orangered" } },
+      { time: 3, changes: { "box.fill": "crimson" } }
     ]
   }
 }`,
@@ -284,13 +279,13 @@ animate 6s loop
     description: 'Define reusable styles — node properties override style defaults',
     dsl: `{
   styles: {
-    primary: { fill: "#2273c3", stroke: { color: "#0f4d8a", width: 2 } },
-    danger: { fill: "#cf1717", stroke: { color: "#910808", width: 2 } }
+    primary: { fill: "steelblue", stroke: { color: "darkblue", width: 2 } },
+    danger: { fill: "firebrick", stroke: { color: "darkred", width: 2 } }
   },
   objects: [
     { id: "a", rect: { w: 100, h: 60, radius: 6 }, style: "primary", transform: { x: 100, y: 150 } },
     { id: "b", rect: { w: 100, h: 60, radius: 6 }, style: "danger", transform: { x: 230, y: 150 } },
-    { id: "c", rect: { w: 100, h: 60, radius: 6 }, style: "primary", fill: "#22c322", transform: { x: 360, y: 150 } }
+    { id: "c", rect: { w: 100, h: 60, radius: 6 }, style: "primary", fill: "limegreen", transform: { x: 360, y: 150 } }
   ]
 }`,
   },
@@ -300,7 +295,7 @@ animate 6s loop
     description: 'Animate a style — all nodes using it change together',
     dsl: `{
   styles: {
-    theme: { fill: "#2273c3" }
+    theme: { fill: "steelblue" }
   },
   objects: [
     { id: "a", rect: { w: 80, h: 80, radius: 8 }, style: "theme", transform: { x: 120, y: 140 } },
@@ -311,8 +306,8 @@ animate 6s loop
     duration: 4,
     loop: true,
     keyframes: [
-      { time: 2, changes: { "theme.fill": "#c32222" } },
-      { time: 4, changes: { "theme.fill": "#2273c3" } }
+      { time: 2, changes: { "theme.fill": "crimson" } },
+      { time: 4, changes: { "theme.fill": "steelblue" } }
     ]
   }
 }`,
@@ -326,7 +321,7 @@ animate 6s loop
     description: 'Animate position — a box moves across the canvas',
     dsl: `{
   objects: [
-    { id: "mover", rect: { w: 50, h: 50, radius: 25 }, fill: "#9d26d9", transform: { x: 100, y: 150 } }
+    { id: "mover", rect: { w: 50, h: 50, radius: 25 }, fill: "darkorchid", transform: { x: 100, y: 150 } }
   ],
   animate: {
     duration: 4,
@@ -347,7 +342,7 @@ animate 6s loop
     description: 'Animate opacity — fade in and out',
     dsl: `{
   objects: [
-    { id: "box", rect: { w: 100, h: 100, radius: 8 }, fill: "#2680d9", opacity: 0, transform: { x: 200, y: 140 } }
+    { id: "box", rect: { w: 100, h: 100, radius: 8 }, fill: "dodgerblue", opacity: 0, transform: { x: 200, y: 140 } }
   ],
   animate: {
     duration: 3,
@@ -367,9 +362,9 @@ animate 6s loop
     description: 'Lines snap to object edges, not centers — with gap spacing',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: "#24598f", stroke: { color: "#2680d9", width: 2 }, transform: { x: 100, y: 150 } },
-    { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: "#248f24", stroke: { color: "#26d926", width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { route: ["a", "b"], gap: 4 }, stroke: { color: "#999999", width: 2 } }
+    { id: "a", rect: { w: 80, h: 50, radius: 6 }, fill: "darkslateblue", stroke: { color: "dodgerblue", width: 2 }, transform: { x: 100, y: 150 } },
+    { id: "b", rect: { w: 80, h: 50, radius: 6 }, fill: "forestgreen", stroke: { color: "limegreen", width: 2 }, transform: { x: 380, y: 150 } },
+    { id: "line", path: { route: ["a", "b"], gap: 4 }, stroke: { color: "darkgray", width: 2 } }
   ]
 }`,
   },
@@ -382,18 +377,18 @@ animate 6s loop
     {
       id: "a", transform: { x: 100, y: 150 },
       children: [
-        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "#1a334d", stroke: { color: "#2680d9", width: 2 } },
-        { id: "a.label", text: { content: "Source", size: 12 }, fill: "#e6e6e6" }
+        { id: "a.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "midnightblue", stroke: { color: "dodgerblue", width: 2 } },
+        { id: "a.label", text: { content: "Source", size: 12 }, fill: "gainsboro" }
       ]
     },
     {
       id: "b", transform: { x: 400, y: 150 },
       children: [
-        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "#4d1a1a", stroke: { color: "#d92626", width: 2 } },
-        { id: "b.label", text: { content: "Target", size: 12 }, fill: "#e6e6e6" }
+        { id: "b.bg", rect: { w: 100, h: 50, radius: 6 }, fill: "darkred", stroke: { color: "crimson", width: 2 } },
+        { id: "b.label", text: { content: "Target", size: 12 }, fill: "gainsboro" }
       ]
     },
-    { template: "arrow", id: "conn", props: { from: "a", to: "b", label: "sends data", colour: "#999999" } }
+    { template: "arrow", id: "conn", props: { from: "a", to: "b", label: "sends data", colour: "darkgray" } }
   ]
 }`,
   },
@@ -403,9 +398,9 @@ animate 6s loop
     description: 'Smooth quadratic bend — animate the curve amount',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: "#24598f", stroke: { color: "#2680d9", width: 2 }, transform: { x: 120, y: 150 } },
-    { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: "#8f2424", stroke: { color: "#d92626", width: 2 }, transform: { x: 380, y: 150 } },
-    { id: "line", path: { route: ["a", "b"], bend: 0, gap: 4 }, stroke: { color: "#999999", width: 2 } }
+    { id: "a", rect: { w: 60, h: 40, radius: 6 }, fill: "darkslateblue", stroke: { color: "dodgerblue", width: 2 }, transform: { x: 120, y: 150 } },
+    { id: "b", rect: { w: 60, h: 40, radius: 6 }, fill: "firebrick", stroke: { color: "crimson", width: 2 }, transform: { x: 380, y: 150 } },
+    { id: "line", path: { route: ["a", "b"], bend: 0, gap: 4 }, stroke: { color: "darkgray", width: 2 } }
   ],
   animate: {
     duration: 4,
@@ -425,9 +420,9 @@ animate 6s loop
     description: 'Smooth Catmull-Rom spline through waypoints',
     dsl: `{
   objects: [
-    { id: "a", ellipse: { rx: 20, ry: 20 }, fill: "#2e73b8", transform: { x: 80, y: 150 } },
-    { id: "b", ellipse: { rx: 20, ry: 20 }, fill: "#b82e2e", transform: { x: 420, y: 150 } },
-    { id: "line", path: { route: ["a", [180, 80], [250, 220], [340, 80], "b"], smooth: true, gap: 4 }, stroke: { color: "#33cc33", width: 2 } }
+    { id: "a", ellipse: { rx: 20, ry: 20 }, fill: "steelblue", transform: { x: 80, y: 150 } },
+    { id: "b", ellipse: { rx: 20, ry: 20 }, fill: "firebrick", transform: { x: 420, y: 150 } },
+    { id: "line", path: { route: ["a", [180, 80], [250, 220], [340, 80], "b"], smooth: true, gap: 4 }, stroke: { color: "limegreen", width: 2 } }
   ]
 }`,
   },
@@ -437,9 +432,9 @@ animate 6s loop
     description: 'Polyline routed through waypoints with rounded corners',
     dsl: `{
   objects: [
-    { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: "#24598f", stroke: { color: "#2680d9", width: 2 }, transform: { x: 80, y: 100 } },
-    { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: "#8f2424", stroke: { color: "#d92626", width: 2 }, transform: { x: 420, y: 200 } },
-    { id: "line", path: { route: ["a", [250, 100], [250, 200], "b"], smooth: false, radius: 15, gap: 4 }, stroke: { color: "#999999", width: 2 } }
+    { id: "a", rect: { w: 60, h: 40, radius: 4 }, fill: "darkslateblue", stroke: { color: "dodgerblue", width: 2 }, transform: { x: 80, y: 100 } },
+    { id: "b", rect: { w: 60, h: 40, radius: 4 }, fill: "firebrick", stroke: { color: "crimson", width: 2 }, transform: { x: 420, y: 200 } },
+    { id: "line", path: { route: ["a", [250, 100], [250, 200], "b"], smooth: false, radius: 15, gap: 4 }, stroke: { color: "darkgray", width: 2 } }
   ]
 }`,
   },
@@ -453,11 +448,11 @@ animate 6s loop
   objects: [
     {
       id: "group",
-      fill: "#2273c3",
+      fill: "steelblue",
       transform: { x: 200, y: 130 },
       children: [
         { id: "inherits", rect: { w: 70, h: 70, radius: 6 } },
-        { id: "overrides", rect: { w: 70, h: 70, radius: 6 }, fill: "#e61919", transform: { x: 90, y: 0 } }
+        { id: "overrides", rect: { w: 70, h: 70, radius: 6 }, fill: "red", transform: { x: 90, y: 0 } }
       ]
     }
   ]
@@ -477,21 +472,21 @@ animate 6s loop
         {
           id: "inherits",
           rect: { w: 80, h: 80, radius: 8 },
-          fill: "#2680d9"
+          fill: "dodgerblue"
         },
         {
           id: "overrides",
           rect: { w: 80, h: 80, radius: 8 },
-          fill: "#2680d9",
+          fill: "dodgerblue",
           opacity: 0.8,
           transform: { x: 100, y: 0 }
         }
       ]
     },
-    { id: "reference", rect: { w: 80, h: 80, radius: 8 }, fill: "#2680d9", transform: { x: 370, y: 130 } },
-    { id: "l1", text: { content: "inherits 0.5", size: 10 }, fill: "#808080", transform: { x: 120, y: 240 } },
-    { id: "l2", text: { content: "overrides to 0.8", size: 10 }, fill: "#808080", transform: { x: 220, y: 240 } },
-    { id: "l3", text: { content: "full opacity", size: 10 }, fill: "#808080", transform: { x: 370, y: 240 } }
+    { id: "reference", rect: { w: 80, h: 80, radius: 8 }, fill: "dodgerblue", transform: { x: 370, y: 130 } },
+    { id: "l1", text: { content: "inherits 0.5", size: 10 }, fill: "gray", transform: { x: 120, y: 240 } },
+    { id: "l2", text: { content: "overrides to 0.8", size: 10 }, fill: "gray", transform: { x: 220, y: 240 } },
+    { id: "l3", text: { content: "full opacity", size: 10 }, fill: "gray", transform: { x: 370, y: 240 } }
   ]
 }`,
   },
@@ -506,14 +501,14 @@ animate 6s loop
     {
       id: "row",
       rect: { w: 400, h: 80 },
-      fill: "#1f1f1f",
-      stroke: { color: "#404040", width: 1 },
+      fill: "darkslategray",
+      stroke: { color: "dimgray", width: 1 },
       layout: { type: "flex", direction: "row", gap: 10 },
       transform: { x: 200, y: 150 },
       children: [
-        { id: "a", rect: { w: 80, h: 50, radius: 4 }, fill: "#2273c3" },
-        { id: "b", rect: { w: 80, h: 50, radius: 4 }, fill: "#22c322" },
-        { id: "c", rect: { w: 80, h: 50, radius: 4 }, fill: "#c32222" }
+        { id: "a", rect: { w: 80, h: 50, radius: 4 }, fill: "steelblue" },
+        { id: "b", rect: { w: 80, h: 50, radius: 4 }, fill: "limegreen" },
+        { id: "c", rect: { w: 80, h: 50, radius: 4 }, fill: "crimson" }
       ]
     }
   ]
@@ -528,13 +523,13 @@ animate 6s loop
     {
       id: "row",
       rect: { w: 400, h: 60 },
-      fill: "#1f1f1f",
+      fill: "darkslategray",
       layout: { type: "flex", direction: "row", gap: 5 },
       transform: { x: 200, y: 150 },
       children: [
-        { id: "fixed", rect: { w: 60, h: 40, radius: 4 }, fill: "#2273c3" },
-        { id: "grows", rect: { w: 60, h: 40, radius: 4 }, fill: "#22c322", layout: { grow: 1 } },
-        { id: "fixed2", rect: { w: 60, h: 40, radius: 4 }, fill: "#c32222" }
+        { id: "fixed", rect: { w: 60, h: 40, radius: 4 }, fill: "steelblue" },
+        { id: "grows", rect: { w: 60, h: 40, radius: 4 }, fill: "limegreen", layout: { grow: 1 } },
+        { id: "fixed2", rect: { w: 60, h: 40, radius: 4 }, fill: "crimson" }
       ]
     }
   ]
@@ -548,21 +543,21 @@ animate 6s loop
   objects: [
     {
       id: "left",
-      fill: "#1b2632",
-      stroke: { color: "#336699", width: 1 },
+      fill: "darkslategray",
+      stroke: { color: "steelblue", width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 120, y: 150 }
     },
     {
       id: "right",
-      fill: "#321b1b",
-      stroke: { color: "#993333", width: 1 },
+      fill: "darkslategray",
+      stroke: { color: "indianred", width: 1 },
       layout: { type: "flex", direction: "column", gap: 8, padding: 10 },
       transform: { x: 350, y: 150 }
     },
-    { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: "#2e73b8", layout: { slot: "left" } },
-    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: "#2eb82e", layout: { slot: "right" } },
-    { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: "#e6a219", layout: { slot: "left" } }
+    { id: "itemA", rect: { w: 120, h: 30, radius: 4 }, fill: "steelblue", layout: { slot: "left" } },
+    { id: "itemB", rect: { w: 120, h: 30, radius: 4 }, fill: "limegreen", layout: { slot: "right" } },
+    { id: "mover", rect: { w: 120, h: 30, radius: 4 }, fill: "goldenrod", layout: { slot: "left" } }
   ],
   animate: {
     duration: 4,
@@ -584,10 +579,10 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: [300, 200], zoom: 1.5 } },
-    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: "#269dd9", transform: { x: 100, y: 200 } },
-    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: "#d92662", transform: { x: 500, y: 200 } },
-    { id: "label_a", text: { content: "A", size: 14 }, fill: "#e6e6e6", transform: { x: 100, y: 200 } },
-    { id: "label_b", text: { content: "B", size: 14 }, fill: "#e6e6e6", transform: { x: 500, y: 200 } }
+    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: "deepskyblue", transform: { x: 100, y: 200 } },
+    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: "mediumvioletred", transform: { x: 500, y: 200 } },
+    { id: "label_a", text: { content: "A", size: 14 }, fill: "gainsboro", transform: { x: 100, y: 200 } },
+    { id: "label_b", text: { content: "B", size: 14 }, fill: "gainsboro", transform: { x: 500, y: 200 } }
   ],
   animate: {
     duration: 6,
@@ -609,9 +604,9 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: [300, 200], zoom: 1 } },
-    { id: "outer", rect: { w: 400, h: 300, radius: 12 }, stroke: { color: "#336699", width: 2 }, transform: { x: 300, y: 200 } },
-    { id: "inner", rect: { w: 120, h: 80, radius: 8 }, fill: "#2eb88a", transform: { x: 300, y: 200 } },
-    { id: "dot", ellipse: { rx: 10, ry: 10 }, fill: "#e8ab30", transform: { x: 300, y: 200 } }
+    { id: "outer", rect: { w: 400, h: 300, radius: 12 }, stroke: { color: "steelblue", width: 2 }, transform: { x: 300, y: 200 } },
+    { id: "inner", rect: { w: 120, h: 80, radius: 8 }, fill: "mediumseagreen", transform: { x: 300, y: 200 } },
+    { id: "dot", ellipse: { rx: 10, ry: 10 }, fill: "goldenrod", transform: { x: 300, y: 200 } }
   ],
   animate: {
     duration: 4,
@@ -631,9 +626,9 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: "all" } },
-    { id: "a", rect: { w: 60, h: 60, radius: 6 }, fill: "#d22d2d", transform: { x: 50, y: 100 } },
-    { id: "b", rect: { w: 60, h: 60, radius: 6 }, fill: "#28bd28", transform: { x: 300, y: 50 } },
-    { id: "c", rect: { w: 60, h: 60, radius: 6 }, fill: "#2d2dd2", transform: { x: 550, y: 300 } }
+    { id: "a", rect: { w: 60, h: 60, radius: 6 }, fill: "crimson", transform: { x: 50, y: 100 } },
+    { id: "b", rect: { w: 60, h: 60, radius: 6 }, fill: "limegreen", transform: { x: 300, y: 50 } },
+    { id: "c", rect: { w: 60, h: 60, radius: 6 }, fill: "royalblue", transform: { x: 550, y: 300 } }
   ],
   animate: {
     duration: 8,
@@ -655,11 +650,11 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: "mover", zoom: 2 } },
-    { id: "mover", ellipse: { rx: 15, ry: 15 }, fill: "#e8ab30", transform: { x: 50, y: 200 } },
-    { id: "track", rect: { w: 600, h: 4, radius: 2 }, fill: "#333333", transform: { x: 300, y: 200 } },
-    { id: "post1", rect: { w: 4, h: 30 }, fill: "#404040", transform: { x: 100, y: 200 } },
-    { id: "post2", rect: { w: 4, h: 30 }, fill: "#404040", transform: { x: 300, y: 200 } },
-    { id: "post3", rect: { w: 4, h: 30 }, fill: "#404040", transform: { x: 500, y: 200 } }
+    { id: "mover", ellipse: { rx: 15, ry: 15 }, fill: "goldenrod", transform: { x: 50, y: 200 } },
+    { id: "track", rect: { w: 600, h: 4, radius: 2 }, fill: "darkslategray", transform: { x: 300, y: 200 } },
+    { id: "post1", rect: { w: 4, h: 30 }, fill: "dimgray", transform: { x: 100, y: 200 } },
+    { id: "post2", rect: { w: 4, h: 30 }, fill: "dimgray", transform: { x: 300, y: 200 } },
+    { id: "post3", rect: { w: 4, h: 30 }, fill: "dimgray", transform: { x: 500, y: 200 } }
   ],
   animate: {
     duration: 4,
@@ -679,17 +674,17 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: [100, 130], zoom: 3, ratio: 1.78 } },
-    { id: "a", rect: { w: 80, h: 80, radius: 6 }, fill: "#3380cc", transform: { x: 100, y: 60 } },
-    { id: "b", rect: { w: 80, h: 80, radius: 6 }, fill: "#34b273", transform: { x: 300, y: 60 } },
-    { id: "c", rect: { w: 80, h: 80, radius: 6 }, fill: "#d98026", transform: { x: 500, y: 60 } },
-    { id: "d", rect: { w: 80, h: 80, radius: 6 }, fill: "#cc3366", transform: { x: 100, y: 200 } },
-    { id: "e", rect: { w: 80, h: 80, radius: 6 }, fill: "#8c53c6", transform: { x: 300, y: 200 } },
-    { id: "hint-bg", rect: { w: 220, h: 24, radius: 4 }, fill: { hex: "#1a1a1a", a: 0.7 }, transform: { x: 300, y: 200 } },
-    { id: "hint", text: { content: "Click Viewport button to preview ratio", size: 10, align: "middle" }, fill: "#f2f2f2", transform: { x: 300, y: 200 } },
-    { id: "f", rect: { w: 80, h: 80, radius: 6 }, fill: "#d2d22d", transform: { x: 500, y: 200 } },
-    { id: "g", rect: { w: 80, h: 80, radius: 6 }, fill: "#34b2b2", transform: { x: 100, y: 340 } },
-    { id: "h", rect: { w: 80, h: 80, radius: 6 }, fill: "#cc3333", transform: { x: 300, y: 340 } },
-    { id: "i", rect: { w: 80, h: 80, radius: 6 }, fill: "#73b234", transform: { x: 500, y: 340 } }
+    { id: "a", rect: { w: 80, h: 80, radius: 6 }, fill: "cornflowerblue", transform: { x: 100, y: 60 } },
+    { id: "b", rect: { w: 80, h: 80, radius: 6 }, fill: "mediumseagreen", transform: { x: 300, y: 60 } },
+    { id: "c", rect: { w: 80, h: 80, radius: 6 }, fill: "peru", transform: { x: 500, y: 60 } },
+    { id: "d", rect: { w: 80, h: 80, radius: 6 }, fill: "palevioletred", transform: { x: 100, y: 200 } },
+    { id: "e", rect: { w: 80, h: 80, radius: 6 }, fill: "mediumpurple", transform: { x: 300, y: 200 } },
+    { id: "hint-bg", rect: { w: 220, h: 24, radius: 4 }, fill: { name: "black", a: 0.7 }, transform: { x: 300, y: 200 } },
+    { id: "hint", text: { content: "Click Viewport button to preview ratio", size: 10, align: "middle" }, fill: "whitesmoke", transform: { x: 300, y: 200 } },
+    { id: "f", rect: { w: 80, h: 80, radius: 6 }, fill: "gold", transform: { x: 500, y: 200 } },
+    { id: "g", rect: { w: 80, h: 80, radius: 6 }, fill: "darkturquoise", transform: { x: 100, y: 340 } },
+    { id: "h", rect: { w: 80, h: 80, radius: 6 }, fill: "indianred", transform: { x: 300, y: 340 } },
+    { id: "i", rect: { w: 80, h: 80, radius: 6 }, fill: "yellowgreen", transform: { x: 500, y: 340 } }
   ],
   animate: {
     duration: 8,
@@ -711,11 +706,11 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: [300, 200], zoom: 1.5 }, transform: { rotation: 0 } },
-    { id: "center", ellipse: { rx: 20, ry: 20 }, fill: "#e8c930", transform: { x: 300, y: 200 } },
-    { id: "n", rect: { w: 30, h: 30, radius: 4 }, fill: "#cc3333", transform: { x: 300, y: 100 } },
-    { id: "e", rect: { w: 30, h: 30, radius: 4 }, fill: "#73b82e", transform: { x: 400, y: 200 } },
-    { id: "s", rect: { w: 30, h: 30, radius: 4 }, fill: "#2eb8b8", transform: { x: 300, y: 300 } },
-    { id: "w", rect: { w: 30, h: 30, radius: 4 }, fill: "#8033cc", transform: { x: 200, y: 200 } }
+    { id: "center", ellipse: { rx: 20, ry: 20 }, fill: "gold", transform: { x: 300, y: 200 } },
+    { id: "n", rect: { w: 30, h: 30, radius: 4 }, fill: "indianred", transform: { x: 300, y: 100 } },
+    { id: "e", rect: { w: 30, h: 30, radius: 4 }, fill: "yellowgreen", transform: { x: 400, y: 200 } },
+    { id: "s", rect: { w: 30, h: 30, radius: 4 }, fill: "darkturquoise", transform: { x: 300, y: 300 } },
+    { id: "w", rect: { w: 30, h: 30, radius: 4 }, fill: "darkorchid", transform: { x: 200, y: 200 } }
   ],
   animate: {
     duration: 6,
@@ -736,10 +731,10 @@ animate 6s loop
   objects: [
     { id: "cam1", camera: { look: "a", zoom: 2, active: true } },
     { id: "cam2", camera: { look: "b", zoom: 2, active: false } },
-    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: "#269dd9", transform: { x: 100, y: 200 } },
-    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: "#d92662", transform: { x: 500, y: 200 } },
-    { id: "la", text: { content: "Cam 1", size: 10 }, fill: "#b3b3b3", transform: { x: 100, y: 250 } },
-    { id: "lb", text: { content: "Cam 2", size: 10 }, fill: "#b3b3b3", transform: { x: 500, y: 250 } }
+    { id: "a", rect: { w: 80, h: 80, radius: 8 }, fill: "deepskyblue", transform: { x: 100, y: 200 } },
+    { id: "b", rect: { w: 80, h: 80, radius: 8 }, fill: "mediumvioletred", transform: { x: 500, y: 200 } },
+    { id: "la", text: { content: "Cam 1", size: 10 }, fill: "silver", transform: { x: 100, y: 250 } },
+    { id: "lb", text: { content: "Cam 2", size: 10 }, fill: "silver", transform: { x: 500, y: 250 } }
   ],
   animate: {
     duration: 4,
@@ -758,15 +753,15 @@ animate 6s loop
     dsl: `{
   objects: [
     { id: "cam", camera: { look: "all", zoom: 1, ratio: 1.78 }, transform: { rotation: 0 } },
-    { id: "a", rect: { w: 70, h: 70, radius: 6 }, fill: "#3380cc", transform: { x: 80, y: 80 } },
-    { id: "b", rect: { w: 70, h: 70, radius: 6 }, fill: "#34b273", transform: { x: 250, y: 80 } },
-    { id: "c", rect: { w: 70, h: 70, radius: 6 }, fill: "#d98026", transform: { x: 420, y: 80 } },
-    { id: "d", rect: { w: 70, h: 70, radius: 6 }, fill: "#cc3366", transform: { x: 80, y: 250 } },
-    { id: "e", rect: { w: 70, h: 70, radius: 6 }, fill: "#8c53c6", transform: { x: 250, y: 250 } },
-    { id: "f", rect: { w: 70, h: 70, radius: 6 }, fill: "#caca2b", transform: { x: 420, y: 250 } },
-    { id: "g", rect: { w: 70, h: 70, radius: 6 }, fill: "#30a6a6", transform: { x: 80, y: 420 } },
-    { id: "h", rect: { w: 70, h: 70, radius: 6 }, fill: "#c43131", transform: { x: 250, y: 420 } },
-    { id: "i", rect: { w: 70, h: 70, radius: 6 }, fill: "#6ba630", transform: { x: 420, y: 420 } }
+    { id: "a", rect: { w: 70, h: 70, radius: 6 }, fill: "cornflowerblue", transform: { x: 80, y: 80 } },
+    { id: "b", rect: { w: 70, h: 70, radius: 6 }, fill: "mediumseagreen", transform: { x: 250, y: 80 } },
+    { id: "c", rect: { w: 70, h: 70, radius: 6 }, fill: "peru", transform: { x: 420, y: 80 } },
+    { id: "d", rect: { w: 70, h: 70, radius: 6 }, fill: "palevioletred", transform: { x: 80, y: 250 } },
+    { id: "e", rect: { w: 70, h: 70, radius: 6 }, fill: "mediumpurple", transform: { x: 250, y: 250 } },
+    { id: "f", rect: { w: 70, h: 70, radius: 6 }, fill: "gold", transform: { x: 420, y: 250 } },
+    { id: "g", rect: { w: 70, h: 70, radius: 6 }, fill: "darkturquoise", transform: { x: 80, y: 420 } },
+    { id: "h", rect: { w: 70, h: 70, radius: 6 }, fill: "indianred", transform: { x: 250, y: 420 } },
+    { id: "i", rect: { w: 70, h: 70, radius: 6 }, fill: "yellowgreen", transform: { x: 420, y: 420 } }
   ],
   animate: {
     duration: 14,
