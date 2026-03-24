@@ -430,32 +430,51 @@ export function V2Editor({ modelManager, viewFormat = 'dsl', onViewFormatChange,
   }, []);
 
   // Popup change handler — delegates to ModelManager
-  // For compound objects, uses per-property updates to avoid replacing the whole
-  // object (which causes DSL format disruption and potential data loss).
+  // For compound objects, uses recursive per-property updates to avoid replacing
+  // whole sub-objects (which causes DSL format disruption and potential data loss).
   const handlePopupChange = useCallback((newValue: unknown) => {
     if (!popup) return;
     const mm = modelManagerRef.current;
     const oldValue = popup.value;
 
+    const diffAndUpdate = (
+      oldObj: Record<string, unknown>,
+      newObj: Record<string, unknown>,
+      basePath: string,
+    ) => {
+      for (const key of Object.keys(newObj)) {
+        if (newObj[key] !== oldObj[key]) {
+          // Recurse into compound sub-properties to get per-property updates
+          if (
+            typeof newObj[key] === 'object' && newObj[key] !== null && !Array.isArray(newObj[key]) &&
+            typeof oldObj[key] === 'object' && oldObj[key] !== null && !Array.isArray(oldObj[key])
+          ) {
+            diffAndUpdate(
+              oldObj[key] as Record<string, unknown>,
+              newObj[key] as Record<string, unknown>,
+              `${basePath}.${key}`,
+            );
+          } else {
+            mm.updateProperty(`${basePath}.${key}`, newObj[key]);
+          }
+        }
+      }
+      for (const key of Object.keys(oldObj)) {
+        if (!(key in newObj) && key !== 'id' && key !== 'children') {
+          mm.removeProperty(`${basePath}.${key}`);
+        }
+      }
+    };
+
     if (
       typeof newValue === 'object' && newValue !== null && !Array.isArray(newValue) &&
       typeof oldValue === 'object' && oldValue !== null && !Array.isArray(oldValue)
     ) {
-      const oldObj = oldValue as Record<string, unknown>;
-      const newObj = newValue as Record<string, unknown>;
-
-      // Update changed or added properties individually
-      for (const key of Object.keys(newObj)) {
-        if (newObj[key] !== oldObj[key]) {
-          mm.updateProperty(`${popup.path}.${key}`, newObj[key]);
-        }
-      }
-      // Remove deleted properties
-      for (const key of Object.keys(oldObj)) {
-        if (!(key in newObj) && key !== 'id' && key !== 'children') {
-          mm.removeProperty(`${popup.path}.${key}`);
-        }
-      }
+      diffAndUpdate(
+        oldValue as Record<string, unknown>,
+        newValue as Record<string, unknown>,
+        popup.path,
+      );
     } else {
       mm.updateProperty(popup.path, newValue);
     }

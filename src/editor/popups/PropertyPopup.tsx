@@ -177,20 +177,30 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
 
 // ─── Compact compound row (for compound sub-properties at node level) ─
 
-function CompactRow({ prop, value, onRemove, inactive }: {
+function CompactRow({ prop, value, onRemove, inactive, onClick }: {
   prop: PropertyDescriptor;
   value: unknown;
   onRemove?: () => void;
   inactive?: boolean;
+  onClick?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   const type = detectSchemaType(prop.schema);
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '4px 8px', fontSize: 11, fontFamily: FONT,
-      color: inactive ? '#3a3f49' : '#c9cdd4',
-      opacity: inactive ? 0.6 : 1,
-    }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={onClick ? () => setHovered(true) : undefined}
+      onMouseLeave={onClick ? () => setHovered(false) : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '4px 8px', fontSize: 11, fontFamily: FONT,
+        color: inactive ? '#6b7280' : '#c9cdd4',
+        opacity: inactive ? 0.8 : 1,
+        cursor: onClick ? 'pointer' : undefined,
+        background: hovered ? 'rgba(167, 139, 250, 0.06)' : undefined,
+        borderRadius: 4,
+      }}
+    >
       <span style={{ color: '#4a4f59', fontSize: 10, width: 16, textAlign: 'center', flexShrink: 0 }}>
         {TYPE_ICONS[type] ?? '·'}
       </span>
@@ -205,6 +215,9 @@ function CompactRow({ prop, value, onRemove, inactive }: {
       )}
       {inactive && <span style={{ flex: 1 }} />}
       {onRemove && <RemoveButton onClick={onRemove} />}
+      {onClick && (
+        <span style={{ color: '#4a4f59', fontSize: 10, flexShrink: 0 }}>›</span>
+      )}
     </div>
   );
 }
@@ -264,10 +277,11 @@ const slideInRef = (el: HTMLDivElement | null) => {
 };
 
 /** Compound editor with active/inactive property separation and remove buttons. */
-function CompoundEditor({ schemaPath, value, onChange }: {
+function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
   schemaPath: string;
   value: Record<string, unknown>;
   onChange: (value: unknown) => void;
+  onDescend?: (key: string) => void;
 }) {
   // Snapshot active keys on mount.
   // Removal updates immediately; promotion is debounced after interaction ends.
@@ -363,6 +377,7 @@ function CompoundEditor({ schemaPath, value, onChange }: {
             value={value[prop.name]}
             onRemove={canRemove ? () => handleRemove(prop.name) : undefined}
             inactive={inactive}
+            onClick={onDescend ? () => onDescend(prop.name) : undefined}
           />
         </div>
       );
@@ -402,6 +417,7 @@ interface PropertyPopupProps {
 
 export function PropertyPopup({ schemaPath, value, position, onChange, onClose }: PropertyPopupProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [navStack, setNavStack] = useState<string[]>([]);
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -426,53 +442,98 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     };
   }, []);
 
-  const schema = getPropertySchema(schemaPath);
-  if (!schema) return null;
+  // Derive effective schema path and value based on navigation stack
+  const effectiveSchemaPath = navStack.length > 0
+    ? [schemaPath, ...navStack].filter(Boolean).join('.')
+    : schemaPath;
 
-  const type = detectSchemaType(schema);
+  let effectiveValue: unknown = value;
+  for (const key of navStack) {
+    effectiveValue = (effectiveValue as Record<string, unknown>)?.[key];
+  }
+
+  const effectiveSchema = getPropertySchema(effectiveSchemaPath);
+
+  // Wrap onChange to reconstruct root value when navigated into a child
+  const wrappedOnChange = navStack.length > 0
+    ? (newChildValue: unknown) => {
+        const rootValue = (value as Record<string, unknown>) ?? {};
+        let result: Record<string, unknown> = { ...rootValue };
+        let current = result;
+        for (let i = 0; i < navStack.length - 1; i++) {
+          const copy = { ...(current[navStack[i]] as Record<string, unknown> ?? {}) };
+          current[navStack[i]] = copy;
+          current = copy;
+        }
+        current[navStack[navStack.length - 1]] = newChildValue;
+        onChange(result);
+      }
+    : onChange;
+
+  const handleDescend = useCallback((key: string) => {
+    setNavStack(prev => [...prev, key]);
+  }, []);
+
+  // If navigated schema doesn't resolve, pop back (after all hooks)
+  if (!effectiveSchema) {
+    if (navStack.length > 0) {
+      setTimeout(() => setNavStack(prev => prev.slice(0, -1)), 0);
+    }
+    return null;
+  }
+
+  const effectiveType = detectSchemaType(effectiveSchema);
 
   let content: React.ReactNode = null;
 
-  switch (type) {
+  switch (effectiveType) {
     case 'color': {
-      const colorVal = (value ?? 'red') as Color;
+      const colorVal = (effectiveValue ?? 'red') as Color;
       content = (
         <div onMouseDown={stop} onPointerDown={stop}>
-          <ColorPicker value={colorVal} onChange={onChange} />
+          <ColorPicker value={colorVal} onChange={wrappedOnChange} />
         </div>
       );
       break;
     }
     case 'object': {
-      const objVal = (value as Record<string, unknown>) ?? {};
-      content = <CompoundEditor schemaPath={schemaPath} value={objVal} onChange={onChange} />;
+      const objVal = (effectiveValue as Record<string, unknown>) ?? {};
+      content = (
+        <CompoundEditor
+          key={effectiveSchemaPath}
+          schemaPath={effectiveSchemaPath}
+          value={objVal}
+          onChange={wrappedOnChange}
+          onDescend={handleDescend}
+        />
+      );
       break;
     }
     case 'number': {
-      const constraints = getNumberConstraints(schema);
+      const constraints = getNumberConstraints(effectiveSchema);
       const hasRange = constraints?.min !== undefined && constraints?.max !== undefined;
       const range = hasRange ? (constraints!.max! - constraints!.min!) : 100;
       const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
       content = (
         <NumberSlider
-          value={(value as number) ?? 0}
+          value={(effectiveValue as number) ?? 0}
           min={constraints?.min}
           max={constraints?.max}
           step={step}
-          label={schemaPath.split('.').pop()}
-          onChange={onChange}
+          label={effectiveSchemaPath.split('.').pop()}
+          onChange={wrappedOnChange}
         />
       );
       break;
     }
     case 'enum': {
-      const options = getEnumValues(schema);
+      const options = getEnumValues(effectiveSchema);
       if (options) {
         content = (
           <EnumDropdown
-            value={(value as string) ?? options[0]}
+            value={(effectiveValue as string) ?? options[0]}
             options={options}
-            onChange={onChange}
+            onChange={wrappedOnChange}
           />
         );
       }
@@ -484,11 +545,11 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input
               type="checkbox"
-              checked={value as boolean ?? false}
-              onChange={(e) => onChange(e.target.checked)}
+              checked={effectiveValue as boolean ?? false}
+              onChange={(e) => wrappedOnChange(e.target.checked)}
             />
             <span style={{ fontSize: 11, fontFamily: FONT, color: '#c9cdd4' }}>
-              {schemaPath.split('.').pop()}
+              {effectiveSchemaPath.split('.').pop()}
             </span>
           </label>
         </div>
@@ -496,16 +557,43 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
       break;
     }
     case 'pointref': {
-      content = <PointRefEditor value={value} onChange={onChange} />;
+      content = <PointRefEditor value={effectiveValue} onChange={wrappedOnChange} />;
       break;
     }
     case 'anchor': {
-      content = <AnchorEditor value={value} onChange={onChange} />;
+      content = <AnchorEditor value={effectiveValue} onChange={wrappedOnChange} />;
+      break;
+    }
+    case 'string': {
+      content = (
+        <div style={{ padding: '4px 8px' }}>
+          <div style={{ fontSize: 10, color: '#6b7280', fontFamily: FONT, marginBottom: 2 }}>
+            {effectiveSchemaPath.split('.').pop()}
+          </div>
+          <input
+            type="text"
+            value={(effectiveValue as string) ?? ''}
+            onChange={(e) => wrappedOnChange(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            onMouseDown={stop}
+            onPointerDown={stop}
+            style={{
+              width: '100%', padding: '4px 6px', fontSize: 11, fontFamily: FONT,
+              background: '#0e1117', border: '1px solid #2a2d35', borderRadius: 4,
+              color: '#e2e5ea', outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+      );
       break;
     }
     default:
       return null;
   }
+
+  // Build breadcrumb segments
+  const rootLabel = schemaPath.split('.').pop() || 'node';
+  const breadcrumbSegments = [rootLabel, ...navStack];
 
   return (
     <div
@@ -522,14 +610,39 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
         border: '1px solid #2a2d35',
         borderRadius: 8,
         boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-        minWidth: type === 'object' ? 260 : 120,
+        minWidth: effectiveType === 'object' ? 260 : 120,
       }}
     >
       <div style={{
         padding: '4px 8px', borderBottom: '1px solid #1a1d24',
         fontSize: 10, color: '#6b7280', fontFamily: FONT,
+        display: 'flex', alignItems: 'center', gap: 4,
       }}>
-        {schemaPath || 'node'}
+        {navStack.length > 0 && (
+          <span
+            onClick={() => setNavStack(prev => prev.slice(0, -1))}
+            style={{ cursor: 'pointer', color: '#a78bfa', marginRight: 2 }}
+            title="Go back"
+          >←</span>
+        )}
+        {breadcrumbSegments.map((seg, i) => {
+          const isLast = i === breadcrumbSegments.length - 1;
+          const clickable = !isLast && navStack.length > 0;
+          return (
+            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {i > 0 && <span style={{ color: '#3a3f49' }}>›</span>}
+              <span
+                onClick={clickable ? () => setNavStack(navStack.slice(0, i)) : undefined}
+                style={{
+                  cursor: clickable ? 'pointer' : undefined,
+                  color: clickable ? '#a78bfa' : '#6b7280',
+                }}
+              >
+                {seg}
+              </span>
+            </span>
+          );
+        })}
       </div>
       {content}
     </div>
