@@ -1,5 +1,5 @@
 /**
- * V2 Editor — backed by the structured editor system.
+ * V2 Editor -- backed by the structured editor system.
  * Uses ModelManager, schema-driven decorations, DSL linter, and property popups.
  * DSL-only mode (JSON5 rendering removed).
  */
@@ -13,7 +13,6 @@ import { autocompletion, type CompletionContext, type CompletionResult } from '@
 import { linter, lintGutter } from '@codemirror/lint';
 import { starchTheme } from '../../editor/theme';
 import { dslLanguage, dslHighlight } from '../../editor/dslLanguage';
-import { getDslCompletions } from '../../editor/dslCompletionSource';
 import { lintDsl } from '../../editor/dslLinter';
 import {
   getPropertySchema,
@@ -24,11 +23,12 @@ import {
 import { PropertyPopup } from '../../editor/popups/PropertyPopup';
 import { ModelManager, getNestedValue, resolveIdPath } from '../../editor/modelManager';
 import { schemaDecorationsExtension, setSpans, spanField, getSpanAtPos } from '../../editor/schemaDecorations';
+import { getSchemaCompletions } from '../../editor/schemaCompletionSource';
 import type { SchemaSection } from '../../editor/schemaSpan';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
-// ─── DSL Linter ─────────────────────────────────────────────────
+// --- DSL Linter ---
 
 const dslEditorLinter = linter((view) => {
   const doc = view.state.doc.toString();
@@ -48,32 +48,7 @@ const dslEditorLinter = linter((view) => {
   });
 }, { delay: 300 });
 
-// ─── DSL Completion Source ──────────────────────────────────────
-
-function dslCompletionSource(context: CompletionContext): CompletionResult | null {
-  // Only activate if there's a word being typed or it's explicit (Ctrl+Space)
-  const wordBefore = context.matchBefore(/[\w@]+/);
-  if (!context.explicit && !wordBefore) return null;
-
-  const doc = context.state.doc.toString();
-  const pos = context.pos;
-
-  const items = getDslCompletions(doc, pos);
-  if (items.length === 0) return null;
-
-  const from = wordBefore ? wordBefore.from : pos;
-
-  return {
-    from,
-    options: items.map(item => ({
-      label: item.label,
-      detail: item.detail,
-      type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
-    })),
-  };
-}
-
-// ─── Hover Tooltip (decoration-based) ───────────────────────────
+// --- Hover Tooltip (decoration-based) ---
 
 function createHoverTooltipSource() {
   return hoverTooltip((view, pos) => {
@@ -116,9 +91,7 @@ function createHoverTooltipSource() {
   }, { hoverTime: 400 });
 }
 
-// ─── DSL Node Inline/Block Toggle Gutter ─────────────────────────
-
-const NODE_LINE_RE = /^(\s*)(\w+)\s*:/;
+// --- DSL Node Inline/Block Toggle Gutter (span-based) ---
 
 class NodeToggleMarker extends GutterMarker {
   constructor(readonly nodeId: string, readonly isBlock: boolean) {
@@ -140,36 +113,43 @@ function createNodeToggleGutter(
   return gutter({
     class: 'cm-dsl-toggle-gutter',
     lineMarker(view, line) {
-      const lineText = view.state.doc.sliceString(line.from, line.to);
-      const m = lineText.match(NODE_LINE_RE);
-      if (!m) return null;
-      const nodeId = m[2];
-      const DOC_KW = new Set(['name', 'description', 'background', 'viewport', 'images', 'style', 'animate']);
-      if (DOC_KW.has(nodeId)) return null;
-      const isBlock = getNodeFormat(nodeId) === 'block';
-      return new NodeToggleMarker(nodeId, isBlock);
+      const spans = view.state.field(spanField);
+      // Find spans on this line that represent a top-level node
+      for (const span of spans) {
+        if (span.from >= line.from && span.from < line.to) {
+          // Check if this is a node-level span (modelPath = "objects.<id>" or "objects.<id>.<prop>")
+          const parts = span.modelPath.split('.');
+          if (parts[0] === 'objects' && parts.length >= 2) {
+            const nodeId = parts[1];
+            const isBlock = getNodeFormat(nodeId) === 'block';
+            return new NodeToggleMarker(nodeId, isBlock);
+          }
+        }
+      }
+      return null;
     },
     domEventHandlers: {
       click(view, line) {
-        const lineText = view.state.doc.sliceString(line.from, line.to);
-        const m = lineText.match(NODE_LINE_RE);
-        if (!m) return false;
-        const nodeId = m[2];
-        const DOC_KW = new Set(['name', 'description', 'background', 'viewport', 'images', 'style', 'animate']);
-        if (DOC_KW.has(nodeId)) return false;
-        onToggle(nodeId);
-        return true;
+        const spans = view.state.field(spanField);
+        for (const span of spans) {
+          if (span.from >= line.from && span.from < line.to) {
+            const parts = span.modelPath.split('.');
+            if (parts[0] === 'objects' && parts.length >= 2) {
+              onToggle(parts[1]);
+              return true;
+            }
+          }
+        }
+        return false;
       },
     },
   });
 }
 
-// ─── Editor Component ───────────────────────────────────────────
+// --- Editor Component ---
 
 interface V2EditorProps {
   modelManager: ModelManager;
-  viewFormat?: 'json5' | 'dsl';
-  onViewFormatChange?: (format: 'json5' | 'dsl') => void;
   height?: string;
 }
 
@@ -178,7 +158,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
   const viewRef = useRef<EditorView | null>(null);
   const externalDispatch = useRef(false);
 
-  // Ref tracking — closures baked into CodeMirror extensions use these
+  // Ref tracking -- closures baked into CodeMirror extensions use these
   const modelManagerRef = useRef(modelManager);
   modelManagerRef.current = modelManager;
 
@@ -187,7 +167,6 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     path: string;
     schemaPath: string;
     section: SchemaSection;
-    value: unknown;
     position: { x: number; y: number };
     initialFocusKey?: string;
   } | null>(null);
@@ -202,7 +181,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
   useEffect(() => {
     const view = viewRef.current;
     if (view) {
-      // Initial push — includes spans
+      // Initial push -- includes spans
       const result = modelManager.getDisplayResult();
       externalDispatch.current = true;
       view.dispatch({
@@ -244,7 +223,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     return modelManagerRef.current.formatHints.nodes[nodeId]?.display;
   }, []);
 
-  // Handle click on editor — span-based logic
+  // Handle click on editor -- span-based logic
   const handleEditorClick = useCallback((view: EditorView, pos: number) => {
     const spans = view.state.field(spanField);
     const span = getSpanAtPos(spans, pos);
@@ -276,8 +255,6 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
 
     if (!['number', 'color', 'enum', 'boolean', 'object', 'pointref', 'anchor', 'string'].includes(type)) return;
 
-    const resolvedPath = resolveIdPath(modelManagerRef.current.json, modelPath);
-    const value = getNestedValue(modelManagerRef.current.json, resolvedPath);
     const coords = view.coordsAtPos(pos);
     if (!coords) return;
 
@@ -286,72 +263,42 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
       path: modelPath,
       schemaPath,
       section: span.section,
-      value,
       position: { x: coords.left, y: coords.bottom + 4 },
       initialFocusKey,
     });
   }, []);
 
-  // Popup change handler — delegates to ModelManager
-  // For compound objects, uses recursive per-property updates to avoid replacing
-  // whole sub-objects (which causes DSL format disruption and potential data loss).
-  const handlePopupChange = useCallback((newValue: unknown) => {
-    if (!popup) return;
-    const mm = modelManagerRef.current;
-    const resolvedPath = resolveIdPath(mm.json, popup.path);
-    const oldValue = getNestedValue(mm.json, resolvedPath);
+  // Schema-driven completion source using span context
+  const schemaCompletionAdapter = useCallback((context: CompletionContext): CompletionResult | null => {
+    const wordBefore = context.matchBefore(/[\w@]+/);
+    if (!context.explicit && !wordBefore) return null;
 
-    const diffAndUpdate = (
-      oldObj: Record<string, unknown>,
-      newObj: Record<string, unknown>,
-      basePath: string,
-    ) => {
-      for (const key of Object.keys(newObj)) {
-        if (newObj[key] !== oldObj[key]) {
-          // Recurse into compound sub-properties to get per-property updates
-          if (
-            typeof newObj[key] === 'object' && newObj[key] !== null && !Array.isArray(newObj[key]) &&
-            typeof oldObj[key] === 'object' && oldObj[key] !== null && !Array.isArray(oldObj[key])
-          ) {
-            diffAndUpdate(
-              oldObj[key] as Record<string, unknown>,
-              newObj[key] as Record<string, unknown>,
-              `${basePath}.${key}`,
-            );
-          } else {
-            mm.updateProperty(`${basePath}.${key}`, newObj[key]);
-          }
-        }
-      }
-      for (const key of Object.keys(oldObj)) {
-        if (!(key in newObj) && key !== 'id' && key !== 'children') {
-          mm.removeProperty(`${basePath}.${key}`);
-        }
-      }
+    const spans = context.state.field(spanField);
+    const prefix = wordBefore ? wordBefore.text : '';
+
+    // Get current line text up to cursor for context-dependent completions
+    const line = context.state.doc.lineAt(context.pos);
+    const lineText = context.state.doc.sliceString(line.from, context.pos);
+
+    const items = getSchemaCompletions(
+      spans, context.pos, prefix, lineText, modelManagerRef.current.json,
+    );
+    if (items.length === 0) return null;
+
+    const from = wordBefore ? wordBefore.from : context.pos;
+    return {
+      from,
+      options: items.map(item => ({
+        label: item.label,
+        detail: item.detail,
+        type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
+      })),
     };
-
-    if (
-      typeof newValue === 'object' && newValue !== null && !Array.isArray(newValue) &&
-      typeof oldValue === 'object' && oldValue !== null && !Array.isArray(oldValue)
-    ) {
-      diffAndUpdate(
-        oldValue as Record<string, unknown>,
-        newValue as Record<string, unknown>,
-        popup.path,
-      );
-    } else {
-      mm.updateProperty(popup.path, newValue);
-    }
-
-    // Re-read canonical value from model (avoids stale references)
-    const freshResolved = resolveIdPath(mm.json, popup.path);
-    const fresh = getNestedValue(mm.json, freshResolved);
-    setPopup(prev => prev ? { ...prev, value: fresh ?? newValue } : null);
-  }, [popup]);
+  }, []);
 
   const createExtensions = useCallback(
     () => {
-      // Update listener — forward keystrokes to ModelManager (use ref for fresh reference)
+      // Update listener -- forward keystrokes to ModelManager (use ref for fresh reference)
       const updateListener = EditorView.updateListener.of((update) => {
         if (update.docChanged && !externalDispatch.current) {
           modelManagerRef.current.setText(update.state.doc.toString(), 'dsl');
@@ -369,9 +316,9 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
         history(),
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         EditorState.tabSize.of(2),
-        // Completion: DSL
+        // Completion: schema-driven
         autocompletion({
-          override: [dslCompletionSource],
+          override: [schemaCompletionAdapter],
           activateOnTyping: true,
         }),
         // Linter: DSL
@@ -381,7 +328,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
         schemaDecorationsExtension(),
         // Hover tooltip (reads decorations)
         createHoverTooltipSource(),
-        // Node toggle gutter
+        // Node toggle gutter (span-based)
         createNodeToggleGutter(getNodeFormat, handleNodeToggle),
         updateListener,
         EditorView.domEventHandlers({
@@ -400,7 +347,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
         }),
       ];
     },
-    [handleEditorClick, handleNodeToggle, getNodeFormat],
+    [handleEditorClick, handleNodeToggle, getNodeFormat, schemaCompletionAdapter],
   );
 
   // Mount editor
@@ -445,9 +392,21 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
       {popup && createPortal(
         <PropertyPopup
           schemaPath={popup.schemaPath}
-          value={popup.value}
+          modelPath={popup.path}
+          section={popup.section}
           position={popup.position}
-          onChange={handlePopupChange}
+          initialFocusKey={popup.initialFocusKey}
+          onPropertyChange={(path, value) => {
+            if (value === undefined) {
+              modelManagerRef.current.removeProperty(path);
+            } else {
+              modelManagerRef.current.updateProperty(path, value);
+            }
+          }}
+          readValue={(path) => {
+            const resolved = resolveIdPath(modelManagerRef.current.json, path);
+            return getNestedValue(modelManagerRef.current.json, resolved);
+          }}
           onClose={() => { popupOpenRef.current = false; setPopup(null); }}
         />,
         document.body,

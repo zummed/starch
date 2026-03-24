@@ -9,6 +9,7 @@ import { EnumDropdown } from './EnumDropdown';
 import { PointRefEditor } from './PointRefEditor';
 import { AnchorEditor } from './AnchorEditor';
 import type { Color } from '../../types/properties';
+import type { SchemaSection } from '../schemaSpan';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -16,14 +17,14 @@ const TYPE_ICONS: Record<string, string> = {
   number: '#',
   string: 'T',
   boolean: '?',
-  enum: '≡',
-  color: '●',
+  enum: '\u2261',
+  color: '\u25CF',
   object: '{}',
   array: '[]',
   record: '{}',
-  pointref: '◎',
-  anchor: '⊕',
-  unknown: '·',
+  pointref: '\u25CE',
+  anchor: '\u2295',
+  unknown: '\u00B7',
 };
 
 const stop = (e: React.MouseEvent | React.PointerEvent) => e.stopPropagation();
@@ -31,10 +32,10 @@ const stop = (e: React.MouseEvent | React.PointerEvent) => e.stopPropagation();
 /** Properties filtered from compound editors (identity/structural). */
 const EXCLUDED_PROPS = new Set(['id', 'children']);
 
-/** Geometry types — mutually exclusive per node. */
+/** Geometry types -- mutually exclusive per node. */
 const GEOMETRY_PROPS = new Set(['rect', 'ellipse', 'text', 'path', 'image', 'camera']);
 
-// ─── Value summaries for compact compound rows ────────────────────
+// --- Value summaries for compact compound rows ---
 
 function getValueSummary(value: unknown, type: SchemaType): string {
   if (value == null) return '';
@@ -51,8 +52,8 @@ function getValueSummary(value: unknown, type: SchemaType): string {
   }
   if (type === 'object' && typeof value === 'object') {
     const v = value as Record<string, unknown>;
-    if ('w' in v && 'h' in v && !('content' in v)) return `${v.w} × ${v.h}`;
-    if ('rx' in v && 'ry' in v) return `${v.rx} × ${v.ry}`;
+    if ('w' in v && 'h' in v && !('content' in v)) return `${v.w} \u00D7 ${v.h}`;
+    if ('rx' in v && 'ry' in v) return `${v.rx} \u00D7 ${v.ry}`;
     if ('content' in v) return String(v.content).slice(0, 20);
     if ('color' in v) {
       const c = v.color;
@@ -65,7 +66,7 @@ function getValueSummary(value: unknown, type: SchemaType): string {
   return '';
 }
 
-// ─── Per-property widget renderer ──────────────────────────────────
+// --- Per-property widget renderer ---
 
 function renderScalarWidget(
   prop: PropertyDescriptor,
@@ -158,7 +159,7 @@ function renderScalarWidget(
   }
 }
 
-// ─── Remove button ─────────────────────────────────────────────────
+// --- Remove button ---
 
 function RemoveButton({ onClick }: { onClick: () => void }) {
   return (
@@ -174,11 +175,11 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
         fontFamily: FONT, flexShrink: 0, lineHeight: 1, borderRadius: 3,
       }}
       title="Remove property"
-    >×</button>
+    >\u00D7</button>
   );
 }
 
-// ─── Compact compound row (for compound sub-properties at node level) ─
+// --- Compact compound row (for compound sub-properties at node level) ---
 
 function CompactRow({ prop, value, onRemove, inactive, onClick }: {
   prop: PropertyDescriptor;
@@ -205,7 +206,7 @@ function CompactRow({ prop, value, onRemove, inactive, onClick }: {
       }}
     >
       <span style={{ color: '#4a4f59', fontSize: 10, width: 16, textAlign: 'center', flexShrink: 0 }}>
-        {TYPE_ICONS[type] ?? '·'}
+        {TYPE_ICONS[type] ?? '\u00B7'}
       </span>
       <span style={{ flexShrink: 0 }}>{prop.name}</span>
       {!inactive && value != null && (
@@ -219,13 +220,13 @@ function CompactRow({ prop, value, onRemove, inactive, onClick }: {
       {inactive && <span style={{ flex: 1 }} />}
       {onRemove && <RemoveButton onClick={onRemove} />}
       {onClick && (
-        <span style={{ color: '#4a4f59', fontSize: 10, flexShrink: 0 }}>›</span>
+        <span style={{ color: '#4a4f59', fontSize: 10, flexShrink: 0 }}>\u203A</span>
       )}
     </div>
   );
 }
 
-// ─── Scalar property row with inline widget ────────────────────────
+// --- Scalar property row with inline widget ---
 
 function ScalarRow({ prop, value, onChange, onRemove, inactive }: {
   prop: PropertyDescriptor;
@@ -251,7 +252,7 @@ function ScalarRow({ prop, value, onChange, onRemove, inactive }: {
   );
 }
 
-// ─── Separator ─────────────────────────────────────────────────────
+// --- Separator ---
 
 function Separator() {
   return (
@@ -267,7 +268,7 @@ function Separator() {
   );
 }
 
-// ─── Compound Editor ───────────────────────────────────────────────
+// --- Compound Editor (simplified with direct model bindings) ---
 
 /** Animate a newly promoted row sliding into the active section. */
 const slideInRef = (el: HTMLDivElement | null) => {
@@ -279,30 +280,28 @@ const slideInRef = (el: HTMLDivElement | null) => {
   }
 };
 
-/** Compound editor with active/inactive property separation and remove buttons. */
-function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
+/** Compound editor with direct model bindings per widget. */
+function CompoundEditor({ schemaPath, modelPath, onPropertyChange, readValue, onDescend }: {
   schemaPath: string;
-  value: Record<string, unknown>;
-  onChange: (value: unknown) => void;
+  modelPath: string;
+  onPropertyChange: (path: string, value: unknown) => void;
+  readValue: (path: string) => unknown;
   onDescend?: (key: string) => void;
 }) {
+  const modelValue = (readValue(modelPath) as Record<string, unknown>) ?? {};
+
   // Snapshot active keys on mount.
-  // Removal updates immediately; promotion is debounced after interaction ends.
   const [activeKeys, setActiveKeys] = useState<Set<string>>(
-    () => new Set(Object.keys(value ?? {})),
+    () => new Set(Object.keys(modelValue)),
   );
 
-  // Keep refs for latest values to avoid stale closures during fast slider drags
-  const valueRef = useRef(value);
-  valueRef.current = value;
-  const activeKeysRef = useRef(activeKeys);
-  activeKeysRef.current = activeKeys;
-
-  // Promotion: inactive → active on pointer release after interaction
+  // Promotion: inactive -> active on pointer release after interaction
   const pendingPromotions = useRef<Set<string>>(new Set());
   const promoteDelay = useRef<ReturnType<typeof setTimeout>>(undefined);
   const upHandler = useRef<(() => void) | null>(null);
   const [justPromoted, setJustPromoted] = useState<Set<string>>(new Set());
+  const activeKeysRef = useRef(activeKeys);
+  activeKeysRef.current = activeKeys;
 
   const doPromote = useCallback(() => {
     if (pendingPromotions.current.size === 0) return;
@@ -319,8 +318,7 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
   }, []);
 
   const allProps = getAvailableProperties(schemaPath);
-  // Exclude identity/structural props, and geometry types that conflict with the existing one
-  const existingGeom = Object.keys(value).find(k => GEOMETRY_PROPS.has(k));
+  const existingGeom = Object.keys(modelValue).find(k => GEOMETRY_PROPS.has(k));
   const editableProps = allProps.filter(p => {
     if (EXCLUDED_PROPS.has(p.name)) return false;
     if (existingGeom && GEOMETRY_PROPS.has(p.name) && p.name !== existingGeom) return false;
@@ -331,15 +329,14 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
   const inactiveProps = editableProps.filter(p => !activeKeys.has(p.name));
 
   const handleChange = useCallback((key: string, newVal: unknown) => {
-    onChange({ ...valueRef.current, [key]: newVal });
+    const propPath = `${modelPath}.${key}`;
+    onPropertyChange(propPath, newVal);
 
     // If this is an inactive property, promote after interaction ends.
     if (!activeKeysRef.current.has(key)) {
       pendingPromotions.current.add(key);
-      // Clear any pending fallback timer (slider drags reset it on each change)
       if (promoteDelay.current) clearTimeout(promoteDelay.current);
 
-      // Listen for pointer release (capture phase — slider stopPropagation can't block it)
       if (!upHandler.current) {
         const onUp = () => {
           document.removeEventListener('pointerup', onUp, true);
@@ -351,8 +348,6 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
         document.addEventListener('pointerup', onUp, true);
       }
 
-      // Fallback: for single-click interactions (checkbox, enum, anchor button)
-      // where pointerup already fired before this handler ran
       promoteDelay.current = setTimeout(() => {
         if (upHandler.current) {
           document.removeEventListener('pointerup', upHandler.current, true);
@@ -361,14 +356,13 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
         doPromote();
       }, 300);
     }
-  }, [onChange, doPromote]);
+  }, [modelPath, onPropertyChange, doPromote]);
 
   const handleRemove = useCallback((key: string) => {
     setActiveKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { [key]: _, ...rest } = valueRef.current;
-    onChange(rest);
-  }, [onChange]);
+    const propPath = `${modelPath}.${key}`;
+    onPropertyChange(propPath, undefined);
+  }, [modelPath, onPropertyChange]);
 
   if (editableProps.length === 0) return null;
 
@@ -377,13 +371,15 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
     const isCompound = type === 'object' || type === 'color' || type === 'array' || type === 'record';
     const canRemove = !inactive && !prop.required;
     const animated = justPromoted.has(prop.name);
+    const propPath = `${modelPath}.${prop.name}`;
+    const value = readValue(propPath);
 
     if (isCompound) {
       return (
         <div key={prop.name} ref={animated ? slideInRef : undefined}>
           <CompactRow
             prop={prop}
-            value={value[prop.name]}
+            value={value}
             onRemove={canRemove ? () => handleRemove(prop.name) : undefined}
             inactive={inactive}
             onClick={onDescend ? () => onDescend(prop.name) : undefined}
@@ -396,7 +392,7 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
       <div key={prop.name} ref={animated ? slideInRef : undefined}>
         <ScalarRow
           prop={prop}
-          value={value[prop.name]}
+          value={value}
           onChange={(v) => handleChange(prop.name, v)}
           onRemove={canRemove ? () => handleRemove(prop.name) : undefined}
           inactive={inactive}
@@ -414,17 +410,25 @@ function CompoundEditor({ schemaPath, value, onChange, onDescend }: {
   );
 }
 
-// ─── PropertyPopup ─────────────────────────────────────────────────
+// --- PropertyPopup ---
 
 interface PropertyPopupProps {
   schemaPath: string;
-  value: unknown;
+  modelPath: string;
+  section: SchemaSection;
   position: { x: number; y: number };
-  onChange: (value: unknown) => void;
+  initialFocusKey?: string;
+  /** Called per-widget with the specific property's full model path and new value. */
+  onPropertyChange: (modelPath: string, value: unknown) => void;
+  /** Read the current value for a model path from the model. */
+  readValue: (modelPath: string) => unknown;
   onClose: () => void;
 }
 
-export function PropertyPopup({ schemaPath, value, position, onChange, onClose }: PropertyPopupProps) {
+export function PropertyPopup({
+  schemaPath, modelPath, section: _section, position, initialFocusKey,
+  onPropertyChange, readValue, onClose,
+}: PropertyPopupProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [navStack, setNavStack] = useState<string[]>([]);
 
@@ -451,33 +455,26 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     };
   }, []);
 
-  // Derive effective schema path and value based on navigation stack
+  // Scroll initialFocusKey into view
+  useEffect(() => {
+    if (!initialFocusKey || !ref.current) return;
+    const timer = setTimeout(() => {
+      const label = ref.current?.querySelector(`[data-prop-key="${initialFocusKey}"]`);
+      label?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [initialFocusKey]);
+
+  // Derive effective schema path and model path based on navigation stack
   const effectiveSchemaPath = navStack.length > 0
     ? [schemaPath, ...navStack].filter(Boolean).join('.')
     : schemaPath;
 
-  let effectiveValue: unknown = value;
-  for (const key of navStack) {
-    effectiveValue = (effectiveValue as Record<string, unknown>)?.[key];
-  }
+  const effectiveModelPath = navStack.length > 0
+    ? [modelPath, ...navStack].join('.')
+    : modelPath;
 
   const effectiveSchema = getPropertySchema(effectiveSchemaPath);
-
-  // Wrap onChange to reconstruct root value when navigated into a child
-  const wrappedOnChange = navStack.length > 0
-    ? (newChildValue: unknown) => {
-        const rootValue = (value as Record<string, unknown>) ?? {};
-        let result: Record<string, unknown> = { ...rootValue };
-        let current = result;
-        for (let i = 0; i < navStack.length - 1; i++) {
-          const copy = { ...(current[navStack[i]] as Record<string, unknown> ?? {}) };
-          current[navStack[i]] = copy;
-          current = copy;
-        }
-        current[navStack[navStack.length - 1]] = newChildValue;
-        onChange(result);
-      }
-    : onChange;
 
   const handleDescend = useCallback((key: string) => {
     setNavStack(prev => [...prev, key]);
@@ -497,22 +494,22 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
 
   switch (effectiveType) {
     case 'color': {
-      const colorVal = (effectiveValue ?? 'red') as Color;
+      const colorVal = (readValue(effectiveModelPath) ?? 'red') as Color;
       content = (
         <div onMouseDown={stop} onPointerDown={stop}>
-          <ColorPicker value={colorVal} onChange={wrappedOnChange} />
+          <ColorPicker value={colorVal} onChange={(v) => onPropertyChange(effectiveModelPath, v)} />
         </div>
       );
       break;
     }
     case 'object': {
-      const objVal = (effectiveValue as Record<string, unknown>) ?? {};
       content = (
         <CompoundEditor
           key={effectiveSchemaPath}
           schemaPath={effectiveSchemaPath}
-          value={objVal}
-          onChange={wrappedOnChange}
+          modelPath={effectiveModelPath}
+          onPropertyChange={onPropertyChange}
+          readValue={readValue}
           onDescend={handleDescend}
         />
       );
@@ -523,14 +520,15 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
       const hasRange = constraints?.min !== undefined && constraints?.max !== undefined;
       const range = hasRange ? (constraints!.max! - constraints!.min!) : 100;
       const step = range <= 1 ? 0.01 : range <= 20 ? 0.5 : 1;
+      const numVal = readValue(effectiveModelPath);
       content = (
         <NumberSlider
-          value={(effectiveValue as number) ?? 0}
+          value={(numVal as number) ?? 0}
           min={constraints?.min}
           max={constraints?.max}
           step={step}
           label={effectiveSchemaPath.split('.').pop()}
-          onChange={wrappedOnChange}
+          onChange={(v) => onPropertyChange(effectiveModelPath, v)}
         />
       );
       break;
@@ -538,24 +536,26 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
     case 'enum': {
       const options = getEnumValues(effectiveSchema);
       if (options) {
+        const enumVal = readValue(effectiveModelPath);
         content = (
           <EnumDropdown
-            value={(effectiveValue as string) ?? options[0]}
+            value={(enumVal as string) ?? options[0]}
             options={options}
-            onChange={wrappedOnChange}
+            onChange={(v) => onPropertyChange(effectiveModelPath, v)}
           />
         );
       }
       break;
     }
     case 'boolean': {
+      const boolVal = readValue(effectiveModelPath);
       content = (
         <div style={{ padding: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input
               type="checkbox"
-              checked={effectiveValue as boolean ?? false}
-              onChange={(e) => wrappedOnChange(e.target.checked)}
+              checked={boolVal as boolean ?? false}
+              onChange={(e) => onPropertyChange(effectiveModelPath, e.target.checked)}
             />
             <span style={{ fontSize: 11, fontFamily: FONT, color: '#c9cdd4' }}>
               {effectiveSchemaPath.split('.').pop()}
@@ -566,14 +566,17 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
       break;
     }
     case 'pointref': {
-      content = <PointRefEditor value={effectiveValue} onChange={wrappedOnChange} />;
+      const prVal = readValue(effectiveModelPath);
+      content = <PointRefEditor value={prVal} onChange={(v) => onPropertyChange(effectiveModelPath, v)} />;
       break;
     }
     case 'anchor': {
-      content = <AnchorEditor value={effectiveValue} onChange={wrappedOnChange} />;
+      const ancVal = readValue(effectiveModelPath);
+      content = <AnchorEditor value={ancVal} onChange={(v) => onPropertyChange(effectiveModelPath, v)} />;
       break;
     }
     case 'string': {
+      const strVal = readValue(effectiveModelPath);
       content = (
         <div style={{ padding: '4px 8px' }}>
           <div style={{ fontSize: 10, color: '#6b7280', fontFamily: FONT, marginBottom: 2 }}>
@@ -581,8 +584,8 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
           </div>
           <input
             type="text"
-            value={(effectiveValue as string) ?? ''}
-            onChange={(e) => wrappedOnChange(e.target.value)}
+            value={(strVal as string) ?? ''}
+            onChange={(e) => onPropertyChange(effectiveModelPath, e.target.value)}
             onKeyDown={(e) => e.stopPropagation()}
             onMouseDown={stop}
             onPointerDown={stop}
@@ -632,14 +635,14 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
             onClick={() => setNavStack(prev => prev.slice(0, -1))}
             style={{ cursor: 'pointer', color: '#a78bfa', marginRight: 2 }}
             title="Go back"
-          >←</span>
+          >{'\u2190'}</span>
         )}
         {breadcrumbSegments.map((seg, i) => {
           const isLast = i === breadcrumbSegments.length - 1;
           const clickable = !isLast && navStack.length > 0;
           return (
             <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {i > 0 && <span style={{ color: '#3a3f49' }}>›</span>}
+              {i > 0 && <span style={{ color: '#3a3f49' }}>{'\u203A'}</span>}
               <span
                 onClick={clickable ? () => setNavStack(navStack.slice(0, i)) : undefined}
                 style={{

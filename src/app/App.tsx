@@ -469,12 +469,6 @@ export default function App() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <V2Editor
           modelManager={activeModelManager}
-          viewFormat={activeTab.viewFormat}
-          onViewFormatChange={(format) => {
-            setTabs(prev => prev.map(t =>
-              t.id === activeTabId ? { ...t, viewFormat: format } : t
-            ));
-          }}
         />
       </div>
     </div>
