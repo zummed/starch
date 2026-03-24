@@ -10,9 +10,10 @@ interface Tab {
 interface TabbedPopupProps {
   tabs: Tab[];
   defaultTab?: number;
+  onTabChange?: (index: number) => void;
 }
 
-export function TabbedPopup({ tabs, defaultTab = 0 }: TabbedPopupProps) {
+export function TabbedPopup({ tabs, defaultTab = 0, onTabChange }: TabbedPopupProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   if (tabs.length === 1) {
@@ -27,7 +28,7 @@ export function TabbedPopup({ tabs, defaultTab = 0 }: TabbedPopupProps) {
         {tabs.map((tab, i) => (
           <button
             key={tab.label}
-            onClick={() => setActiveTab(i)}
+            onClick={() => { setActiveTab(i); onTabChange?.(i); }}
             onMouseDown={(e) => e.stopPropagation()}
             style={{
               flex: 1,
