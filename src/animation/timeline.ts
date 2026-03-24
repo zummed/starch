@@ -89,7 +89,7 @@ function computeSlotLayoutState(
   // Read auto-sized container dimensions from the cloned tree
   const containerSizes = new Map<string, { w: number; h: number }>();
   for (const n of cloned) {
-    if (n.layout && n.rect) {
+    if (n.layout?.type && n.rect) {
       containerSizes.set(n.id, { w: n.rect.w, h: n.rect.h });
     }
   }

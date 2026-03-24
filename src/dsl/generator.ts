@@ -192,7 +192,10 @@ function formatInlineProps(node: any): string {
   if (node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
   if (node.visible === false) parts.push(`visible=false`);
   if (node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.layout?.slot !== undefined) parts.push(`layout slot=${node.layout.slot}`);
+  if (node.layout && !isBlockLayout(node.layout)) {
+    const hint = formatLayoutHintInline(node.layout);
+    if (hint) parts.push(hint);
+  }
   if (node.transform) {
     const t = formatTransform(node.transform);
     if (t) parts.push(t);
@@ -220,6 +223,16 @@ function formatBlockVisualProps(node: any, indent: string): string[] {
   if (node.fill) lines.push(`${indent}fill ${formatColor(node.fill)}`);
   if (node.stroke) lines.push(`${indent}stroke ${formatStroke(node.stroke)}`);
   return lines;
+}
+
+const LAYOUT_HINT_KEYS = ['grow', 'order', 'alignSelf', 'slot'] as const;
+
+function formatLayoutHintInline(layout: any): string | null {
+  const parts: string[] = [];
+  for (const key of LAYOUT_HINT_KEYS) {
+    if (layout[key] !== undefined) parts.push(`${key}=${layout[key]}`);
+  }
+  return parts.length > 0 ? `layout ${parts.join(' ')}` : null;
 }
 
 /** A layout object that has type or direction (container layout) needs block rendering.
@@ -350,7 +363,10 @@ function formatNode(node: any, depth: number, options?: GeneratorOptions): strin
     if (node.opacity !== undefined) inlineOnlyParts.push(`opacity=${node.opacity}`);
     if (node.visible === false) inlineOnlyParts.push(`visible=false`);
     if (node.depth !== undefined) inlineOnlyParts.push(`depth=${node.depth}`);
-    if (node.layout?.slot !== undefined && !node.layout?.type) inlineOnlyParts.push(`layout slot=${node.layout.slot}`);
+    if (node.layout && !isBlockLayout(node.layout)) {
+      const hint = formatLayoutHintInline(node.layout);
+      if (hint) inlineOnlyParts.push(hint);
+    }
     if (node.transform) {
       const t = formatTransform(node.transform);
       if (t) inlineOnlyParts.push(t);
