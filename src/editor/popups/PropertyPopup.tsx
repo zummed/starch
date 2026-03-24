@@ -4,6 +4,7 @@ import { ColorPicker } from './ColorPicker';
 import { NumberSlider } from './NumberSlider';
 import { EnumDropdown } from './EnumDropdown';
 import { PointRefEditor } from './PointRefEditor';
+import type { Color } from '../../types/properties';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -30,8 +31,14 @@ function CompoundEditor({ schemaPath, value, onChange }: { schemaPath: string; v
     return detectSchemaType(p.schema) === 'number';
   });
 
-  const handleColorChange = useCallback((color: { h: number; s: number; l: number }) => {
-    onChange({ ...value, ...color });
+  const handleColorChange = useCallback((color: Color) => {
+    // If the color is an object, spread it into the compound value
+    if (typeof color === 'object' && color !== null) {
+      onChange({ ...value, ...color });
+    } else {
+      // String color — shouldn't normally happen in compound objects, but handle gracefully
+      onChange(color);
+    }
   }, [value, onChange]);
 
   const handleSubChange = useCallback((key: string, newVal: unknown) => {
@@ -108,7 +115,17 @@ export function PropertyPopup({ schemaPath, value, position, onChange, onClose }
   let content: React.ReactNode = null;
 
   switch (type) {
-    case 'color':
+    case 'color': {
+      // Color union: can be string, RGB, HSL, {name,a}, {hex,a}
+      // Route directly to ColorPicker with the value as-is
+      const colorVal = (value ?? 'red') as Color;
+      content = (
+        <div onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <ColorPicker value={colorVal} onChange={onChange} />
+        </div>
+      );
+      break;
+    }
     case 'object': {
       const objVal = (value as Record<string, unknown>) ?? {};
       content = <CompoundEditor schemaPath={schemaPath} value={objVal} onChange={onChange} />;

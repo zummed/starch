@@ -84,6 +84,11 @@ export function hslToRgb(h: number, s: number, l: number): { r: number; g: numbe
   };
 }
 
+export function hslToHex(h: number, s: number, l: number): string {
+  const { r, g, b } = hslToRgb(h, s, l);
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 export function hexToRgb(hex: string): [number, number, number] {
   hex = hex.replace('#', '');
   if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];

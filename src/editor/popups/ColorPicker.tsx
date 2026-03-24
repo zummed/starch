@@ -1,6 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
 import { TabbedPopup } from './TabbedPopup';
 import { NumberSlider } from './NumberSlider';
+import type { Color } from '../../types/properties';
+import {
+  colorToHsl, hslToRgb, hslToHex, hslToName, resolveNamedColor,
+} from '../../types/color';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 const SQ_SIZE = 160;
@@ -10,27 +14,7 @@ function stop(e: React.SyntheticEvent) {
   e.stopPropagation();
 }
 
-// ─── Color conversions ──────────────────────────────────────────
-
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  const s1 = s / 100, l1 = l / 100;
-  if (s1 === 0) { const v = Math.round(l1 * 255); return [v, v, v]; }
-  const hue2rgb = (p: number, q: number, t: number) => {
-    if (t < 0) t += 1; if (t > 1) t -= 1;
-    if (t < 1/6) return p + (q - p) * 6 * t;
-    if (t < 1/2) return q;
-    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-    return p;
-  };
-  const q = l1 < 0.5 ? l1 * (1 + s1) : l1 + s1 - l1 * s1;
-  const p = 2 * l1 - q;
-  const h1 = h / 360;
-  return [
-    Math.round(hue2rgb(p, q, h1 + 1/3) * 255),
-    Math.round(hue2rgb(p, q, h1) * 255),
-    Math.round(hue2rgb(p, q, h1 - 1/3) * 255),
-  ];
-}
+// ─── Color conversions (local helpers) ─────────────────────────
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   const r1 = r / 255, g1 = g / 255, b1 = b / 255;
@@ -46,11 +30,6 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
 }
 
-function hslToHex(h: number, s: number, l: number): string {
-  const [r, g, b] = hslToRgb(h, s, l);
-  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-}
-
 function hexToHsl(hex: string): [number, number, number] | null {
   const m = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
   if (!m) {
@@ -61,15 +40,70 @@ function hexToHsl(hex: string): [number, number, number] | null {
   return rgbToHsl(parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16));
 }
 
-// ─── Components ─────────────────────────────────────────────────
+// ─── Format detection ──────────────────────────────────────────
 
-interface ColorPickerProps {
-  value: { h: number; s: number; l: number; a?: number };
-  onChange: (value: { h: number; s: number; l: number; a?: number }) => void;
+type ColorFormat = 'named' | 'hex' | 'rgb' | 'hsl';
+
+function detectFormat(value: Color): ColorFormat {
+  if (typeof value === 'string') {
+    return value.startsWith('#') ? 'hex' : 'named';
+  }
+  if (typeof value === 'object' && value !== null) {
+    if ('h' in value && 's' in value && 'l' in value) return 'hsl';
+    if ('r' in value && 'g' in value && 'b' in value) return 'rgb';
+    if ('name' in value && 'a' in value) return 'named';
+    if ('hex' in value && 'a' in value) return 'hex';
+  }
+  return 'hex'; // fallback
+}
+
+function extractAlpha(value: Color): number | undefined {
+  if (typeof value === 'string') return undefined;
+  if (typeof value === 'object' && value !== null && 'a' in value) {
+    return (value as Record<string, unknown>).a as number;
+  }
+  return undefined;
+}
+
+// ─── Output builder ────────────────────────────────────────────
+
+function buildOutput(h: number, s: number, l: number, alpha: number | undefined, format: ColorFormat): Color {
+  if (format === 'named') {
+    const name = hslToName({ h, s, l });
+    if (name) {
+      return alpha !== undefined ? { name, a: alpha } : name;
+    }
+    // No exact match — fall back to hex
+    return buildOutput(h, s, l, alpha, 'hex');
+  }
+  if (format === 'hex') {
+    const hex = hslToHex(h, s, l);
+    return alpha !== undefined ? { hex, a: alpha } : hex;
+  }
+  if (format === 'rgb') {
+    const { r, g, b } = hslToRgb(h, s, l);
+    return alpha !== undefined ? { r, g, b, a: alpha } : { r, g, b };
+  }
+  // hsl
+  return alpha !== undefined ? { h, s, l, a: alpha } : { h, s, l };
+}
+
+// ─── Swatch colors ─────────────────────────────────────────────
+
+const SWATCH_COLORS = [
+  'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta',
+  'pink', 'brown', 'coral', 'gold', 'lime', 'teal', 'navy', 'indigo',
+  'white', 'silver', 'gray', 'black',
+];
+
+// ─── Components ────────────────────────────────────────────────
+
+export interface ColorPickerProps {
+  value: Color;
+  onChange: (value: Color) => void;
 }
 
 // HSL ↔ HSB conversion for the 2D picker square
-// The square works in HSB (Hue/Saturation/Brightness) space
 function hslToHsb(h: number, s: number, l: number): { hb_s: number; hb_b: number } {
   const s1 = s / 100, l1 = l / 100;
   const b = l1 + s1 * Math.min(l1, 1 - l1);
@@ -96,7 +130,6 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
     const rect = sqRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    // x = HSB saturation (0→1), y inverted = HSB brightness (1→0)
     const hb_s = x * 100;
     const hb_b = (1 - y) * 100;
     const { s: newS, l: newL } = hsbToHsl(h, hb_s, hb_b);
@@ -127,7 +160,6 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
           `,
         }}
       >
-        {/* Crosshair indicator — positioned in HSB space */}
         {(() => { const { hb_s, hb_b } = hslToHsb(h, s, l); return (
         <div style={{
           position: 'absolute',
@@ -179,11 +211,51 @@ function VisualPicker({ h, s, l, onChange }: { h: number; s: number; l: number; 
   );
 }
 
-/** Format inputs: HSL / RGB / Hex */
-function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; onChange: (h: number, s: number, l: number) => void }) {
-  const [format, setFormat] = useState<'hsl' | 'rgb' | 'hex'>('hsl');
+/** Named color swatch grid */
+function SwatchGrid({ onSelect, currentName }: { onSelect: (name: string) => void; currentName?: string }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, padding: '4px 8px 8px' }} onMouseDown={stop} onPointerDown={stop}>
+      {SWATCH_COLORS.map(name => {
+        const rgb = resolveNamedColor(name);
+        const bg = rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : '#000';
+        const isActive = currentName === name;
+        return (
+          <div
+            key={name}
+            title={name}
+            onClick={() => onSelect(name)}
+            onMouseDown={stop}
+            style={{
+              width: 18, height: 18, borderRadius: 3, cursor: 'pointer',
+              background: bg,
+              border: isActive ? '2px solid #a78bfa' : '1px solid #2a2d35',
+              boxSizing: 'border-box',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Format inputs: Named / Hex / RGB / HSL */
+function FormatInputs({
+  h, s, l, alpha, format, onChange, onFormatChange, onAlphaChange,
+}: {
+  h: number; s: number; l: number;
+  alpha: number | undefined;
+  format: ColorFormat;
+  onChange: (h: number, s: number, l: number) => void;
+  onFormatChange: (format: ColorFormat) => void;
+  onAlphaChange?: (alpha: number) => void;
+}) {
   const [hexInput, setHexInput] = useState(hslToHex(h, s, l));
-  const [rgb, setRgb] = useState(() => hslToRgb(h, s, l));
+  const [rgb, setRgb] = useState(() => {
+    const c = hslToRgb(h, s, l);
+    return [c.r, c.g, c.b] as [number, number, number];
+  });
+  // Track the current named color (if any)
+  const currentName = hslToName({ h, s, l });
 
   const inputStyle: React.CSSProperties = {
     width: 42, padding: '2px 4px', fontSize: 10, fontFamily: FONT,
@@ -191,17 +263,26 @@ function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; 
     color: '#e2e5ea', textAlign: 'right', outline: 'none',
   };
 
+  const handleSwatchSelect = useCallback((name: string) => {
+    const rgb = resolveNamedColor(name);
+    if (!rgb) return;
+    const [nh, ns, nl] = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    onChange(nh, ns, nl);
+    // If not already on named format, switch to it
+    if (format !== 'named') onFormatChange('named');
+  }, [onChange, onFormatChange, format]);
+
   return (
     <div style={{ padding: '4px 8px 8px' }} onMouseDown={stop} onPointerDown={stop}>
       {/* Format tabs */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 6 }}>
-        {(['hsl', 'rgb', 'hex'] as const).map(f => (
+        {(['named', 'hex', 'rgb', 'hsl'] as const).map(f => (
           <button
             key={f}
             onClick={() => {
-              setFormat(f);
+              onFormatChange(f);
               if (f === 'hex') setHexInput(hslToHex(h, s, l));
-              if (f === 'rgb') setRgb(hslToRgb(h, s, l));
+              if (f === 'rgb') { const c = hslToRgb(h, s, l); setRgb([c.r, c.g, c.b]); }
             }}
             onMouseDown={stop}
             style={{
@@ -217,6 +298,10 @@ function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; 
           </button>
         ))}
       </div>
+
+      {format === 'named' && (
+        <SwatchGrid onSelect={handleSwatchSelect} currentName={currentName} />
+      )}
 
       {format === 'hsl' && (
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -277,6 +362,13 @@ function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; 
           />
         </div>
       )}
+
+      {/* Alpha slider — only when input has alpha */}
+      {alpha !== undefined && onAlphaChange && (
+        <div style={{ marginTop: 4 }}>
+          <NumberSlider value={alpha} min={0} max={1} step={0.01} label="Alpha" onChange={onAlphaChange} />
+        </div>
+      )}
     </div>
   );
 }
@@ -284,21 +376,39 @@ function FormatInputs({ h, s, l, onChange }: { h: number; s: number; l: number; 
 // ─── Main export ────────────────────────────────────────────────
 
 export function ColorPicker({ value, onChange }: ColorPickerProps) {
-  const hasAlpha = value.a !== undefined;
-  const [h, setH] = useState(value.h);
-  const [s, setS] = useState(value.s);
-  const [l, setL] = useState(value.l);
-  const [a, setA] = useState(value.a ?? 1);
+  // Convert input to HSL for internal state
+  const initHsl = (() => {
+    try { return colorToHsl(value); }
+    catch { return { h: 0, s: 0, l: 50 }; }
+  })();
+
+  const hasAlpha = extractAlpha(value) !== undefined;
+  const [h, setH] = useState(initHsl.h);
+  const [s, setS] = useState(initHsl.s);
+  const [l, setL] = useState(initHsl.l);
+  const [a, setA] = useState(extractAlpha(value) ?? 1);
+  const [format, setFormat] = useState<ColorFormat>(() => detectFormat(value));
+
+  const alpha = hasAlpha ? a : undefined;
+
+  const emit = useCallback((nh: number, ns: number, nl: number, na: number | undefined, fmt: ColorFormat) => {
+    onChange(buildOutput(nh, ns, nl, na, fmt));
+  }, [onChange]);
 
   const update = useCallback((nh: number, ns: number, nl: number) => {
     setH(nh); setS(ns); setL(nl);
-    onChange(hasAlpha ? { h: nh, s: ns, l: nl, a } : { h: nh, s: ns, l: nl });
-  }, [onChange, hasAlpha, a]);
+    emit(nh, ns, nl, alpha, format);
+  }, [emit, alpha, format]);
 
   const updateAlpha = useCallback((na: number) => {
     setA(na);
-    onChange({ h, s, l, a: na });
-  }, [onChange, h, s, l]);
+    emit(h, s, l, na, format);
+  }, [emit, h, s, l, format]);
+
+  const handleFormatChange = useCallback((newFormat: ColorFormat) => {
+    setFormat(newFormat);
+    emit(h, s, l, alpha, newFormat);
+  }, [emit, h, s, l, alpha]);
 
   return (
     <TabbedPopup tabs={[
@@ -307,12 +417,14 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         content: (
           <div>
             <VisualPicker h={h} s={s} l={l} onChange={update} />
-            <FormatInputs h={h} s={s} l={l} onChange={update} />
-            {hasAlpha && (
-              <div style={{ padding: '0 8px 4px' }} onMouseDown={stop} onPointerDown={stop}>
-                <NumberSlider value={a} min={0} max={1} step={0.01} label="Alpha" onChange={updateAlpha} />
-              </div>
-            )}
+            <FormatInputs
+              h={h} s={s} l={l}
+              alpha={alpha}
+              format={format}
+              onChange={update}
+              onFormatChange={handleFormatChange}
+              onAlphaChange={hasAlpha ? updateAlpha : undefined}
+            />
           </div>
         ),
       },
