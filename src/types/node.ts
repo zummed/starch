@@ -115,7 +115,7 @@ export const CameraSchema = dsl(z.object({
 
 // ─── Node Schema ────────────────────────────────────────────────
 
-export const NodeSchema: z.ZodType<NodeInput> = z.object({
+export const NodeSchema: z.ZodType<NodeInput> = dsl(z.object({
   id: z.string().describe('Unique node identifier (string, required)'),
   children: z.lazy(() => z.array(NodeSchema)).describe('Nested child nodes (array of Node)').optional(),
   visible: z.boolean().describe('Whether node is rendered (boolean, default true)').default(true),
@@ -149,6 +149,16 @@ export const NodeSchema: z.ZodType<NodeInput> = z.object({
   // Template
   template: z.string().describe('Template name to instantiate (string)').optional(),
   props: z.record(z.string(), z.unknown()).describe('Props passed to template instantiation (Record<string, unknown>)').optional(),
+}), {
+  nodeId: 'id',
+  geometry: ['rect', 'ellipse', 'text', 'path', 'image', 'camera'],
+  sigil: { key: 'style', prefix: '@' },
+  inlineProps: ['fill', 'stroke', 'opacity', 'visible', 'depth', 'transform'],
+  blockProps: ['fill', 'stroke', 'dash', 'layout'],
+  inlineLayoutHints: ['grow', 'order', 'alignSelf', 'slot'],
+  kwargs: ['opacity', 'depth'],
+  flags: ['visible'],
+  children: { children: 'block' },
 });
 
 // ─── Derived Types ──────────────────────────────────────────────
