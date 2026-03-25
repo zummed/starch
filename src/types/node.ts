@@ -4,27 +4,40 @@ import {
   LayoutSchema, AnchorSchema,
 } from './properties';
 import type { Color, Stroke, Transform, TransformInput, Dash, Layout } from './properties';
+import { dsl } from '../dsl/dslMeta';
 
 // ─── Geometry Schemas ───────────────────────────────────────────
 
-export const RectGeomSchema = z.object({
+export const RectGeomSchema = dsl(z.object({
   w: z.number().min(0).describe('Rectangle width in pixels (number, >= 0)').default(0),
   h: z.number().min(0).describe('Rectangle height in pixels (number, >= 0)').default(0),
   radius: z.number().min(0).describe('Corner radius in pixels (number, >= 0)').optional(),
+}), {
+  keyword: 'rect',
+  positional: [{ keys: ['w', 'h'], format: 'dimension' }],
+  kwargs: ['radius'],
 });
 
-export const EllipseGeomSchema = z.object({
+export const EllipseGeomSchema = dsl(z.object({
   rx: z.number().min(0).describe('Horizontal radius in pixels (number, >= 0)'),
   ry: z.number().min(0).describe('Vertical radius in pixels (number, >= 0)'),
+}), {
+  keyword: 'ellipse',
+  positional: [{ keys: ['rx', 'ry'], format: 'dimension', transform: 'double' }],
 });
 
-export const TextGeomSchema = z.object({
+export const TextGeomSchema = dsl(z.object({
   content: z.string().describe('Text string to display (string)'),
   size: z.number().min(1).describe('Font size in pixels (number, >= 1, default 14)').optional(),
   lineHeight: z.number().min(0).describe('Line height multiplier (number, >= 0)').optional(),
   align: z.enum(['start', 'middle', 'end']).describe('Horizontal text alignment — "start", "middle", or "end" (default "middle")').optional(),
   bold: z.boolean().describe('Render text in bold (boolean, default false)').optional(),
   mono: z.boolean().describe('Render text in monospace font (boolean, default false)').optional(),
+}), {
+  keyword: 'text',
+  positional: [{ keys: ['content'], format: 'quoted' }],
+  kwargs: ['size', 'lineHeight', 'align'],
+  flags: ['bold', 'mono'],
 });
 
 export const PointRefSchema = z.union([
@@ -33,7 +46,7 @@ export const PointRefSchema = z.union([
   z.tuple([z.string(), z.number(), z.number()]).describe('Node ID with offset [id, dx, dy]'),
 ]);
 
-export const PathGeomSchema = z.object({
+export const PathGeomSchema = dsl(z.object({
   points: z.array(z.tuple([z.number(), z.number()])).describe('Ordered path vertices — array of [x, y] coordinate tuples').optional(),
   fromAnchor: AnchorSchema.describe('Anchor on start node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
   toAnchor: AnchorSchema.describe('Anchor on end node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
@@ -46,14 +59,39 @@ export const PathGeomSchema = z.object({
   gap: z.number().min(0).describe('Gap between node edge and line endpoint in pixels (number, >= 0)').optional(),
   fromGap: z.number().min(0).describe('Gap at start endpoint in pixels, overrides gap (number, >= 0)').optional(),
   toGap: z.number().min(0).describe('Gap at end endpoint in pixels, overrides gap (number, >= 0)').optional(),
+}), {
+  variants: [
+    {
+      when: 'route',
+      hints: {
+        positional: [{ keys: ['route'], format: 'arrow' }],
+        flags: ['smooth', 'closed'],
+        kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress'],
+      },
+    },
+    {
+      when: 'points',
+      hints: {
+        keyword: 'path',
+        positional: [{ keys: ['points'], format: 'tuples' }],
+        flags: ['closed', 'smooth'],
+      },
+    },
+  ],
+  flags: ['smooth', 'closed'],
+  kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress'],
 });
 
-export const ImageGeomSchema = z.object({
+export const ImageGeomSchema = dsl(z.object({
   src: z.string().describe('Image source URL or data URI (string)'),
   fit: z.enum(['contain', 'cover', 'fill']).describe('Image fit mode — "contain", "cover", or "fill" (default "contain")').optional(),
   padding: z.number().min(0).describe('Padding around image in pixels (number, >= 0)').optional(),
   w: z.number().min(0).describe('Display width in pixels (number, >= 0)'),
   h: z.number().min(0).describe('Display height in pixels (number, >= 0)'),
+}), {
+  keyword: 'image',
+  positional: [{ keys: ['src'], format: 'quoted' }, { keys: ['w', 'h'], format: 'dimension' }],
+  kwargs: ['fit'],
 });
 
 export const CameraLookSchema = z.union([
@@ -64,11 +102,15 @@ export const CameraLookSchema = z.union([
   z.array(z.string()).describe('Fit to a set of node IDs (string[])'),
 ]);
 
-export const CameraSchema = z.object({
+export const CameraSchema = dsl(z.object({
   look: CameraLookSchema.describe('Camera look target — "all", node ID, [x,y], [id,dx,dy], or string[] of IDs').optional(),
   zoom: z.number().min(0).describe('Zoom level multiplier (number, > 0, default 1)').optional(),
   ratio: z.number().min(0).describe('Viewport aspect ratio width/height (number, > 0)').optional(),
   active: z.boolean().describe('Whether this camera is the active viewport (boolean, default false)').optional(),
+}), {
+  keyword: 'camera',
+  kwargs: ['look', 'zoom', 'ratio'],
+  flags: ['active'],
 });
 
 // ─── Node Schema ────────────────────────────────────────────────
