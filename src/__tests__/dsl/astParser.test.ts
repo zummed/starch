@@ -631,6 +631,86 @@ describe('astParser - AST structure', () => {
   });
 });
 
+// ─── Inline Compound Nodes ───────────────────────────────────────
+
+describe('astParser - inline compound nodes', () => {
+  it('wraps stroke in a compound AST node', () => {
+    const { ast } = buildAstFromText('box: rect 100x100 stroke red\n');
+    const objectsSection = ast.children.find(c => c.schemaPath === 'objects');
+    const nodeCompound = objectsSection!.children[0];
+    const strokeCompound = nodeCompound.children.find(
+      c => c.dslRole === 'compound' && c.schemaPath === 'stroke'
+    );
+    expect(strokeCompound).toBeDefined();
+    expect(strokeCompound!.modelPath).toBe('objects.box.stroke');
+    // Should have keyword child
+    const kwChild = strokeCompound!.children.find(c => c.dslRole === 'keyword' && c.value === 'stroke');
+    expect(kwChild).toBeDefined();
+    // Should have value child for color
+    const valChild = strokeCompound!.children.find(c => c.dslRole === 'value');
+    expect(valChild).toBeDefined();
+  });
+
+  it('wraps fill in a compound AST node', () => {
+    const { ast } = buildAstFromText('box: rect 100x100 fill blue\n');
+    const objectsSection = ast.children.find(c => c.schemaPath === 'objects');
+    const nodeCompound = objectsSection!.children[0];
+    const fillCompound = nodeCompound.children.find(
+      c => c.dslRole === 'compound' && c.schemaPath === 'fill'
+    );
+    expect(fillCompound).toBeDefined();
+    expect(fillCompound!.modelPath).toBe('objects.box.fill');
+  });
+
+  it('wraps at/transform in a compound AST node', () => {
+    const { ast } = buildAstFromText('box: rect 100x100 at 50,75\n');
+    const objectsSection = ast.children.find(c => c.schemaPath === 'objects');
+    const nodeCompound = objectsSection!.children[0];
+    const transformCompound = nodeCompound.children.find(
+      c => c.dslRole === 'compound' && c.schemaPath === 'transform'
+    );
+    expect(transformCompound).toBeDefined();
+    expect(transformCompound!.modelPath).toBe('objects.box.transform');
+    const kwChild = transformCompound!.children.find(c => c.dslRole === 'keyword' && c.value === 'at');
+    expect(kwChild).toBeDefined();
+  });
+
+  it('wraps stroke with width in a compound AST node', () => {
+    const { ast } = buildAstFromText('box: rect 100x100 stroke red width=2\n');
+    const objectsSection = ast.children.find(c => c.schemaPath === 'objects');
+    const nodeCompound = objectsSection!.children[0];
+    const strokeCompound = nodeCompound.children.find(
+      c => c.dslRole === 'compound' && c.schemaPath === 'stroke'
+    );
+    expect(strokeCompound).toBeDefined();
+    // width kwarg should be inside the stroke compound
+    const widthKey = strokeCompound!.children.find(c => c.dslRole === 'kwarg-key' && c.value === 'width');
+    expect(widthKey).toBeDefined();
+  });
+
+  it('wraps dash in a compound AST node in block mode', () => {
+    const { ast } = buildAstFromText('box: rect 100x100\n  dash dashed length=10\n');
+    const objectsSection = ast.children.find(c => c.schemaPath === 'objects');
+    const nodeCompound = objectsSection!.children[0];
+    const dashCompound = nodeCompound.children.find(
+      c => c.dslRole === 'compound' && c.schemaPath === 'dash'
+    );
+    expect(dashCompound).toBeDefined();
+    expect(dashCompound!.modelPath).toBe('objects.box.dash');
+  });
+
+  it('parent references remain consistent with compounds', () => {
+    const { ast } = buildAstFromText('box: rect 100x100 fill red stroke blue width=2 at 50,75\n');
+    function checkParents(node: typeof ast) {
+      for (const child of node.children) {
+        expect(child.parent).toBe(node);
+        checkParents(child);
+      }
+    }
+    checkParents(ast);
+  });
+});
+
 // ─── Edge Cases ──────────────────────────────────────────────────
 
 describe('astParser - edge cases', () => {

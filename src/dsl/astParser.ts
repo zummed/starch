@@ -1535,18 +1535,29 @@ function buildNodeAstChildren(
       continue;
     }
 
-    // fill/stroke keywords
+    // fill/stroke keywords — wrap in compound AST node (matches emitter)
     if (tok.type === 'identifier' && (tok.value === 'fill' || tok.value === 'stroke')) {
+      const propKey = tok.value;
+      const propCompound = createAstNode({
+        dslRole: 'compound',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: propKey,
+        modelPath: `${modelPrefix}.${propKey}`,
+      });
+      propCompound.parent = compound;
+      compound.children.push(propCompound);
+
       const kwNode = createAstNode({
         dslRole: 'keyword',
         from: tok.offset,
         to: tok.offset + tok.value.length,
-        schemaPath: tok.value,
-        modelPath: `${modelPrefix}.${tok.value}`,
-        value: tok.value,
+        schemaPath: propKey,
+        modelPath: `${modelPrefix}.${propKey}`,
+        value: propKey,
       });
-      kwNode.parent = compound;
-      compound.children.push(kwNode);
+      kwNode.parent = propCompound;
+      propCompound.children.push(kwNode);
       i++;
 
       // Color value follows — find the next meaningful token
@@ -1567,12 +1578,13 @@ function buildNodeAstChildren(
           dslRole: 'value',
           from: ct.offset,
           to: ct.offset + ct.value.length,
-          schemaPath: tok.value,
-          modelPath: `${modelPrefix}.${tok.value}`,
+          schemaPath: propKey,
+          modelPath: `${modelPrefix}.${propKey}`,
           value: ct.value,
         });
-        valNode.parent = compound;
-        compound.children.push(valNode);
+        valNode.parent = propCompound;
+        propCompound.children.push(valNode);
+        propCompound.to = ct.offset + ct.value.length;
         i++;
         // After color components, check for kwarg (width=, a=)
         if (tokens[i]?.type === 'equals') {
@@ -1584,6 +1596,74 @@ function buildNodeAstChildren(
         // Stop after 3 numbers for HSL/RGB
         break;
       }
+
+      // For stroke: consume trailing kwarg pairs (width=N) into the compound
+      if (propKey === 'stroke') {
+        while (i < endIdx && tokens[i]?.type === 'identifier' && i + 1 < endIdx && tokens[i + 1]?.type === 'equals') {
+          const kTok = tokens[i];
+          if (kTok.value !== 'width' && kTok.value !== 'a') break;
+          const keyNode = createAstNode({
+            dslRole: 'kwarg-key',
+            from: kTok.offset,
+            to: kTok.offset + kTok.value.length,
+            schemaPath: `stroke.${kTok.value}`,
+            modelPath: `${modelPrefix}.stroke.${kTok.value}`,
+            value: kTok.value,
+          });
+          keyNode.parent = propCompound;
+          propCompound.children.push(keyNode);
+          i += 2; // skip key and =
+          if (i < endIdx) {
+            const vTok = tokens[i];
+            const valNode = createAstNode({
+              dslRole: 'kwarg-value',
+              from: vTok.offset,
+              to: vTok.offset + vTok.value.length,
+              schemaPath: `stroke.${kTok.value}`,
+              modelPath: `${modelPrefix}.stroke.${kTok.value}`,
+              value: vTok.value,
+            });
+            valNode.parent = propCompound;
+            propCompound.children.push(valNode);
+            propCompound.to = vTok.offset + vTok.value.length;
+            i++;
+          }
+        }
+      }
+
+      // For fill: consume trailing alpha kwarg (a=N) into the compound
+      if (propKey === 'fill') {
+        while (i < endIdx && tokens[i]?.type === 'identifier' && tokens[i]?.value === 'a' && i + 1 < endIdx && tokens[i + 1]?.type === 'equals') {
+          const kTok = tokens[i];
+          const keyNode = createAstNode({
+            dslRole: 'kwarg-key',
+            from: kTok.offset,
+            to: kTok.offset + kTok.value.length,
+            schemaPath: `fill.a`,
+            modelPath: `${modelPrefix}.fill.a`,
+            value: kTok.value,
+          });
+          keyNode.parent = propCompound;
+          propCompound.children.push(keyNode);
+          i += 2; // skip key and =
+          if (i < endIdx) {
+            const vTok = tokens[i];
+            const valNode = createAstNode({
+              dslRole: 'kwarg-value',
+              from: vTok.offset,
+              to: vTok.offset + vTok.value.length,
+              schemaPath: `fill.a`,
+              modelPath: `${modelPrefix}.fill.a`,
+              value: vTok.value,
+            });
+            valNode.parent = propCompound;
+            propCompound.children.push(valNode);
+            propCompound.to = vTok.offset + vTok.value.length;
+            i++;
+          }
+        }
+      }
+
       continue;
     }
 
@@ -1638,8 +1718,18 @@ function buildNodeAstChildren(
       continue;
     }
 
-    // 'at' keyword
+    // 'at' keyword — wrap in compound AST node (matches emitter)
     if (tok.type === 'identifier' && tok.value === 'at') {
+      const transformCompound = createAstNode({
+        dslRole: 'compound',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: 'transform',
+        modelPath: `${modelPrefix}.transform`,
+      });
+      transformCompound.parent = compound;
+      compound.children.push(transformCompound);
+
       const kwNode = createAstNode({
         dslRole: 'keyword',
         from: tok.offset,
@@ -1648,9 +1738,232 @@ function buildNodeAstChildren(
         modelPath: `${modelPrefix}.transform`,
         value: 'at',
       });
-      kwNode.parent = compound;
-      compound.children.push(kwNode);
+      kwNode.parent = transformCompound;
+      transformCompound.children.push(kwNode);
       i++;
+
+      // Consume position values and transform kwargs into the compound
+      // Position: x,y or x=N y=N
+      while (i < endIdx && tokens[i].type !== 'newline' && tokens[i].type !== 'eof') {
+        const ct = tokens[i];
+        // Stop at next property keyword
+        if (ct.type === 'identifier' && (ct.value === 'fill' || ct.value === 'stroke' || ct.value === 'at' ||
+          ct.value === 'layout' || ct.value === 'dash' || GEOM_KEYWORDS.has(ct.value))) break;
+        // Stop at non-transform kwargs
+        if (ct.type === 'identifier' && i + 1 < endIdx && tokens[i + 1]?.type === 'equals') {
+          if (!TRANSFORM_PROPS.has(ct.value) && ct.value !== 'x' && ct.value !== 'y') break;
+          // Transform kwarg
+          const kTok = ct;
+          const keyNode = createAstNode({
+            dslRole: 'kwarg-key',
+            from: kTok.offset,
+            to: kTok.offset + kTok.value.length,
+            schemaPath: `transform.${kTok.value}`,
+            modelPath: `${modelPrefix}.transform.${kTok.value}`,
+            value: kTok.value,
+          });
+          keyNode.parent = transformCompound;
+          transformCompound.children.push(keyNode);
+          i += 2; // skip key and =
+          if (i < endIdx) {
+            const vTok = tokens[i];
+            const valNode = createAstNode({
+              dslRole: 'kwarg-value',
+              from: vTok.offset,
+              to: vTok.offset + vTok.value.length,
+              schemaPath: `transform.${kTok.value}`,
+              modelPath: `${modelPrefix}.transform.${kTok.value}`,
+              value: vTok.value,
+            });
+            valNode.parent = transformCompound;
+            transformCompound.children.push(valNode);
+            transformCompound.to = vTok.offset + vTok.value.length;
+            i++;
+          }
+          continue;
+        }
+        // Stop at boolean flags that aren't transform-related
+        if (ct.type === 'identifier' && (TEXT_BOOLEANS.has(ct.value) || PATH_BOOLEANS.has(ct.value) || NODE_BOOLEANS.has(ct.value))) break;
+        // Stop at atSign
+        if (ct.type === 'atSign') break;
+        // Number or comma (position components)
+        if (ct.type === 'number' || ct.type === 'comma') {
+          const valNode = createAstNode({
+            dslRole: ct.type === 'comma' ? 'separator' : 'value',
+            from: ct.offset,
+            to: ct.offset + ct.value.length,
+            schemaPath: 'transform',
+            modelPath: `${modelPrefix}.transform`,
+            value: ct.type === 'number' ? parseFloat(ct.value) : ct.value,
+          });
+          valNode.parent = transformCompound;
+          transformCompound.children.push(valNode);
+          transformCompound.to = ct.offset + ct.value.length;
+          i++;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+
+    // dash keyword — wrap in compound AST node (matches emitter)
+    if (tok.type === 'identifier' && tok.value === 'dash') {
+      const dashCompound = createAstNode({
+        dslRole: 'compound',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: 'dash',
+        modelPath: `${modelPrefix}.dash`,
+      });
+      dashCompound.parent = compound;
+      compound.children.push(dashCompound);
+
+      const kwNode = createAstNode({
+        dslRole: 'keyword',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: 'dash',
+        modelPath: `${modelPrefix}.dash`,
+        value: 'dash',
+      });
+      kwNode.parent = dashCompound;
+      dashCompound.children.push(kwNode);
+      i++;
+
+      // Consume pattern identifier and kwargs
+      while (i < endIdx && tokens[i].type !== 'newline' && tokens[i].type !== 'eof' && tokens[i].type !== 'dedent') {
+        const ct = tokens[i];
+        if (ct.type === 'identifier' && (ct.value === 'fill' || ct.value === 'stroke' || ct.value === 'at' ||
+          ct.value === 'layout' || ct.value === 'dash' || GEOM_KEYWORDS.has(ct.value))) break;
+        if (ct.type === 'identifier' && i + 1 < endIdx && tokens[i + 1]?.type === 'equals') {
+          const kTok = ct;
+          const keyNode = createAstNode({
+            dslRole: 'kwarg-key',
+            from: kTok.offset,
+            to: kTok.offset + kTok.value.length,
+            schemaPath: `dash.${kTok.value}`,
+            modelPath: `${modelPrefix}.dash.${kTok.value}`,
+            value: kTok.value,
+          });
+          keyNode.parent = dashCompound;
+          dashCompound.children.push(keyNode);
+          i += 2;
+          if (i < endIdx) {
+            const vTok = tokens[i];
+            const valNode = createAstNode({
+              dslRole: 'kwarg-value',
+              from: vTok.offset,
+              to: vTok.offset + vTok.value.length,
+              schemaPath: `dash.${kTok.value}`,
+              modelPath: `${modelPrefix}.dash.${kTok.value}`,
+              value: vTok.value,
+            });
+            valNode.parent = dashCompound;
+            dashCompound.children.push(valNode);
+            dashCompound.to = vTok.offset + vTok.value.length;
+            i++;
+          }
+          continue;
+        }
+        if (ct.type === 'identifier') {
+          // Pattern value
+          const valNode = createAstNode({
+            dslRole: 'value',
+            from: ct.offset,
+            to: ct.offset + ct.value.length,
+            schemaPath: 'dash.pattern',
+            modelPath: `${modelPrefix}.dash.pattern`,
+            value: ct.value,
+          });
+          valNode.parent = dashCompound;
+          dashCompound.children.push(valNode);
+          dashCompound.to = ct.offset + ct.value.length;
+          i++;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+
+    // layout keyword — wrap in compound AST node (matches emitter)
+    if (tok.type === 'identifier' && tok.value === 'layout') {
+      const layoutCompound = createAstNode({
+        dslRole: 'compound',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: 'layout',
+        modelPath: `${modelPrefix}.layout`,
+      });
+      layoutCompound.parent = compound;
+      compound.children.push(layoutCompound);
+
+      const kwNode = createAstNode({
+        dslRole: 'keyword',
+        from: tok.offset,
+        to: tok.offset + tok.value.length,
+        schemaPath: 'layout',
+        modelPath: `${modelPrefix}.layout`,
+        value: 'layout',
+      });
+      kwNode.parent = layoutCompound;
+      layoutCompound.children.push(kwNode);
+      i++;
+
+      // Consume type, direction, and kwargs
+      while (i < endIdx && tokens[i].type !== 'newline' && tokens[i].type !== 'eof' && tokens[i].type !== 'dedent') {
+        const ct = tokens[i];
+        if (ct.type === 'identifier' && (ct.value === 'fill' || ct.value === 'stroke' || ct.value === 'at' ||
+          ct.value === 'dash' || GEOM_KEYWORDS.has(ct.value))) break;
+        if (ct.type === 'identifier' && i + 1 < endIdx && tokens[i + 1]?.type === 'equals') {
+          const kTok = ct;
+          const keyNode = createAstNode({
+            dslRole: 'kwarg-key',
+            from: kTok.offset,
+            to: kTok.offset + kTok.value.length,
+            schemaPath: `layout.${kTok.value}`,
+            modelPath: `${modelPrefix}.layout.${kTok.value}`,
+            value: kTok.value,
+          });
+          keyNode.parent = layoutCompound;
+          layoutCompound.children.push(keyNode);
+          i += 2;
+          if (i < endIdx) {
+            const vTok = tokens[i];
+            const valNode = createAstNode({
+              dslRole: 'kwarg-value',
+              from: vTok.offset,
+              to: vTok.offset + vTok.value.length,
+              schemaPath: `layout.${kTok.value}`,
+              modelPath: `${modelPrefix}.layout.${kTok.value}`,
+              value: vTok.value,
+            });
+            valNode.parent = layoutCompound;
+            layoutCompound.children.push(valNode);
+            layoutCompound.to = vTok.offset + vTok.value.length;
+            i++;
+          }
+          continue;
+        }
+        if (ct.type === 'identifier') {
+          // Type or direction value
+          const valNode = createAstNode({
+            dslRole: 'value',
+            from: ct.offset,
+            to: ct.offset + ct.value.length,
+            schemaPath: 'layout',
+            modelPath: `${modelPrefix}.layout`,
+            value: ct.value,
+          });
+          valNode.parent = layoutCompound;
+          layoutCompound.children.push(valNode);
+          layoutCompound.to = ct.offset + ct.value.length;
+          i++;
+          continue;
+        }
+        break;
+      }
       continue;
     }
 

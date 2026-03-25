@@ -304,19 +304,25 @@ function renderStyle(name: string, style: any): SectionResult {
 
   if (style.fill) {
     b.write('\n  ');
+    b.openCompound('fill', `${modelPrefix}.fill`);
     b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
     b.write(' ');
     emitColor(b, style.fill, 'fill', `${modelPrefix}.fill`);
+    b.closeCompound();
   }
   if (style.stroke) {
     b.write('\n  ');
+    b.openCompound('stroke', `${modelPrefix}.stroke`);
     b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
     b.write(' ');
     emitStroke(b, style.stroke, modelPrefix);
+    b.closeCompound();
   }
   if (style.dash) {
     b.write('\n  ');
+    b.openCompound('dash', `${modelPrefix}.dash`);
     emitDashBlock(b, style.dash, modelPrefix);
+    b.closeCompound();
   }
 
   // Other style properties
@@ -331,7 +337,9 @@ function renderStyle(name: string, style: any): SectionResult {
 
   if (style.layout) {
     b.write('\n  ');
+    b.openCompound('layout', `${modelPrefix}.layout`);
     emitLayout(b, style.layout, modelPrefix);
+    b.closeCompound();
   }
 
   const text = b.getText();
@@ -473,15 +481,19 @@ function renderBlockNode(b: AstTextBuilder, node: any, depth: number, modelPrefi
   // Block properties: fill, stroke
   if (node.fill && hasOwn(node, 'fill')) {
     b.write(`\n${childIndent}`);
+    b.openCompound('fill', `${modelPrefix}.fill`);
     b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
     b.write(' ');
     emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    b.closeCompound();
   }
   if (node.stroke && hasOwn(node, 'stroke')) {
     b.write(`\n${childIndent}`);
+    b.openCompound('stroke', `${modelPrefix}.stroke`);
     b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
     b.write(' ');
     emitStroke(b, node.stroke, modelPrefix);
+    b.closeCompound();
   }
 
   // Block-only props (dash, layout)
@@ -1010,15 +1022,19 @@ function emitInlineProps(b: AstTextBuilder, node: any, modelPrefix: string): voi
   }
   if (node.fill && hasOwn(node, 'fill')) {
     space();
+    b.openCompound('fill', `${modelPrefix}.fill`);
     b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
     b.write(' ');
     emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    b.closeCompound();
   }
   if (node.stroke && hasOwn(node, 'stroke')) {
     space();
+    b.openCompound('stroke', `${modelPrefix}.stroke`);
     b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
     b.write(' ');
     emitStroke(b, node.stroke, modelPrefix);
+    b.closeCompound();
   }
   if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
     space();
@@ -1040,13 +1056,17 @@ function emitInlineProps(b: AstTextBuilder, node: any, modelPrefix: string): voi
   }
   if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
     space();
+    b.openCompound('layout', `${modelPrefix}.layout`);
     emitLayoutHintInline(b, node.layout, modelPrefix);
+    b.closeCompound();
   }
   if (node.transform && hasOwn(node, 'transform')) {
     const t = formatTransformText(node.transform);
     if (t) {
       space();
+      b.openCompound('transform', `${modelPrefix}.transform`);
       emitTransform(b, node.transform, modelPrefix);
+      b.closeCompound();
     }
   }
 }
@@ -1104,15 +1124,19 @@ function emitInlinePropsWithoutPathAndTransform(b: AstTextBuilder, node: any, mo
   }
   if (node.fill && hasOwn(node, 'fill')) {
     space();
+    b.openCompound('fill', `${modelPrefix}.fill`);
     b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
     b.write(' ');
     emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    b.closeCompound();
   }
   if (node.stroke && hasOwn(node, 'stroke')) {
     space();
+    b.openCompound('stroke', `${modelPrefix}.stroke`);
     b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
     b.write(' ');
     emitStroke(b, node.stroke, modelPrefix);
+    b.closeCompound();
   }
   if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
     space();
@@ -1146,15 +1170,19 @@ function emitInlinePropsWithoutPath(b: AstTextBuilder, node: any, modelPrefix: s
   }
   if (node.fill && hasOwn(node, 'fill')) {
     space();
+    b.openCompound('fill', `${modelPrefix}.fill`);
     b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
     b.write(' ');
     emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    b.closeCompound();
   }
   if (node.stroke && hasOwn(node, 'stroke')) {
     space();
+    b.openCompound('stroke', `${modelPrefix}.stroke`);
     b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
     b.write(' ');
     emitStroke(b, node.stroke, modelPrefix);
+    b.closeCompound();
   }
   if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
     space();
@@ -1178,7 +1206,9 @@ function emitInlinePropsWithoutPath(b: AstTextBuilder, node: any, modelPrefix: s
     const t = formatTransformText(node.transform);
     if (t) {
       space();
+      b.openCompound('transform', `${modelPrefix}.transform`);
       emitTransform(b, node.transform, modelPrefix);
+      b.closeCompound();
     }
   }
 }
@@ -1273,11 +1303,15 @@ function emitBlockOnlyProps(b: AstTextBuilder, node: any, depth: number, modelPr
   const indent = '  '.repeat(depth);
   if (node.dash && hasOwn(node, 'dash')) {
     b.write(`\n${indent}`);
+    b.openCompound('dash', `${modelPrefix}.dash`);
     emitDashBlock(b, node.dash, modelPrefix);
+    b.closeCompound();
   }
   if (node.layout && hasOwn(node, 'layout') && isBlockLayout(node.layout)) {
     b.write(`\n${indent}`);
+    b.openCompound('layout', `${modelPrefix}.layout`);
     emitLayout(b, node.layout, modelPrefix);
+    b.closeCompound();
   }
 }
 

@@ -9,7 +9,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, hoverTooltip, typ
 import { EditorState, type Extension } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching } from '@codemirror/language';
-import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
+import { autocompletion, snippet, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { linter, lintGutter } from '@codemirror/lint';
 import { starchTheme } from '../../editor/theme';
 import { dslLanguage, dslHighlight } from '../../editor/dslLanguage';
@@ -356,32 +356,58 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     if (!context.explicit && !wordBefore) return null;
 
     const ast = context.state.field(astField);
-    const prefix = wordBefore ? wordBefore.text : '';
 
-    // Get current line text up to cursor for context-dependent completions
+    // Get current line text up to cursor, EXCLUDING the partially-typed word.
+    // This keeps context detection stable as the user types — CodeMirror handles
+    // filtering by the partial word itself.
     const line = context.state.doc.lineAt(context.pos);
-    const lineText = context.state.doc.sliceString(line.from, context.pos);
+    const fullLineText = context.state.doc.sliceString(line.from, context.pos);
+    const lineText = wordBefore
+      ? context.state.doc.sliceString(line.from, wordBefore.from)
+      : fullLineText;
 
     const items = completionsAt(
-      ast, context.pos, lineText, modelManagerRef.current.json,
+      ast, wordBefore ? wordBefore.from : context.pos, lineText, modelManagerRef.current.json,
     );
     if (items.length === 0) return null;
 
-    // Filter by prefix
-    const lower = prefix.toLowerCase();
-    const filtered = prefix
-      ? items.filter(i => i.label.toLowerCase().startsWith(lower))
-      : items;
-    if (filtered.length === 0) return null;
+    // Let CodeMirror handle prefix filtering (it has built-in fuzzy matching).
+    // We just return all items; CodeMirror filters by the word at `from`.
+    const sectionCache: Record<string, { name: string; rank: number; header: (section: { name: string }) => HTMLElement }> = {};
+    function getSection(scope: string) {
+      if (sectionCache[scope]) return sectionCache[scope];
+      const isNode = scope === 'node';
+      const section = {
+        name: isNode ? 'node properties' : scope,
+        rank: isNode ? 1 : 0,
+        header(sec: { name: string }) {
+          const el = document.createElement('div');
+          el.style.cssText = 'padding: 2px 8px; font-size: 10px; color: #5a5f69; border-top: 1px solid #2a2d35; font-family: monospace;';
+          el.textContent = sec.name;
+          return el;
+        },
+      };
+      sectionCache[scope] = section;
+      return section;
+    }
 
     const from = wordBefore ? wordBefore.from : context.pos;
     return {
       from,
-      options: filtered.map(item => ({
-        label: item.label,
-        detail: item.detail,
-        type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
-      })),
+      options: items.map(item => {
+        const option: any = {
+          label: item.label,
+          detail: item.detail,
+          type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
+        };
+        if (item.snippetTemplate) {
+          option.apply = snippet(item.snippetTemplate);
+        }
+        if (item.scope) {
+          option.section = getSection(item.scope);
+        }
+        return option;
+      }),
     };
   }, []);
 
