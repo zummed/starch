@@ -9,7 +9,8 @@ import { EnumDropdown } from './EnumDropdown';
 import { PointRefEditor } from './PointRefEditor';
 import { AnchorEditor } from './AnchorEditor';
 import type { Color } from '../../types/properties';
-import type { SchemaSection } from '../schemaSpan';
+
+export type SchemaSection = 'node' | 'style' | 'animate' | 'images';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 

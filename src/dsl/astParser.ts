@@ -1560,7 +1560,7 @@ function buildNodeAstChildren(
           !FREE_FLOATING_PROPS.has(ct.value) && !TRANSFORM_PROPS.has(ct.value) &&
           !RECT_PROPS.has(ct.value) && !TEXT_PROPS.has(ct.value) && !IMAGE_PROPS.has(ct.value) &&
           !PATH_PROPS.has(ct.value) && !CAMERA_PROPS.has(ct.value) && !NODE_BOOLEANS.has(ct.value) &&
-          s.peek(1)?.type !== 'equals'))) {
+          tokens[i + 1]?.type !== 'equals'))) {
           break;
         }
         const valNode = createAstNode({

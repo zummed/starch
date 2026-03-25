@@ -6,7 +6,7 @@ import { expandTemplates } from '../templates/registry';
 import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
-import { parseDsl } from '../dsl/parser';
+import { buildAstFromText } from '../dsl/astParser';
 
 export interface ParsedScene {
   name?: string;
@@ -71,7 +71,7 @@ export function parseScene(input: string): ParsedScene {
 
   const trimmed = input.trim();
   const isDsl = trimmed.length === 0 || trimmed[0] !== '{';
-  const raw = isDsl ? parseDsl(trimmed) : JSON5.parse(trimmed);
+  const raw = isDsl ? buildAstFromText(trimmed).model : JSON5.parse(trimmed);
 
   const name = typeof raw.name === 'string' ? raw.name : undefined;
   const description = typeof raw.description === 'string' ? raw.description : undefined;

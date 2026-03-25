@@ -1,6 +1,6 @@
 /**
  * V2 Editor -- backed by the structured editor system.
- * Uses ModelManager, schema-driven decorations, DSL linter, and property popups.
+ * Uses ModelManager, AST-driven decorations, DSL linter, and property popups.
  * DSL-only mode (JSON5 rendering removed).
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
@@ -13,7 +13,6 @@ import { autocompletion, type CompletionContext, type CompletionResult } from '@
 import { linter, lintGutter } from '@codemirror/lint';
 import { starchTheme } from '../../editor/theme';
 import { dslLanguage, dslHighlight } from '../../editor/dslLanguage';
-import { lintDsl } from '../../editor/dslLinter';
 import {
   getPropertySchema,
   getPropertyDescription,
@@ -22,42 +21,74 @@ import {
 } from '../../types/schemaRegistry';
 import { PropertyPopup } from '../../editor/popups/PropertyPopup';
 import { ModelManager, getNestedValue, resolveIdPath } from '../../editor/modelManager';
-import { schemaDecorationsExtension, setSpans, spanField, getSpanAtPos } from '../../editor/schemaDecorations';
-import { getSchemaCompletions } from '../../editor/schemaCompletionSource';
-import type { SchemaSection } from '../../editor/schemaSpan';
+import { astExtension, setAst, astField } from '../../dsl/astDecorations';
+import { nodeAt, findCompound, flattenLeaves } from '../../dsl/astTypes';
+import { completionsAt } from '../../dsl/astCompletions';
+import { buildAstFromText } from '../../dsl/astParser';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
-// --- DSL Linter ---
+// --- DSL Linter (AST-based) ---
 
 const dslEditorLinter = linter((view) => {
   const doc = view.state.doc.toString();
   if (!doc.trim()) return [];
-  const diags = lintDsl(doc);
-  return diags.map(d => {
-    const lineNum = Math.min(d.line, view.state.doc.lines);
-    const line = view.state.doc.line(lineNum);
-    const col = Math.min(d.col - 1, line.length);
-    const from = line.from + Math.max(0, col);
-    return {
-      from,
-      to: Math.min(from + 1, line.to),
-      severity: d.severity as 'error' | 'warning' | 'info',
-      message: d.message,
-    };
-  });
+  try {
+    buildAstFromText(doc);
+    return [];
+  } catch (e: unknown) {
+    const err = e as Error;
+    const message = err.message || 'Parse error';
+
+    // Try to extract line:col from the error message
+    const lineColMatch = message.match(/at line (\d+):(\d+)/);
+    if (lineColMatch) {
+      const lineNum = Math.min(parseInt(lineColMatch[1]), view.state.doc.lines);
+      const line = view.state.doc.line(lineNum);
+      const col = Math.min(parseInt(lineColMatch[2]) - 1, line.length);
+      const from = line.from + Math.max(0, col);
+      return [{
+        from,
+        to: Math.min(from + 1, line.to),
+        severity: 'error' as const,
+        message: message.replace(/\s+at line \d+(:\d+)?/, '').trim(),
+      }];
+    }
+
+    const lineMatch = message.match(/(?:at )?line (\d+)/);
+    if (lineMatch) {
+      const lineNum = Math.min(parseInt(lineMatch[1]), view.state.doc.lines);
+      const line = view.state.doc.line(lineNum);
+      return [{
+        from: line.from,
+        to: Math.min(line.from + 1, line.to),
+        severity: 'error' as const,
+        message: message.replace(/\s+at line \d+(:\d+)?/, '').trim(),
+      }];
+    }
+
+    // No position info — report at line 1
+    return [{
+      from: 0,
+      to: Math.min(1, view.state.doc.length),
+      severity: 'error' as const,
+      message: message.replace(/\s+at line \d+(:\d+)?/, '').trim(),
+    }];
+  }
 }, { delay: 300 });
 
-// --- Hover Tooltip (decoration-based) ---
+// --- Hover Tooltip (AST-based) ---
 
 function createHoverTooltipSource() {
   return hoverTooltip((view, pos) => {
-    const spans = view.state.field(spanField);
-    const span = getSpanAtPos(spans, pos);
-    if (!span) return null;
+    const ast = view.state.field(astField);
+    if (!ast) return null;
+    const node = nodeAt(ast, pos);
+    if (!node || node.dslRole === 'document' || node.dslRole === 'section') return null;
 
-    const description = getPropertyDescription(span.schemaPath);
-    const schema = getPropertySchema(span.schemaPath);
+    const schemaPath = node.schemaPath;
+    const description = getPropertyDescription(schemaPath);
+    const schema = getPropertySchema(schemaPath);
     if (!description && !schema) return null;
     const type = schema ? detectSchemaType(schema) : 'unknown';
 
@@ -70,7 +101,7 @@ function createHoverTooltipSource() {
 
         const pathEl = document.createElement('div');
         pathEl.style.cssText = 'color: #a78bfa; font-weight: bold; margin-bottom: 2px;';
-        pathEl.textContent = span.schemaPath;
+        pathEl.textContent = schemaPath;
         dom.appendChild(pathEl);
 
         if (description) {
@@ -91,7 +122,7 @@ function createHoverTooltipSource() {
   }, { hoverTime: 400 });
 }
 
-// --- DSL Node Inline/Block Toggle Gutter (span-based) ---
+// --- DSL Node Inline/Block Toggle Gutter (AST-based) ---
 
 class NodeToggleMarker extends GutterMarker {
   constructor(readonly nodeId: string, readonly isBlock: boolean) {
@@ -113,12 +144,12 @@ function createNodeToggleGutter(
   return gutter({
     class: 'cm-dsl-toggle-gutter',
     lineMarker(view, line) {
-      const spans = view.state.field(spanField);
-      // Find spans on this line that represent a top-level node
-      for (const span of spans) {
-        if (span.from >= line.from && span.from < line.to) {
-          // Check if this is a node-level span (modelPath = "objects.<id>" or "objects.<id>.<prop>")
-          const parts = span.modelPath.split('.');
+      const ast = view.state.field(astField);
+      if (!ast) return null;
+      const leaves = flattenLeaves(ast);
+      for (const leaf of leaves) {
+        if (leaf.from >= line.from && leaf.from < line.to) {
+          const parts = leaf.modelPath.split('.');
           if (parts[0] === 'objects' && parts.length >= 2) {
             const nodeId = parts[1];
             const isBlock = getNodeFormat(nodeId) === 'block';
@@ -130,10 +161,12 @@ function createNodeToggleGutter(
     },
     domEventHandlers: {
       click(view, line) {
-        const spans = view.state.field(spanField);
-        for (const span of spans) {
-          if (span.from >= line.from && span.from < line.to) {
-            const parts = span.modelPath.split('.');
+        const ast = view.state.field(astField);
+        if (!ast) return false;
+        const leaves = flattenLeaves(ast);
+        for (const leaf of leaves) {
+          if (leaf.from >= line.from && leaf.from < line.to) {
+            const parts = leaf.modelPath.split('.');
             if (parts[0] === 'objects' && parts.length >= 2) {
               onToggle(parts[1]);
               return true;
@@ -166,7 +199,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
   const [popup, setPopup] = useState<{
     path: string;
     schemaPath: string;
-    section: SchemaSection;
+    section: 'node' | 'style' | 'animate' | 'images';
     position: { x: number; y: number };
     initialFocusKey?: string;
   } | null>(null);
@@ -177,21 +210,21 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     popupOpenRef.current = popup !== null;
   }, [popup]);
 
-  // When modelManager changes (tab switch), push new text + spans into editor and re-subscribe
+  // When modelManager changes (tab switch), push new text + AST into editor and re-subscribe
   useEffect(() => {
     const view = viewRef.current;
     if (view) {
-      // Initial push -- includes spans
+      // Initial push -- includes AST
       const result = modelManager.getDisplayResult();
       externalDispatch.current = true;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: result.text },
-        effects: [setSpans.of(result.spans)],
+        effects: [setAst.of(result.ast)],
       });
       externalDispatch.current = false;
     }
 
-    // Subscribe to text changes (for popup edits / mode toggle)
+    // Subscribe to text changes (for popup edits / mode toggle) — pushes text + AST
     const unsubText = modelManager.onTextChange(() => {
       const v = viewRef.current;
       if (!v) return;
@@ -199,13 +232,29 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
       externalDispatch.current = true;
       v.dispatch({
         changes: { from: 0, to: v.state.doc.length, insert: result.text },
-        effects: [setSpans.of(result.spans)],
+        effects: [setAst.of(result.ast)],
       });
       externalDispatch.current = false;
     });
+
+    // Subscribe to model changes (fires after successful parse from typing) — pushes AST only.
+    // setText() doesn't emit textChange (editor already has the text), so we need this
+    // separate path to keep AST in sync with freshly typed content.
+    const unsubModel = modelManager.onModelChange(() => {
+      const v = viewRef.current;
+      if (!v || externalDispatch.current) return;
+      // Use the AST stored by _processText (from buildAstFromText), not getDisplayResult
+      const ast = modelManager.ast;
+      if (ast) {
+        v.dispatch({
+          effects: [setAst.of(ast)],
+        });
+      }
+    });
+
     // Close any open popup when switching tabs
     setPopup(null);
-    return unsubText;
+    return () => { unsubText(); unsubModel(); };
   }, [modelManager]);
 
   // Handle inline/block toggle for a DSL node
@@ -223,37 +272,70 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     return modelManagerRef.current.formatHints.nodes[nodeId]?.display;
   }, []);
 
-  // Handle click on editor -- span-based logic
+  // Handle click on editor -- AST-based logic
   const handleEditorClick = useCallback((view: EditorView, pos: number) => {
-    const spans = view.state.field(spanField);
-    const span = getSpanAtPos(spans, pos);
-    if (!span) return;
+    const ast = view.state.field(astField);
+    if (!ast) return;
+    const node = nodeAt(ast, pos);
+    if (!node || node.dslRole === 'document' || node.dslRole === 'section') return;
 
-    // Walk up to compound ancestor
-    let schemaPath = span.schemaPath;
-    let modelPath = span.modelPath;
+    // Use findCompound() to walk up to nearest compound ancestor
+    const compound = findCompound(node);
+    if (!compound) return;
+
+    let schemaPath = compound.schemaPath;
+    let modelPath = compound.modelPath;
     const schema = getPropertySchema(schemaPath);
     if (!schema) return;
 
     let type = detectSchemaType(schema);
     let initialFocusKey: string | undefined;
 
-    // If leaf, bubble up to compound parent
-    if (!isBubblableType(type) && type !== 'object') {
-      const lastDot = schemaPath.lastIndexOf('.');
-      if (lastDot > 0) {
-        const parentSchemaPath = schemaPath.slice(0, lastDot);
-        const parentSchema = getPropertySchema(parentSchemaPath);
-        if (parentSchema && isBubblableType(detectSchemaType(parentSchema))) {
-          initialFocusKey = schemaPath.slice(lastDot + 1);
-          schemaPath = parentSchemaPath;
-          modelPath = modelPath.slice(0, modelPath.lastIndexOf('.'));
-          type = detectSchemaType(parentSchema);
+    // If leaf was clicked, record the field name for initial focus
+    if (node !== compound && node.schemaPath !== compound.schemaPath) {
+      const leafSp = node.schemaPath;
+      const compoundSp = compound.schemaPath;
+      if (leafSp.startsWith(compoundSp + '.')) {
+        initialFocusKey = leafSp.slice(compoundSp.length + 1);
+      } else if (compoundSp === '' && leafSp) {
+        initialFocusKey = leafSp;
+      }
+    }
+
+    // If compound is a node-line (objects.<id>), check if the clicked node's
+    // immediate compound is actually a sub-property (like rect, fill, stroke).
+    // In that case, use the sub-property compound instead.
+    if (type === 'object' && compound.modelPath.split('.').length === 2 && node !== compound) {
+      // Try to find a more specific compound between node and the node-line
+      let inner = node;
+      while (inner.parent && inner.parent !== compound) {
+        if (inner.parent.dslRole === 'compound') {
+          const innerSchema = getPropertySchema(inner.parent.schemaPath);
+          if (innerSchema) {
+            const innerType = detectSchemaType(innerSchema);
+            if (isBubblableType(innerType) || innerType === 'object') {
+              schemaPath = inner.parent.schemaPath;
+              modelPath = inner.parent.modelPath;
+              type = innerType;
+              // Recalculate initialFocusKey relative to the inner compound
+              const leafSp = node.schemaPath;
+              if (leafSp.startsWith(schemaPath + '.')) {
+                initialFocusKey = leafSp.slice(schemaPath.length + 1);
+              } else {
+                initialFocusKey = undefined;
+              }
+              break;
+            }
+          }
         }
+        inner = inner.parent!;
       }
     }
 
     if (!['number', 'color', 'enum', 'boolean', 'object', 'pointref', 'anchor', 'string'].includes(type)) return;
+
+    // Derive section from modelPath
+    const section = deriveSectionFromModelPath(modelPath);
 
     const coords = view.coordsAtPos(pos);
     if (!coords) return;
@@ -262,33 +344,40 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
     setPopup({
       path: modelPath,
       schemaPath,
-      section: span.section,
+      section,
       position: { x: coords.left, y: coords.bottom + 4 },
       initialFocusKey,
     });
   }, []);
 
-  // Schema-driven completion source using span context
-  const schemaCompletionAdapter = useCallback((context: CompletionContext): CompletionResult | null => {
+  // AST-driven completion source
+  const astCompletionAdapter = useCallback((context: CompletionContext): CompletionResult | null => {
     const wordBefore = context.matchBefore(/[\w@]+/);
     if (!context.explicit && !wordBefore) return null;
 
-    const spans = context.state.field(spanField);
+    const ast = context.state.field(astField);
     const prefix = wordBefore ? wordBefore.text : '';
 
     // Get current line text up to cursor for context-dependent completions
     const line = context.state.doc.lineAt(context.pos);
     const lineText = context.state.doc.sliceString(line.from, context.pos);
 
-    const items = getSchemaCompletions(
-      spans, context.pos, prefix, lineText, modelManagerRef.current.json,
+    const items = completionsAt(
+      ast, context.pos, lineText, modelManagerRef.current.json,
     );
     if (items.length === 0) return null;
+
+    // Filter by prefix
+    const lower = prefix.toLowerCase();
+    const filtered = prefix
+      ? items.filter(i => i.label.toLowerCase().startsWith(lower))
+      : items;
+    if (filtered.length === 0) return null;
 
     const from = wordBefore ? wordBefore.from : context.pos;
     return {
       from,
-      options: items.map(item => ({
+      options: filtered.map(item => ({
         label: item.label,
         detail: item.detail,
         type: item.type === 'property' ? 'property' : item.type === 'value' ? 'constant' : 'keyword',
@@ -316,19 +405,19 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
         history(),
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         EditorState.tabSize.of(2),
-        // Completion: schema-driven
+        // Completion: AST-driven
         autocompletion({
-          override: [schemaCompletionAdapter],
+          override: [astCompletionAdapter],
           activateOnTyping: true,
         }),
-        // Linter: DSL
+        // Linter: DSL (AST-based)
         dslEditorLinter,
         lintGutter(),
-        // Schema decorations
-        schemaDecorationsExtension(),
-        // Hover tooltip (reads decorations)
+        // AST decorations
+        astExtension(),
+        // Hover tooltip (reads AST)
         createHoverTooltipSource(),
-        // Node toggle gutter (span-based)
+        // Node toggle gutter (AST-based)
         createNodeToggleGutter(getNodeFormat, handleNodeToggle),
         updateListener,
         EditorView.domEventHandlers({
@@ -347,7 +436,7 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
         }),
       ];
     },
-    [handleEditorClick, handleNodeToggle, getNodeFormat, schemaCompletionAdapter],
+    [handleEditorClick, handleNodeToggle, getNodeFormat, astCompletionAdapter],
   );
 
   // Mount editor
@@ -366,9 +455,9 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
       parent: containerRef.current,
     });
 
-    // Push initial spans
+    // Push initial AST
     view.dispatch({
-      effects: [setSpans.of(initialResult.spans)],
+      effects: [setAst.of(initialResult.ast)],
     });
 
     viewRef.current = view;
@@ -413,4 +502,13 @@ export function V2Editor({ modelManager, height }: V2EditorProps) {
       )}
     </div>
   );
+}
+
+// --- Helpers ---
+
+function deriveSectionFromModelPath(modelPath: string): 'node' | 'style' | 'animate' | 'images' {
+  if (modelPath.startsWith('styles')) return 'style';
+  if (modelPath.startsWith('animate')) return 'animate';
+  if (modelPath.startsWith('images')) return 'images';
+  return 'node';
 }

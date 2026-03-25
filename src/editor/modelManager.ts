@@ -11,12 +11,12 @@ import JSON5 from 'json5';
 import type { Node } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { parseScene } from '../parser/parser';
-import { parseDslWithHints } from '../dsl/parser';
+import { buildAstFromText } from '../dsl/astParser';
+import { buildAstFromModel } from '../dsl/astEmitter';
+import type { AstNode } from '../dsl/astTypes';
 import type { FormatHints } from '../dsl/formatHints';
 import { emptyFormatHints } from '../dsl/formatHints';
 import type { ZodError } from 'zod';
-import { SchemaRenderer } from './schemaRenderer';
-import type { RenderResult } from './schemaSpan';
 
 export interface ModelState {
   nodes: Node[];
@@ -38,9 +38,16 @@ const EMPTY_STATE: ModelState = {
   trackPaths: [],
 };
 
+/** Result from getDisplayResult — AST-based. */
+export interface DisplayResult {
+  text: string;
+  ast: AstNode;
+}
+
 export class ModelManager {
   private _json: any = {};
   private _model: ModelState = EMPTY_STATE;
+  private _ast: AstNode | null = null;
   private _formatHints: FormatHints = emptyFormatHints();
   private _viewFormat: 'json5' | 'dsl' = 'json5';
 
@@ -58,6 +65,7 @@ export class ModelManager {
   // ── Getters ──
 
   get json(): any { return this._json; }
+  get ast(): AstNode | null { return this._ast; }
   get formatHints(): FormatHints { return this._formatHints; }
   get realModel(): ModelState { return this._model; }
   get viewFormat(): 'json5' | 'dsl' { return this._viewFormat; }
@@ -165,8 +173,10 @@ export class ModelManager {
 
   // ── Display Text ──
 
-  getDisplayResult(): RenderResult {
-    return new SchemaRenderer().render(this._json, this._formatHints);
+  getDisplayResult(): DisplayResult {
+    const { text, ast } = buildAstFromModel(this._json, this._formatHints);
+    this._ast = ast;
+    return { text, ast };
   }
 
   getDisplayText(): string {
@@ -210,11 +220,13 @@ export class ModelManager {
       if (actualFormat === 'json5') {
         const parsed = JSON5.parse(text);
         this._json = parsed;
-        // json5 path does NOT update formatHints
+        // json5 path does NOT update formatHints or AST
+        this._ast = null;
       } else {
-        // DSL path: parse with hints
-        const { scene, formatHints } = parseDslWithHints(text);
-        this._json = scene;
+        // DSL path: parse with AST
+        const { ast, model, formatHints } = buildAstFromText(text);
+        this._json = model;
+        this._ast = ast;
         this._formatHints = formatHints;
       }
 

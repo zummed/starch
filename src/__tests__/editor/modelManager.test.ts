@@ -193,15 +193,14 @@ describe('ModelManager', () => {
     mm.destroy();
   });
 
-  it('getDisplayResult returns text and spans', () => {
+  it('getDisplayResult returns text and AST', () => {
     const mm = new ModelManager(0);
     mm.setText('box: rect 100x60', 'dsl');
     const result = mm.getDisplayResult();
     expect(result.text).toContain('box: rect 100x60');
-    expect(result.spans.length).toBeGreaterThan(0);
-    const wSpan = result.spans.find(s => s.schemaPath === 'rect.w');
-    expect(wSpan).toBeDefined();
-    expect(result.text.slice(wSpan!.from, wSpan!.to)).toBe('100');
+    expect(result.ast).toBeDefined();
+    expect(result.ast.dslRole).toBe('document');
+    expect(result.ast.children.length).toBeGreaterThan(0);
     mm.destroy();
   });
 
