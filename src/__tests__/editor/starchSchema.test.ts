@@ -1,44 +1,46 @@
 import { describe, it, expect } from 'vitest';
 import { starchSchema } from '../../editor/schema/starchSchema';
 
+const nodes = starchSchema.nodes as Record<string, unknown>;
+
 describe('starchSchema', () => {
   it('defines doc node as top-level', () => {
-    expect(starchSchema.nodes.get('doc')).toBeDefined();
+    expect(nodes['doc']).toBeDefined();
   });
 
   it('defines scene_node with expected attrs', () => {
-    expect(starchSchema.nodes.get('scene_node')).toBeDefined();
+    expect(nodes['scene_node']).toBeDefined();
   });
 
   it('defines property_slot with key and schemaPath attrs', () => {
-    expect(starchSchema.nodes.get('property_slot')).toBeDefined();
+    expect(nodes['property_slot']).toBeDefined();
   });
 
   it('defines geometry_slot', () => {
-    expect(starchSchema.nodes.get('geometry_slot')).toBeDefined();
+    expect(nodes['geometry_slot']).toBeDefined();
   });
 
   it('defines compound_slot', () => {
-    expect(starchSchema.nodes.get('compound_slot')).toBeDefined();
+    expect(nodes['compound_slot']).toBeDefined();
   });
 
   it('defines draft_slot', () => {
-    expect(starchSchema.nodes.get('draft_slot')).toBeDefined();
+    expect(nodes['draft_slot']).toBeDefined();
   });
 
   it('defines style_block, animate_block, images_block', () => {
-    expect(starchSchema.nodes.get('style_block')).toBeDefined();
-    expect(starchSchema.nodes.get('animate_block')).toBeDefined();
-    expect(starchSchema.nodes.get('images_block')).toBeDefined();
+    expect(nodes['style_block']).toBeDefined();
+    expect(nodes['animate_block']).toBeDefined();
+    expect(nodes['images_block']).toBeDefined();
   });
 
   it('defines keyframe_block and keyframe_entry', () => {
-    expect(starchSchema.nodes.get('keyframe_block')).toBeDefined();
-    expect(starchSchema.nodes.get('keyframe_entry')).toBeDefined();
+    expect(nodes['keyframe_block']).toBeDefined();
+    expect(nodes['keyframe_entry']).toBeDefined();
   });
 
   it('defines metadata node', () => {
-    expect(starchSchema.nodes.get('metadata')).toBeDefined();
+    expect(nodes['metadata']).toBeDefined();
   });
 
   it('can create a minimal valid document', () => {

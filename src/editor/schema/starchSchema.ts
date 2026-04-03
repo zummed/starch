@@ -1,8 +1,7 @@
 import { Schema } from 'prosemirror-model';
-import type { NodeType } from 'prosemirror-model';
 import { attrs } from './schemaBuilder';
 
-const _schema = new Schema({
+export const starchSchema = new Schema({
   nodes: {
     doc: {
       content: '(metadata | scene_node | style_block | animate_block | images_block)*',
@@ -96,7 +95,7 @@ const _schema = new Schema({
 
     keyframe_block: {
       attrs: attrs({
-        time: { default: '' },
+        time: { default: 0 },
         schemaPath: { default: '' },
       }),
       content: 'keyframe_entry*',
@@ -140,23 +139,3 @@ const _schema = new Schema({
   },
 });
 
-// Augment schema.nodes with a Map-like .get() method so callers can use
-// either direct property access or .get(name) interchangeably.
-type SchemaNodes = typeof _schema.nodes & { get(name: string): NodeType | undefined };
-((_schema.nodes as unknown as SchemaNodes).get as unknown) ||
-  Object.defineProperty(_schema.nodes, 'get', {
-    value(name: string): NodeType | undefined {
-      return (_schema.nodes as unknown as Record<string, NodeType>)[name];
-    },
-    enumerable: false,
-    configurable: true,
-    writable: true,
-  });
-
-/**
- * The Starch ProseMirror schema.
- *
- * `schema.nodes` supports both direct property access (`schema.nodes.doc`)
- * and Map-like access (`schema.nodes.get('doc')`).
- */
-export const starchSchema = _schema as typeof _schema & { nodes: SchemaNodes };
