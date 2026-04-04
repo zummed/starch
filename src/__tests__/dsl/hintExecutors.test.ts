@@ -71,3 +71,47 @@ describe('executePositional - basic formats', () => {
     expect(wLeaf?.dslRole).toBe('value');
   });
 });
+
+describe('executePositional - arrow and tuples', () => {
+  it('format tuples parses multiple (x,y) points', () => {
+    const c = ctx('(0,0) (10,20) (30,40)');
+    const hint: PositionalHint = { keys: ['points'], format: 'tuples' };
+    const result = executePositional(c, hint, '');
+    expect(result?.points).toEqual([[0, 0], [10, 20], [30, 40]]);
+  });
+
+  it('format tuples handles empty list', () => {
+    const c = ctx('');
+    const hint: PositionalHint = { keys: ['points'], format: 'tuples' };
+    const result = executePositional(c, hint, '');
+    expect(result?.points).toEqual([]);
+  });
+
+  it('format arrow parses id -> id chain', () => {
+    const c = ctx('a -> b -> c');
+    const hint: PositionalHint = { keys: ['route'], format: 'arrow' };
+    const result = executePositional(c, hint, '');
+    expect(result?.route).toEqual(['a', 'b', 'c']);
+  });
+
+  it('format arrow handles (x,y) waypoints', () => {
+    const c = ctx('a -> (10,20) -> b');
+    const hint: PositionalHint = { keys: ['route'], format: 'arrow' };
+    const result = executePositional(c, hint, '');
+    expect(result?.route).toEqual(['a', [10, 20], 'b']);
+  });
+
+  it('format arrow handles (id,dx,dy) waypoints', () => {
+    const c = ctx('a -> (b,10,5) -> c');
+    const hint: PositionalHint = { keys: ['route'], format: 'arrow' };
+    const result = executePositional(c, hint, '');
+    expect(result?.route).toEqual(['a', ['b', 10, 5], 'c']);
+  });
+
+  it('format arrow returns null if first waypoint missing', () => {
+    const c = ctx('-> a');
+    const hint: PositionalHint = { keys: ['route'], format: 'arrow' };
+    const result = executePositional(c, hint, '');
+    expect(result).toBeNull();
+  });
+});

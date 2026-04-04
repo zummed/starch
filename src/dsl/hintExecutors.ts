@@ -91,6 +91,71 @@ export function executePositional(
     return result;
   }
 
+  // tuples: list of (x,y) points
+  if (format === 'tuples') {
+    const [k] = hint.keys;
+    const points: Array<[number, number]> = [];
+    while (ctx.is('parenOpen')) {
+      ctx.next(); // consume (
+      if (!ctx.is('number')) break;
+      const x = parseFloat(ctx.next()!.value);
+      if (ctx.is('comma')) ctx.next();
+      if (!ctx.is('number')) break;
+      const y = parseFloat(ctx.next()!.value);
+      if (ctx.is('parenClose')) ctx.next();
+      points.push([x, y]);
+    }
+    result[k] = points;
+    return result;
+  }
+
+  // arrow: identifier/(x,y)/(id,dx,dy) chain separated by arrows
+  if (format === 'arrow') {
+    const [k] = hint.keys;
+    const route: unknown[] = [];
+
+    const parseWaypoint = (): unknown | null => {
+      if (ctx.is('identifier')) {
+        return ctx.next()!.value;
+      }
+      if (ctx.is('parenOpen')) {
+        ctx.next();
+        // Could be (x,y) or (id,dx,dy)
+        const first = ctx.peek();
+        if (first?.type === 'number') {
+          const x = parseFloat(ctx.next()!.value);
+          if (ctx.is('comma')) ctx.next();
+          const y = parseFloat(ctx.next()!.value);
+          if (ctx.is('parenClose')) ctx.next();
+          return [x, y];
+        }
+        if (first?.type === 'identifier') {
+          const id = ctx.next()!.value;
+          if (ctx.is('comma')) ctx.next();
+          const dx = parseFloat(ctx.next()!.value);
+          if (ctx.is('comma')) ctx.next();
+          const dy = parseFloat(ctx.next()!.value);
+          if (ctx.is('parenClose')) ctx.next();
+          return [id, dx, dy];
+        }
+      }
+      return null;
+    };
+
+    const first = parseWaypoint();
+    if (first == null) return null;
+    route.push(first);
+
+    while (ctx.is('arrow')) {
+      ctx.next();
+      const wp = parseWaypoint();
+      if (wp == null) break;
+      route.push(wp);
+    }
+    result[k] = route;
+    return result;
+  }
+
   // Default: single value (identifier/number/hexColor/string)
   const tok = ctx.peek();
   if (!tok) return null;
