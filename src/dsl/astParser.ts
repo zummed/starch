@@ -1025,7 +1025,14 @@ function parseAnimateContent(s: TokenStream, animate: any, scopePrefix: string):
       const time = parseFloat(s.next().value);
       const kf: any = { changes: {} };
       kf.time = time;
-      // Standalone timestamp line (number alone, changes indented below)
+
+      // Parse optional easing= on the timestamp line
+      if (s.is('identifier', 'easing') && s.peek(1).type === 'equals') {
+        s.next(); s.next();
+        kf.easing = s.expect('identifier').value;
+      }
+
+      // Standalone timestamp line (number alone or number easing=X, changes indented below)
       if (s.is('newline') || s.is('eof')) {
         animate.keyframes.push(kf);
         s.skipNewlines();
