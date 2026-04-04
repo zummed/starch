@@ -713,7 +713,14 @@ export function executeNodeBody(
           const isFillProp = fieldName === 'fill';
 
           if (isFillProp) {
-            ctx.next(); // consume 'fill'
+            const fillTok = ctx.next()!; // consume 'fill'
+            ctx.emitLeaf({
+              schemaPath: `${schemaPath}.fill`,
+              from: fillTok.offset,
+              to: fillTok.offset + fillTok.value.length,
+              value: 'fill',
+              dslRole: 'keyword',
+            });
             const color = executeColor(ctx, `${schemaPath}.fill`);
             if (color != null) result.fill = color;
           } else if (geometry.includes(fieldName)) {

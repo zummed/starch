@@ -9,7 +9,8 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createRoot, type Root } from 'react-dom/client';
 import { createElement, useState, type ReactElement } from 'react';
-import { buildAstFromText } from '../../dsl/astParser';
+import { walkDocument } from '../../dsl/schemaWalker';
+import { leavesToAst } from '../../dsl/astAdapter';
 import { nodeAt, findCompound } from '../../dsl/astTypes';
 import {
   getPropertySchema,
@@ -91,8 +92,8 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
 
   let ast;
   try {
-    const result = buildAstFromText(text);
-    ast = result.ast;
+    const { ast: ctx } = walkDocument(text);
+    ast = leavesToAst(ctx.astLeaves(), text.length);
   } catch {
     return null;
   }

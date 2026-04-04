@@ -5,7 +5,8 @@
  * schema context and determine what popup to show.
  */
 import { describe, it, expect } from 'vitest';
-import { buildAstFromText } from '../../dsl/astParser';
+import { walkDocument } from '../../dsl/schemaWalker';
+import { leavesToAst } from '../../dsl/astAdapter';
 import { nodeAt, findCompound } from '../../dsl/astTypes';
 import {
   getPropertySchema,
@@ -20,8 +21,8 @@ import { NodeSchema } from '../../types/node';
 function detectAt(text: string, textPos: number) {
   let ast;
   try {
-    const result = buildAstFromText(text);
-    ast = result.ast;
+    const { ast: ctx } = walkDocument(text);
+    ast = leavesToAst(ctx.astLeaves(), text.length);
   } catch {
     return null;
   }
