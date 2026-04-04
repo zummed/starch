@@ -316,6 +316,179 @@ export function executeSchema(
 }
 
 /**
+ * Parse a single instance declaration: `id: body` or `id body`.
+ * The idKey is assigned from the identifier. The body is parsed
+ * against the instance schema's hints (geometry, inlineProps, sigil).
+ */
+export function executeInstance(
+  ctx: WalkContext,
+  instanceSchema: z.ZodType,
+  idKey: string,
+  colonMode: 'required' | 'optional',
+  schemaPath: string,
+): Record<string, unknown> | null {
+  if (!ctx.is('identifier')) return null;
+  const idTok = ctx.peek()!;
+  const id = idTok.value;
+
+  // Check for colon
+  const hasColon = ctx.peek(1)?.type === 'colon';
+  if (colonMode === 'required' && !hasColon) return null;
+
+  ctx.next(); // consume identifier
+  if (hasColon) ctx.next(); // consume colon
+
+  ctx.emitLeaf({
+    schemaPath: `${schemaPath}.${idKey}`,
+    from: idTok.offset,
+    to: idTok.offset + id.length,
+    value: id,
+    dslRole: 'value',
+  });
+
+  const result: Record<string, unknown> = { [idKey]: id };
+
+  // Parse the body using the instance schema (NodeSchema-like)
+  const body = executeNodeBody(ctx, instanceSchema, schemaPath);
+  if (body) Object.assign(result, body);
+
+  return result;
+}
+
+/**
+ * Parse the body of a node: geometry keyword + its args, followed by
+ * inline properties. Uses the schema's hints (geometry, inlineProps) to
+ * determine what to look for.
+ */
+export function executeNodeBody(
+  ctx: WalkContext,
+  schema: z.ZodType,
+  schemaPath: string,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const hints = getDsl(schema);
+  if (!hints) return result;
+
+  const geometry = hints.geometry ?? [];
+  const inlineProps = hints.inlineProps ?? [];
+
+  while (!ctx.atEnd() && ctx.is('identifier')) {
+    const tok = ctx.peek()!;
+
+    // Try geometry keywords (rect, ellipse, etc.)
+    if (geometry.includes(tok.value)) {
+      const geomSchema = resolveFieldSchema(schema, tok.value);
+      if (geomSchema) {
+        const geom = executeSchema(ctx, geomSchema, `${schemaPath}.${tok.value}`);
+        if (geom != null) {
+          result[tok.value] = geom;
+          continue;
+        }
+      }
+      // Geometry keyword found but schema couldn't parse — stop inline parsing
+      break;
+    }
+
+    // Try inline props by matching field name or schema keyword
+    // e.g. 'fill' matches field 'fill', 'stroke' matches field 'stroke',
+    // 'at' matches field 'transform' (which has keyword 'at')
+    const inlinePropField = findInlinePropField(schema, inlineProps, tok.value);
+    if (inlinePropField !== null) {
+      const { fieldName } = inlinePropField;
+      // Special handling for 'fill' — color union, no wrapping schema
+      if (fieldName === 'fill') {
+        ctx.next(); // consume 'fill'
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.fill`,
+          from: tok.offset,
+          to: tok.offset + tok.value.length,
+          value: 'fill',
+          dslRole: 'keyword',
+        });
+        const color = executeColor(ctx, `${schemaPath}.fill`);
+        if (color != null) result.fill = color;
+        continue;
+      }
+      const propSchema = resolveFieldSchema(schema, fieldName);
+      if (propSchema) {
+        const parsed = executeSchema(ctx, propSchema, `${schemaPath}.${fieldName}`);
+        if (parsed != null && Object.keys(parsed).length > 0) {
+          result[fieldName] = parsed;
+          continue;
+        }
+      }
+      // Inline prop keyword recognized but couldn't parse — stop
+      break;
+    }
+
+    // Not a recognized token — break (inline parsing stops)
+    break;
+  }
+
+  return result;
+}
+
+/** Unwrap Zod optional/default wrappers to get the inner schema. */
+function unwrap(schema: z.ZodType): z.ZodType {
+  let s: any = schema;
+  while (s?._def?.innerType) {
+    s = s._def.innerType;
+  }
+  return s as z.ZodType;
+}
+
+/**
+ * Walk the schema chain (including Zod v4 `_zod.parent`) to find a version
+ * that has DSL hints registered. `.describe()` in Zod v4 creates a new schema
+ * object while keeping the original in `_zod.parent`, so the DSL WeakMap
+ * entry is on the original.
+ */
+function findDslSchema(schema: z.ZodType): z.ZodType {
+  let s: any = schema;
+  while (s) {
+    if (getDsl(s as z.ZodType)) return s as z.ZodType;
+    s = s?._zod?.parent ?? null;
+  }
+  return schema;
+}
+
+/** Look up a field schema within an object schema, unwrapping wrappers. */
+function resolveFieldSchema(schema: z.ZodType, fieldName: string): z.ZodType | null {
+  const unwrapped = unwrap(schema);
+  const shape = (unwrapped as any).shape;
+  if (!shape?.[fieldName]) return null;
+  // Find the DSL-registered version of the schema (surviving .describe() wrapping)
+  return findDslSchema(unwrap(shape[fieldName]));
+}
+
+/**
+ * Find which inline prop field matches the current token value.
+ * First checks if the token matches a field name directly (e.g. 'fill', 'stroke').
+ * Then checks if any field's DSL keyword matches (e.g. 'at' → 'transform').
+ * Returns { fieldName } or null if no match.
+ */
+function findInlinePropField(
+  schema: z.ZodType,
+  inlineProps: string[],
+  tokenValue: string,
+): { fieldName: string } | null {
+  // Direct field name match
+  if (inlineProps.includes(tokenValue)) {
+    return { fieldName: tokenValue };
+  }
+  // Check if any inline prop field's schema has keyword matching the token
+  for (const fieldName of inlineProps) {
+    const fs = resolveFieldSchema(schema, fieldName);
+    if (!fs) continue;
+    const fHints = getDsl(fs);
+    if (fHints?.keyword === tokenValue) {
+      return { fieldName };
+    }
+  }
+  return null;
+}
+
+/**
  * Parse a color value — named, hex, hsl, or rgb form.
  * Returns the parsed value (string for named/hex, object for hsl/rgb).
  * Returns null if the next token is not a color.

@@ -1,6 +1,6 @@
 import { tokenize } from './tokenizer';
 import { WalkContext } from './walkContext';
-import { executeSchema } from './hintExecutors';
+import { executeSchema, executeInstance } from './hintExecutors';
 import { getDsl } from './dslMeta';
 import { DocumentSchema } from '../types/schemaRegistry';
 import type { z } from 'zod';
@@ -36,6 +36,12 @@ export function walkDocument(text: string): WalkResult {
     // Match against top-level fields by keyword
     const matched = matchTopLevel(ctx, tok.value, topLevelFields, model);
     if (matched) {
+      ctx.skipNewlines();
+      continue;
+    }
+
+    // Try matching an instance declaration against fields with instanceDeclaration hint
+    if (matchInstance(ctx, shape, model)) {
       ctx.skipNewlines();
       continue;
     }
@@ -84,4 +90,36 @@ function matchTopLevel(
     model[field.name] = result;
   }
   return true;
+}
+
+function matchInstance(
+  ctx: WalkContext,
+  shape: Record<string, z.ZodType>,
+  model: Record<string, any>,
+): boolean {
+  // Find any field with instanceDeclaration hint (typically 'objects')
+  for (const [name, field] of Object.entries(shape)) {
+    const inner = (field as any)._def?.innerType ?? field;
+    const hints = getDsl(inner);
+    if (!hints?.instanceDeclaration) continue;
+
+    // The array's element schema is the instance schema
+    const arrayDef = (inner as any)._def;
+    const elementSchema = arrayDef?.element ?? arrayDef?.type;
+    // Unwrap lazy
+    const resolvedSchema = (elementSchema as any)?._def?.getter
+      ? (elementSchema as any)._def.getter()
+      : elementSchema;
+
+    if (!resolvedSchema) continue;
+
+    const { idKey, colon } = hints.instanceDeclaration;
+    const instance = executeInstance(ctx, resolvedSchema, idKey, colon, name);
+    if (instance) {
+      if (!model[name]) model[name] = [];
+      model[name].push(instance);
+      return true;
+    }
+  }
+  return false;
 }

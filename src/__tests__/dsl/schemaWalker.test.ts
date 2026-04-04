@@ -45,3 +45,35 @@ background white`);
     expect(nameLeaf?.dslRole).toBe('value');
   });
 });
+
+describe('walkDocument - instance declarations', () => {
+  it('parses a single node declaration', () => {
+    const { model } = walkDocument('box: rect 100x60');
+    expect(model.objects).toHaveLength(1);
+    expect(model.objects[0].id).toBe('box');
+    expect(model.objects[0].rect).toEqual({ w: 100, h: 60 });
+  });
+
+  it('parses multiple nodes', () => {
+    const { model } = walkDocument(`box: rect 100x60
+circle: ellipse 50x50`);
+    expect(model.objects).toHaveLength(2);
+    expect(model.objects[0].id).toBe('box');
+    expect(model.objects[1].id).toBe('circle');
+  });
+
+  it('parses node with fill color', () => {
+    const { model } = walkDocument('box: rect 100x60 fill red');
+    expect(model.objects[0].fill).toBe('red');
+  });
+
+  it('parses node with stroke', () => {
+    const { model } = walkDocument('box: rect 100x60 stroke red width=2');
+    expect(model.objects[0].stroke).toEqual({ color: 'red', width: 2 });
+  });
+
+  it('parses node with transform (at)', () => {
+    const { model } = walkDocument('box: rect 100x60 at 200,150');
+    expect(model.objects[0].transform).toEqual({ x: 200, y: 150 });
+  });
+});

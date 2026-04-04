@@ -303,10 +303,18 @@ const viewportField = dsl(
   },
 );
 
+const objectsField = dsl(
+  z.array(z.lazy(() => NodeSchema)).describe('Top-level scene objects'),
+  {
+    instanceDeclaration: { idKey: 'id', colon: 'required' },
+    flatReference: true,
+  },
+);
+
 export const DocumentSchema = z.object({
   name: nameField.optional(),
   description: descriptionField.optional(),
-  objects: z.array(z.lazy(() => NodeSchema)).describe('Top-level scene objects').optional(),
+  objects: objectsField.optional(),
   styles: z.record(z.string(), z.unknown()).describe('Named style definitions').optional(),
   animate: AnimConfigSchema.describe('Animation configuration').optional(),
   background: backgroundField.optional(),
