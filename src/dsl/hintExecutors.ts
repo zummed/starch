@@ -1,5 +1,7 @@
 import type { WalkContext } from './walkContext';
 import type { PositionalHint } from './dslMeta';
+import { getDsl } from './dslMeta';
+import type { z } from 'zod';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -255,5 +257,59 @@ export function executeFlags(
       dslRole: 'flag',
     });
   }
+  return result;
+}
+
+/**
+ * Parse a construct driven by a schema's DslHints.
+ * Consumes: keyword → positional args → kwargs/flags (interleaved).
+ * Returns null if the keyword doesn't match, otherwise the parsed object.
+ */
+export function executeSchema(
+  ctx: WalkContext,
+  schema: z.ZodType,
+  schemaPath: string,
+): Record<string, unknown> | null {
+  const hints = getDsl(schema);
+  if (!hints) return null;
+
+  // Match keyword if declared
+  if (hints.keyword) {
+    if (!ctx.is('identifier', hints.keyword)) return null;
+    const kwTok = ctx.next()!;
+    ctx.emitLeaf({
+      schemaPath,
+      from: kwTok.offset,
+      to: kwTok.offset + kwTok.value.length,
+      value: kwTok.value,
+      dslRole: 'keyword',
+    });
+  }
+
+  const result: Record<string, unknown> = {};
+
+  // Positional args
+  if (hints.positional) {
+    for (const posHint of hints.positional) {
+      const posResult = executePositional(ctx, posHint, schemaPath);
+      if (posResult) Object.assign(result, posResult);
+    }
+  }
+
+  // Kwargs and flags interleaved
+  while (!ctx.atEnd() && ctx.is('identifier')) {
+    const tok = ctx.peek()!;
+    const isKwarg = ctx.peek(1)?.type === 'equals';
+    if (isKwarg && hints.kwargs?.includes(tok.value)) {
+      const kw = executeKwargs(ctx, hints.kwargs, schemaPath);
+      Object.assign(result, kw);
+    } else if (!isKwarg && hints.flags?.includes(tok.value)) {
+      const fl = executeFlags(ctx, hints.flags, schemaPath);
+      Object.assign(result, fl);
+    } else {
+      break;
+    }
+  }
+
   return result;
 }

@@ -209,3 +209,54 @@ describe('executeFlags', () => {
     expect(result).toEqual({});
   });
 });
+
+import { executeSchema } from '../../dsl/hintExecutors';
+import { RectGeomSchema, EllipseGeomSchema } from '../../types/node';
+import { StrokeSchema, TransformSchema } from '../../types/properties';
+
+describe('executeSchema - schema dispatch', () => {
+  it('parses rect geometry', () => {
+    const c = ctx('rect 100x200');
+    const result = executeSchema(c, RectGeomSchema, 'rect');
+    expect(result).toEqual({ w: 100, h: 200 });
+  });
+
+  it('parses rect with radius kwarg', () => {
+    const c = ctx('rect 100x200 radius=8');
+    const result = executeSchema(c, RectGeomSchema, 'rect');
+    expect(result).toEqual({ w: 100, h: 200, radius: 8 });
+  });
+
+  it('parses transform with positional + kwargs', () => {
+    const c = ctx('at 200,150 rotation=45');
+    const result = executeSchema(c, TransformSchema, 'transform');
+    expect(result).toEqual({ x: 200, y: 150, rotation: 45 });
+  });
+
+  it('parses stroke with color + width kwarg', () => {
+    const c = ctx('stroke red width=2');
+    const result = executeSchema(c, StrokeSchema, 'stroke');
+    expect(result).toEqual({ color: 'red', width: 2 });
+  });
+
+  it('parses ellipse with dimension transform (double)', () => {
+    const c = ctx('ellipse 100x60');
+    const result = executeSchema(c, EllipseGeomSchema, 'ellipse');
+    expect(result).toEqual({ rx: 50, ry: 30 });
+  });
+
+  it('returns null when keyword does not match', () => {
+    const c = ctx('notrect 100x200');
+    const result = executeSchema(c, RectGeomSchema, 'rect');
+    expect(result).toBeNull();
+  });
+
+  it('emits keyword AST leaf', () => {
+    const c = ctx('rect 100x200');
+    executeSchema(c, RectGeomSchema, 'rect');
+    const leaves = c.astLeaves();
+    const keywordLeaf = leaves.find(l => l.dslRole === 'keyword');
+    expect(keywordLeaf?.value).toBe('rect');
+    expect(keywordLeaf?.schemaPath).toBe('rect');
+  });
+});
