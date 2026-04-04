@@ -1,69 +1,42 @@
+/* Editor container */
 .starch-editor {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
   line-height: 1.6;
   background: #1a1a2e;
   color: #e0e0e0;
-  padding: 8px;
-  min-height: 200px;
   cursor: text;
 }
-.starch-editor .ProseMirror { outline: none; white-space: pre; }
-.scene-node { margin: 2px 0; border-left: 2px solid transparent; padding-left: 4px; }
-.scene-node:hover { border-left-color: #444; }
-.scene-node.selected { border-left-color: #6c5ce7; background: rgba(108,92,231,0.05); }
-.scene-node-header { display: flex; align-items: baseline; gap: 6px; }
-.scene-node-id { color: #a29bfe; font-weight: bold; }
-.scene-node-id::after { content: ':'; color: #555; }
-.scene-node.inline .scene-node-header { flex-wrap: wrap; }
-.scene-node-inline-summary { color: #b2bec3; margin-left: 2px; }
-.geometry-slot .keyword { color: #6c5ce7; font-weight: bold; }
-.geometry-slot .value { color: #fd79a8; }
-.property-slot { padding-left: 16px; display: flex; align-items: center; gap: 6px; }
-.property-slot .key { color: #74b9ff; }
-.property-slot .value { color: #e0e0e0; }
-.compound-slot { padding-left: 16px; }
-.compound-slot > .compound-header { color: #74b9ff; font-weight: bold; cursor: pointer; }
-.color-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid #555; vertical-align: middle; cursor: pointer; }
-.value.number:hover { text-decoration: underline; cursor: ew-resize; }
-.section-header { color: #636e72; font-weight: bold; margin-top: 8px; cursor: pointer; user-select: none; }
-.section-header::before { content: '▼ '; font-size: 10px; }
-.section-header.collapsed::before { content: '▶ '; }
-.section-block { margin: 4px 0; }
-.style-ref { color: #00cec9; font-style: italic; }
-.style-ref::before { content: '@'; }
-.metadata-line { color: #636e72; }
-.metadata-line .key { color: #00b894; }
-.keyframe-block { margin: 2px 0; }
-.keyframe-header { color: #fdcb6e; font-weight: bold; }
-.keyframe-entry { padding-left: 16px; display: flex; gap: 4px; }
-.keyframe-entry .target { color: #a29bfe; }
-.keyframe-entry .property { color: #74b9ff; }
-.draft-slot { color: #b2bec3; font-style: italic; }
-.draft-hint { color: #636e72; font-size: 11px; margin-left: 8px; }
-.fold-marker { color: #636e72; cursor: pointer; user-select: none; width: 16px; display: inline-block; }
 
-/* Completion menu */
-.starch-completion-menu {
-  position: fixed;
-  z-index: 1000;
-  background: #1e2028;
-  border: 1px solid #2a2d35;
-  border-radius: 6px;
-  padding: 4px 0;
-  min-width: 160px;
-  max-height: 200px;
-  overflow-y: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+.starch-editor .ProseMirror {
+  outline: none;
+  padding: 8px;
+  min-height: 100%;
 }
-.starch-completion-item {
-  padding: 4px 10px;
-  cursor: pointer;
-  color: #c9cdd4;
-  white-space: nowrap;
+
+.starch-editor .ProseMirror pre.dsl-code {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
-.starch-completion-item:hover { background: #2a2d35; }
-.starch-completion-item.selected { background: #6c5ce7; color: white; }
-.starch-completion-detail { color: #636e72; font-size: 11px; margin-left: 8px; }
+
+.starch-editor .ProseMirror pre.dsl-code code {
+  font: inherit;
+}
+
+/* Syntax highlighting */
+.dsl-keyword { color: #74b9ff; }
+.dsl-geometry { color: #6c5ce7; font-weight: bold; }
+.dsl-node-id { color: #a29bfe; font-weight: bold; }
+.dsl-number { color: #fd79a8; }
+.dsl-dimension { color: #fd79a8; font-weight: bold; }
+.dsl-string { color: #ffeaa7; }
+.dsl-color { color: #e17055; }
+.dsl-style-ref { color: #00cec9; font-style: italic; }
+.dsl-arrow { color: #636e72; }
+.dsl-colon { color: #636e72; }
+.dsl-operator { color: #636e72; }
+.dsl-identifier { color: #dfe6e9; }
+.dsl-comment { color: #636e72; font-style: italic; }

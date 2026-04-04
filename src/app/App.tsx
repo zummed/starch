@@ -6,8 +6,6 @@ import { Timeline } from './components/Timeline';
 import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
-import { buildAstFromModel } from '../dsl/astEmitter';
-import { emptyFormatHints } from '../dsl/formatHints';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
@@ -128,13 +126,10 @@ export default function App() {
     setActiveDsl(activeTab.dsl);
   }, [activeTab.id]); // intentionally keyed on id, not dsl
 
-  const handleModelChange = useCallback((model: any) => {
-    try {
-      const { text } = buildAstFromModel(model, emptyFormatHints());
-      setActiveDsl(text);
-    } catch {
-      // Model might be incomplete during editing — that's ok
-    }
+  const handleModelChange = useCallback((_model: any) => {
+    // The editor IS the DSL text — grab it directly
+    const text = editorRef.current?.getDsl() ?? '';
+    if (text) setActiveDsl(text);
   }, []);
 
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
