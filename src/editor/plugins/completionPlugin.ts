@@ -4,7 +4,7 @@
  * Triggers on Ctrl+Space. Uses the AST + completionsAt() to provide
  * schema-aware suggestions. Renders a floating dropdown.
  */
-import { Plugin, PluginKey, type EditorState } from 'prosemirror-state';
+import { Plugin, PluginKey, TextSelection, type EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { buildAstFromText } from '../../dsl/astParser';
 import { completionsAt, type CompletionItem } from '../../dsl/astCompletions';
@@ -46,9 +46,6 @@ function getCompletions(state: EditorState): CompletionState {
     model = result.model;
   } catch { /* partial parse is ok */ }
 
-  const items = completionsAt(ast, textPos, lineText, model);
-  if (items.length === 0) return EMPTY;
-
   // Find the word being typed (for replacement range).
   // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
   // This prevents eating dimensions (100x60), numbers (0.5), etc.
@@ -56,6 +53,17 @@ function getCompletions(state: EditorState): CompletionState {
   while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
     wordStart--;
   }
+
+  const typedWord = text.slice(wordStart, textPos).toLowerCase();
+
+  let items = completionsAt(ast, textPos, lineText, model);
+
+  // Filter by typed prefix
+  if (typedWord) {
+    items = items.filter(item => item.label.toLowerCase().startsWith(typedWord));
+  }
+
+  if (items.length === 0) return EMPTY;
 
   return {
     active: true,
@@ -136,18 +144,32 @@ class CompletionMenuView {
   }
 }
 
-function applyCompletion(view: EditorView, state: CompletionState, item: CompletionItem) {
-  const text = item.snippetTemplate
-    // Strip snippet placeholders: ${1:W} → W
-    ? item.snippetTemplate.replace(/\$\{\d+:([^}]+)\}/g, '$1')
-    : item.label;
+function applyCompletion(view: EditorView, cState: CompletionState, item: CompletionItem) {
+  let insertText: string;
+  let cursorOffset: number | null = null; // offset from start of inserted text to place cursor
 
-  const tr = view.state.tr.replaceWith(
-    state.from,
-    state.to,
-    view.state.schema.text(text),
-  );
+  if (item.snippetTemplate) {
+    // Find first placeholder position for cursor placement
+    const raw = item.snippetTemplate;
+    const firstPlaceholder = raw.indexOf('${1:');
+    if (firstPlaceholder >= 0) {
+      cursorOffset = firstPlaceholder;
+    }
+    // Strip snippet placeholders: ${1:W} → W
+    insertText = raw.replace(/\$\{\d+:([^}]+)\}/g, '$1');
+  } else {
+    insertText = item.label;
+  }
+
+  const tr = view.state.tr.insertText(insertText, cState.from, cState.to);
   tr.setMeta(completionKey, EMPTY);
+
+  // Position cursor at first placeholder if snippet, otherwise at end
+  if (cursorOffset !== null) {
+    const cursorPos = cState.from + cursorOffset;
+    tr.setSelection(TextSelection.create(tr.doc, cursorPos));
+  }
+
   view.dispatch(tr);
   view.focus();
 }
