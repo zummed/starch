@@ -1,0 +1,42 @@
+.starch-editor {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 8px;
+  min-height: 200px;
+  cursor: text;
+}
+.starch-editor .ProseMirror { outline: none; white-space: pre; }
+.scene-node { margin: 2px 0; border-left: 2px solid transparent; padding-left: 4px; }
+.scene-node:hover { border-left-color: #444; }
+.scene-node.selected { border-left-color: #6c5ce7; background: rgba(108,92,231,0.05); }
+.scene-node-header { display: flex; align-items: baseline; gap: 6px; }
+.scene-node-id { color: #a29bfe; font-weight: bold; }
+.scene-node-id::after { content: ':'; color: #555; }
+.geometry-slot .keyword { color: #6c5ce7; font-weight: bold; }
+.geometry-slot .value { color: #fd79a8; }
+.property-slot { padding-left: 16px; display: flex; align-items: center; gap: 6px; }
+.property-slot .key { color: #74b9ff; }
+.property-slot .value { color: #e0e0e0; }
+.compound-slot { padding-left: 16px; }
+.compound-slot > .compound-header { color: #74b9ff; font-weight: bold; cursor: pointer; }
+.color-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid #555; vertical-align: middle; cursor: pointer; }
+.value.number:hover { text-decoration: underline; cursor: ew-resize; }
+.section-header { color: #636e72; font-weight: bold; margin-top: 8px; cursor: pointer; user-select: none; }
+.section-header::before { content: '▼ '; font-size: 10px; }
+.section-header.collapsed::before { content: '▶ '; }
+.section-block { margin: 4px 0; }
+.style-ref { color: #00cec9; font-style: italic; }
+.style-ref::before { content: '@'; }
+.metadata-line { color: #636e72; }
+.metadata-line .key { color: #00b894; }
+.keyframe-block { margin: 2px 0; }
+.keyframe-header { color: #fdcb6e; font-weight: bold; }
+.keyframe-entry { padding-left: 16px; display: flex; gap: 4px; }
+.keyframe-entry .target { color: #a29bfe; }
+.keyframe-entry .property { color: #74b9ff; }
+.draft-slot { color: #b2bec3; font-style: italic; }
+.draft-hint { color: #636e72; font-size: 11px; margin-left: 8px; }
+.fold-marker { color: #636e72; cursor: pointer; user-select: none; width: 16px; display: inline-block; }
