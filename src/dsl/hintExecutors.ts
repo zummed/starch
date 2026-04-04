@@ -177,3 +177,83 @@ export function executePositional(
   });
   return result;
 }
+
+/**
+ * Consume key=value pairs where key is in the allowed list.
+ * Stops when next token is not an allowed kwarg key.
+ * Emits kwarg-key and kwarg-value AST leaves.
+ */
+export function executeKwargs(
+  ctx: WalkContext,
+  allowed: string[],
+  schemaPath: string,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const allowedSet = new Set(allowed);
+
+  while (!ctx.atEnd() && ctx.is('identifier')) {
+    const keyTok = ctx.peek()!;
+    if (!allowedSet.has(keyTok.value)) break;
+    if (ctx.peek(1)?.type !== 'equals') break;
+    ctx.next(); // consume key
+    ctx.next(); // consume =
+
+    const valTok = ctx.peek();
+    if (!valTok) break;
+    let value: unknown;
+    if (valTok.type === 'number') value = parseFloat(valTok.value);
+    else if (valTok.type === 'string') value = valTok.value;
+    else if (valTok.type === 'identifier') value = valTok.value;
+    else if (valTok.type === 'hexColor') value = valTok.value;
+    else break;
+    ctx.next();
+
+    result[keyTok.value] = value;
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${keyTok.value}`,
+      from: keyTok.offset,
+      to: keyTok.offset + keyTok.value.length,
+      value: keyTok.value,
+      dslRole: 'kwarg-key',
+    });
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${keyTok.value}`,
+      from: valTok.offset,
+      to: valTok.offset + valTok.value.length,
+      value,
+      dslRole: 'kwarg-value',
+    });
+  }
+  return result;
+}
+
+/**
+ * Consume bare flag identifiers from the allowed list.
+ * Stops when next token is not an allowed flag, or when a kwarg (key=) is encountered.
+ * Emits flag AST leaves.
+ */
+export function executeFlags(
+  ctx: WalkContext,
+  allowed: string[],
+  schemaPath: string,
+): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  const allowedSet = new Set(allowed);
+
+  while (!ctx.atEnd() && ctx.is('identifier')) {
+    const tok = ctx.peek()!;
+    if (!allowedSet.has(tok.value)) break;
+    // Must not be a kwarg (not followed by =)
+    if (ctx.peek(1)?.type === 'equals') break;
+    ctx.next();
+    result[tok.value] = true;
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${tok.value}`,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
+      value: true,
+      dslRole: 'flag',
+    });
+  }
+  return result;
+}

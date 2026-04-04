@@ -115,3 +115,97 @@ describe('executePositional - arrow and tuples', () => {
     expect(result).toBeNull();
   });
 });
+
+import { executeKwargs, executeFlags } from '../../dsl/hintExecutors';
+
+describe('executeKwargs', () => {
+  it('consumes key=value pairs', () => {
+    const c = ctx('width=2 radius=8');
+    const allowed = ['width', 'radius', 'color'];
+    const result = executeKwargs(c, allowed, '');
+    expect(result).toEqual({ width: 2, radius: 8 });
+  });
+
+  it('stops at unknown keys', () => {
+    const c = ctx('width=2 unknown=5');
+    const allowed = ['width'];
+    const result = executeKwargs(c, allowed, '');
+    expect(result).toEqual({ width: 2 });
+  });
+
+  it('handles identifier values (enums)', () => {
+    const c = ctx('align=middle fit=cover');
+    const allowed = ['align', 'fit'];
+    const result = executeKwargs(c, allowed, '');
+    expect(result).toEqual({ align: 'middle', fit: 'cover' });
+  });
+
+  it('handles string values', () => {
+    const c = ctx('src="url.png"');
+    const allowed = ['src'];
+    const result = executeKwargs(c, allowed, '');
+    expect(result).toEqual({ src: 'url.png' });
+  });
+
+  it('handles hex color values', () => {
+    const c = ctx('color=#ff0000');
+    const allowed = ['color'];
+    const result = executeKwargs(c, allowed, '');
+    expect(result).toEqual({ color: '#ff0000' });
+  });
+
+  it('emits kwarg-key and kwarg-value AST leaves', () => {
+    const c = ctx('width=2');
+    executeKwargs(c, ['width'], 'stroke');
+    const leaves = c.astLeaves();
+    expect(leaves).toHaveLength(2);
+    expect(leaves[0].dslRole).toBe('kwarg-key');
+    expect(leaves[1].dslRole).toBe('kwarg-value');
+    expect(leaves[0].schemaPath).toBe('stroke.width');
+  });
+
+  it('returns empty object when no kwargs present', () => {
+    const c = ctx('not-a-kwarg');
+    const result = executeKwargs(c, ['width'], '');
+    expect(result).toEqual({});
+  });
+});
+
+describe('executeFlags', () => {
+  it('consumes declared flags', () => {
+    const c = ctx('bold mono');
+    const allowed = ['bold', 'mono', 'visible'];
+    const result = executeFlags(c, allowed, '');
+    expect(result).toEqual({ bold: true, mono: true });
+  });
+
+  it('stops at non-flag identifiers', () => {
+    const c = ctx('bold someOtherIdentifier');
+    const allowed = ['bold'];
+    const result = executeFlags(c, allowed, '');
+    expect(result).toEqual({ bold: true });
+  });
+
+  it('does not consume kwarg (key=val)', () => {
+    const c = ctx('bold width=2');
+    const allowed = ['bold', 'width'];
+    const result = executeFlags(c, allowed, '');
+    expect(result).toEqual({ bold: true });
+  });
+
+  it('emits flag AST leaves', () => {
+    const c = ctx('bold');
+    executeFlags(c, ['bold'], 'text');
+    const leaves = c.astLeaves();
+    expect(leaves).toHaveLength(1);
+    expect(leaves[0].dslRole).toBe('flag');
+    expect(leaves[0].value).toBe(true);
+    expect(leaves[0].schemaPath).toBe('text.bold');
+  });
+
+  it('returns empty object when no flags match', () => {
+    const c = ctx('something-else');
+    const result = executeFlags(c, ['bold'], '');
+    expect(result).toEqual({});
+  });
+});
