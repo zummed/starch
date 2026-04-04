@@ -9,6 +9,7 @@ import {
   ImageGeomSchema, CameraSchema, NodeSchema,
 } from './node';
 import { AnimConfigSchema, KeyframeBlockSchema, ChapterSchema, EasingNameSchema } from './animation';
+import { dsl } from '../dsl/dslMeta';
 
 export interface PropertyDescriptor {
   name: string;
@@ -272,17 +273,44 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
 /**
  * Top-level document schema for completion at the root level.
  */
+const nameField = dsl(z.string().describe('Document name (shown as tab label)'), {
+  topLevel: true,
+  keyword: 'name',
+  positional: [{ keys: ['_value'], format: 'quoted' }],
+});
+
+const descriptionField = dsl(z.string().describe('Document description (metadata)'), {
+  topLevel: true,
+  keyword: 'description',
+  positional: [{ keys: ['_value'], format: 'quoted' }],
+});
+
+const backgroundField = dsl(z.string().describe('Background color (CSS color string)'), {
+  topLevel: true,
+  keyword: 'background',
+  positional: [{ keys: ['_value'] }],
+});
+
+const viewportField = dsl(
+  z.union([
+    z.string(),
+    z.object({ width: z.number(), height: z.number() }),
+  ]).describe('Viewport dimensions'),
+  {
+    topLevel: true,
+    keyword: 'viewport',
+    positional: [{ keys: ['width', 'height'], format: 'dimension' }],
+  },
+);
+
 export const DocumentSchema = z.object({
-  name: z.string().describe('Document name (shown as tab label)').optional(),
-  description: z.string().describe('Document description (metadata)').optional(),
+  name: nameField.optional(),
+  description: descriptionField.optional(),
   objects: z.array(z.lazy(() => NodeSchema)).describe('Top-level scene objects').optional(),
   styles: z.record(z.string(), z.unknown()).describe('Named style definitions').optional(),
   animate: AnimConfigSchema.describe('Animation configuration').optional(),
-  background: z.string().describe('Background color (CSS color string)').optional(),
-  viewport: z.union([
-    z.string(),
-    z.object({ width: z.number(), height: z.number() }),
-  ]).describe('Viewport dimensions').optional(),
+  background: backgroundField.optional(),
+  viewport: viewportField.optional(),
   images: z.record(z.string(), z.string()).describe('Named image sources (id → URL)').optional(),
 });
 
