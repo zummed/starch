@@ -3,10 +3,11 @@ import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabLayout } from './components/TabLayout';
 import { Timeline } from './components/Timeline';
-import { V2Editor } from './components/V2Editor';
+import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
-import { ModelManager } from '../editor/modelManager';
+import { buildAstFromModel } from '../dsl/astEmitter';
+import { emptyFormatHints } from '../dsl/formatHints';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
@@ -18,23 +19,14 @@ type LayoutMode = 'panel' | 'tab';
 interface EditorTab {
   id: string;
   label: string;
-  modelManager: ModelManager;
+  dsl: string;
   closable: boolean;
-  viewFormat: 'json5' | 'dsl';
 }
 
 interface StoredTabs {
-  tabs: { id: string; label: string; dsl: string; viewFormat?: 'json5' | 'dsl' }[];
+  tabs: { id: string; label: string; dsl: string }[];
   activeTabId: string;
   nextTabId: number;
-}
-
-/** Create a ModelManager pre-loaded with text. */
-function createModelManager(text: string, format: 'json5' | 'dsl'): ModelManager {
-  const mm = new ModelManager(100);
-  mm.setTextImmediate(text, format);
-  mm.setViewFormat(format);  // sync view format (no listeners yet, so emitText is a no-op)
-  return mm;
 }
 
 function loadStoredTabs(): StoredTabs | null {
@@ -53,8 +45,7 @@ function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: numbe
     const userTabs = tabs.filter(t => t.id !== 'sample').map(t => ({
       id: t.id,
       label: t.label,
-      dsl: t.modelManager.getDisplayText(),
-      viewFormat: t.viewFormat,
+      dsl: t.dsl,
     }));
     const data: StoredTabs = { tabs: userTabs, activeTabId, nextTabId };
     localStorage.setItem(TABS_KEY, JSON.stringify(data));
@@ -91,18 +82,16 @@ export default function App() {
     const sampleTab: EditorTab = {
       id: 'sample',
       label: 'Sample',
-      modelManager: createModelManager(DEFAULT_DSL, 'dsl'),
+      dsl: DEFAULT_DSL,
       closable: false,
-      viewFormat: 'dsl',
     };
     const stored = storedTabs.current;
     if (!stored || stored.tabs.length === 0) return [sampleTab];
     const restored = stored.tabs.map(t => ({
       id: t.id,
       label: t.label,
-      modelManager: createModelManager(t.dsl, t.viewFormat || 'dsl'),
+      dsl: t.dsl,
       closable: true,
-      viewFormat: (t.viewFormat || 'dsl') as 'json5' | 'dsl',
     }));
     return [sampleTab, ...restored];
   });
@@ -129,20 +118,24 @@ export default function App() {
   const [canvasSize, setCanvasSize] = useState<{ w: number; h: number } | null>(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-  const activeModelManager = activeTab.modelManager;
+  const editorRef = useRef<StructuralEditorHandle>(null);
 
-  // Track DSL text for diagram rendering — updated via ModelManager subscription
-  const [activeDsl, setActiveDsl] = useState(() => activeModelManager.getDisplayText());
+  // Track DSL text for diagram rendering — updated via StructuralEditor onModelChange
+  const [activeDsl, setActiveDsl] = useState(activeTab.dsl);
 
+  // When active tab changes, sync DSL
   useEffect(() => {
-    // Set initial text for new active tab
-    setActiveDsl(activeModelManager.getDisplayText());
-    // Subscribe to model changes
-    const unsub = activeModelManager.onModelChange(() => {
-      setActiveDsl(activeModelManager.getDisplayText());
-    });
-    return unsub;
-  }, [activeModelManager]);
+    setActiveDsl(activeTab.dsl);
+  }, [activeTab.id]); // intentionally keyed on id, not dsl
+
+  const handleModelChange = useCallback((model: any) => {
+    try {
+      const { text } = buildAstFromModel(model, emptyFormatHints());
+      setActiveDsl(text);
+    } catch {
+      // Model might be incomplete during editing — that's ok
+    }
+  }, []);
 
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
   useEffect(() => {
@@ -210,15 +203,10 @@ export default function App() {
   }, [diagram.name, activeTab.closable, activeTab.label, activeTabId]);
 
   const handleSampleClick = useCallback((sample: V2Sample) => {
-    setTabs(prev => {
-      const existing = prev.find(t => t.id === 'sample');
-      if (existing) {
-        existing.modelManager.loadText(sample.dsl, 'dsl');
-        return [...prev]; // trigger re-render
-      }
-      const mm = createModelManager(sample.dsl, 'dsl');
-      return [{ id: 'sample', label: 'Sample', modelManager: mm, closable: false, viewFormat: 'dsl' as const }, ...prev];
-    });
+    // Update the tab's stored DSL
+    setTabs(prev => prev.map(t => t.id === 'sample' ? { ...t, dsl: sample.dsl } : t));
+    // Load into editor
+    editorRef.current?.loadDsl(sample.dsl);
     setActiveTabId('sample');
     setActiveSampleId(sample.name);
     requestAnimationFrame(() => diagram.seek(diagram.duration));
@@ -227,21 +215,17 @@ export default function App() {
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabIdRef.current++);
     const defaultDsl = '{\n  objects: [],\n  animate: {\n    duration: 3,\n    loop: true,\n    keyframes: [],\n  },\n}';
-    const mm = createModelManager(defaultDsl, 'dsl');
     setTabs(prev => [...prev, {
       id,
       label: 'Untitled',
-      modelManager: mm,
+      dsl: defaultDsl,
       closable: true,
-      viewFormat: 'dsl' as const,
     }]);
     setActiveTabId(id);
   }, []);
 
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {
-      const tab = prev.find(t => t.id === id);
-      if (tab) tab.modelManager.destroy();
       const remaining = prev.filter(t => t.id !== id);
       if (activeTabId === id) setActiveTabId(remaining[remaining.length - 1]?.id || 'sample');
       return remaining;
@@ -253,7 +237,7 @@ export default function App() {
     if (!tab) return;
     const raw = diagram.name;
     const name = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/[^\w\s-]/g, '_') : 'untitled';
-    const text = tab.modelManager.getDisplayText();
+    const text = editorRef.current?.getDsl() ?? tab.dsl;
     const blob = new Blob([text], { type: 'application/json5' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -273,13 +257,14 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
-          activeModelManager.loadText(reader.result, activeTab.viewFormat);
+          editorRef.current?.loadDsl(reader.result);
+          setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl: reader.result as string } : t));
         }
       };
       reader.readAsText(file);
     };
     input.click();
-  }, [activeModelManager, activeTab.viewFormat]);
+  }, [activeTabId]);
 
   const toggleLayoutMode = useCallback(() => {
     const next: LayoutMode = layoutMode === 'panel' ? 'tab' : 'panel';
@@ -409,22 +394,6 @@ export default function App() {
         display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
         borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
       }}>
-        <button
-          onClick={() => {
-            const newFormat = activeTab.viewFormat === 'json5' ? 'dsl' : 'json5';
-            setTabs(prev => prev.map(t =>
-              t.id === activeTabId ? { ...t, viewFormat: newFormat } : t
-            ));
-          }}
-          title="Toggle between JSON5 and DSL view"
-          style={{
-            padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
-            border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
-            cursor: 'pointer', whiteSpace: 'nowrap',
-          }}
-        >
-          Mode
-        </button>
         {activeTab.closable && (
           <>
             <button
@@ -451,7 +420,7 @@ export default function App() {
         )}
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 9, color: '#4a4f59', marginRight: activeTab.closable ? 6 : 0 }}>
-          {activeTab.viewFormat === 'json5' ? 'JSON5' : 'DSL'}
+          DSL
         </span>
         {activeTab.closable && (
           <button
@@ -467,8 +436,11 @@ export default function App() {
         )}
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <V2Editor
-          modelManager={activeModelManager}
+        <StructuralEditor
+          ref={editorRef}
+          initialDsl={activeTab.dsl}
+          onModelChange={handleModelChange}
+          height="100%"
         />
       </div>
     </div>
