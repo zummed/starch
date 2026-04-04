@@ -1,6 +1,6 @@
 import { tokenize } from './tokenizer';
 import { WalkContext } from './walkContext';
-import { executeSchema, executeInstance, executeColor } from './hintExecutors';
+import { executeSchema, executeInstance, executeColor, parseKeyframesBlock } from './hintExecutors';
 import { getDsl } from './dslMeta';
 import { DocumentSchema } from '../types/schemaRegistry';
 import type { z } from 'zod';
@@ -98,6 +98,17 @@ function matchTopLevel(
   return true;
 }
 
+/** Walk Zod schema chain (including _zod.parent) to find DslHints. */
+function findHints(schema: z.ZodType): { hints: ReturnType<typeof getDsl>; schema: z.ZodType } | null {
+  let s: any = schema;
+  while (s) {
+    const h = getDsl(s as z.ZodType);
+    if (h) return { hints: h, schema: s as z.ZodType };
+    s = s?._zod?.parent ?? null;
+  }
+  return null;
+}
+
 function matchSection(
   ctx: WalkContext,
   keyword: string,
@@ -106,8 +117,9 @@ function matchSection(
 ): boolean {
   for (const [name, field] of Object.entries(shape)) {
     const inner = (field as any)._def?.innerType ?? field;
-    const hints = getDsl(inner);
-    if (!hints) continue;
+    const found = findHints(inner);
+    if (!found) continue;
+    const { hints, schema: hintSchema } = found;
 
     // sectionKeyword field (styles, images)
     if (hints.sectionKeyword === keyword) {
@@ -132,7 +144,19 @@ function matchSection(
       return true;
     }
 
-    // animate uses keyword on the schema itself — see Task 14
+    // animate uses keyword on the schema itself (not sectionKeyword hint)
+    if (hints.keyword === keyword) {
+      const parsed = executeSchema(ctx, hintSchema, name);
+      if (parsed != null) {
+        // Parse indented keyframes block
+        if (hints.children?.keyframes === 'block') {
+          const kfs = parseKeyframesBlock(ctx, `${name}.keyframes`);
+          if (kfs.length > 0) parsed.keyframes = kfs;
+        }
+        model[name] = parsed;
+      }
+      return true;
+    }
   }
   return false;
 }

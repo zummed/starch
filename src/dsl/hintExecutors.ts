@@ -165,7 +165,39 @@ export function executePositional(
   const [k] = hint.keys;
   if (tok.type === 'number') {
     result[k] = parseFloat(tok.value);
-  } else if (tok.type === 'string' || tok.type === 'identifier' || tok.type === 'hexColor') {
+    ctx.next();
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${k}`,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
+      value: result[k],
+      dslRole: 'value',
+    });
+    return result;
+  }
+  // Identifier with optional suffix (e.g., '3s' when suffix='s')
+  if (tok.type === 'identifier') {
+    if (hint.suffix) {
+      const suffix = hint.suffix;
+      if (tok.value.endsWith(suffix)) {
+        const raw = tok.value.slice(0, -suffix.length);
+        const num = parseFloat(raw);
+        if (!isNaN(num)) {
+          result[k] = num;
+          ctx.next();
+          ctx.emitLeaf({
+            schemaPath: `${schemaPath}.${k}`,
+            from: tok.offset,
+            to: tok.offset + tok.value.length,
+            value: result[k],
+            dslRole: 'value',
+          });
+          return result;
+        }
+      }
+    }
+    result[k] = tok.value;
+  } else if (tok.type === 'string' || tok.type === 'hexColor') {
     result[k] = tok.value;
   } else {
     return null;
@@ -527,6 +559,88 @@ function findInlinePropField(
     }
   }
   return null;
+}
+
+/**
+ * Parse an indented block of keyframe entries:
+ *   <time> [easing=name]
+ *       target.property: value
+ *       target.property: value
+ * OR on single line:
+ *   <time> target.property: value
+ */
+export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): any[] {
+  const keyframes: any[] = [];
+  ctx.skipNewlines();
+  if (!ctx.is('indent' as any)) return keyframes;
+  ctx.next();
+
+  while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
+    ctx.skipNewlines();
+    if (ctx.is('dedent' as any)) break;
+    if (!ctx.is('number')) { ctx.next(); continue; }
+
+    const timeTok = ctx.next()!;
+    const kf: any = { time: parseFloat(timeTok.value), changes: {} };
+
+    // Optional easing on timestamp line: "1.5 easing=easeIn"
+    if (ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
+      ctx.next(); ctx.next();
+      if (ctx.is('identifier')) {
+        kf.easing = ctx.next()!.value;
+      }
+    }
+
+    // Inline change on same line: "1.5 box.opacity: 1"
+    if (ctx.is('identifier')) {
+      const { key, value } = parseChangeInline(ctx);
+      if (key) kf.changes[key] = value;
+    }
+
+    ctx.skipNewlines();
+
+    // Indented changes block
+    if (ctx.is('indent' as any)) {
+      ctx.next();
+      while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
+        ctx.skipNewlines();
+        if (ctx.is('dedent' as any)) break;
+        if (!ctx.is('identifier')) { ctx.next(); continue; }
+        const { key, value } = parseChangeInline(ctx);
+        if (key) kf.changes[key] = value;
+        ctx.skipNewlines();
+      }
+      if (ctx.is('dedent' as any)) ctx.next();
+    }
+
+    keyframes.push(kf);
+    ctx.skipNewlines();
+  }
+
+  if (ctx.is('dedent' as any)) ctx.next();
+  return keyframes;
+}
+
+function parseChangeInline(ctx: WalkContext): { key: string | null; value: unknown } {
+  // Parse dotted path: box.opacity or box.transform.x
+  const parts: string[] = [];
+  while (ctx.is('identifier')) {
+    parts.push(ctx.next()!.value);
+    if (ctx.is('dot' as any)) { ctx.next(); continue; }
+    break;
+  }
+  if (!ctx.is('colon')) return { key: null, value: null };
+  ctx.next();
+
+  const valTok = ctx.peek();
+  if (!valTok) return { key: parts.join('.'), value: null };
+  let value: unknown;
+  if (valTok.type === 'number') value = parseFloat(valTok.value);
+  else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
+    value = valTok.value;
+  }
+  ctx.next();
+  return { key: parts.join('.'), value };
 }
 
 /**

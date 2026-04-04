@@ -130,3 +130,37 @@ describe('walkDocument - sections', () => {
     expect(model.images?.hero).toBe('hero.jpg');
   });
 });
+
+describe('walkDocument - animate block', () => {
+  it('parses basic animate duration', () => {
+    const dsl = 'animate 3s';
+    const { model } = walkDocument(dsl);
+    expect(model.animate?.duration).toBe(3);
+  });
+
+  it('parses animate with loop flag', () => {
+    const dsl = 'animate 3s loop';
+    const { model } = walkDocument(dsl);
+    expect(model.animate?.duration).toBe(3);
+    expect(model.animate?.loop).toBe(true);
+  });
+
+  it('parses animate with keyframes', () => {
+    const dsl = `animate 3s loop
+  1 box.opacity: 1
+  2 box.opacity: 0`;
+    const { model } = walkDocument(dsl);
+    expect(model.animate?.keyframes).toHaveLength(2);
+    expect(model.animate?.keyframes[0].time).toBe(1);
+    expect(model.animate?.keyframes[0].changes['box.opacity']).toBe(1);
+    expect(model.animate?.keyframes[1].time).toBe(2);
+    expect(model.animate?.keyframes[1].changes['box.opacity']).toBe(0);
+  });
+
+  it('parses keyframe with multi-part change path', () => {
+    const dsl = `animate 2s
+  1 box.transform.x: 100`;
+    const { model } = walkDocument(dsl);
+    expect(model.animate?.keyframes[0].changes['box.transform.x']).toBe(100);
+  });
+});
