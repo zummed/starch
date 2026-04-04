@@ -11,12 +11,6 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@codemirror/autocomplete": "^6.20.1",
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-json": "^6.0.2",
-    "@codemirror/language": "^6.12.2",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.40.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
@@ -27,7 +21,6 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
-    "@codemirror/lint": "^6.9.5",
     "@prosemirror-adapter/react": "^0.5.3",
     "json5": "^2.2.3",
     "prosemirror-commands": "^1.7.1",
