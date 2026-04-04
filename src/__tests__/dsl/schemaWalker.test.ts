@@ -77,3 +77,27 @@ circle: ellipse 50x50`);
     expect(model.objects[0].transform).toEqual({ x: 200, y: 150 });
   });
 });
+
+describe('walkDocument - children and sigils', () => {
+  it('parses @style sigil reference', () => {
+    const { model } = walkDocument('box: rect 100x60 @primary');
+    expect(model.objects[0].style).toBe('primary');
+  });
+
+  it('parses @style before properties', () => {
+    const { model } = walkDocument('box: rect 100x60 @primary fill red');
+    expect(model.objects[0].style).toBe('primary');
+    expect(model.objects[0].fill).toBe('red');
+  });
+
+  it('parses nested children (indented)', () => {
+    const dsl = `parent: rect 200x200
+  child1: rect 50x50
+  child2: ellipse 30x30`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects[0].id).toBe('parent');
+    expect(model.objects[0].children).toHaveLength(2);
+    expect(model.objects[0].children[0].id).toBe('child1');
+    expect(model.objects[0].children[1].id).toBe('child2');
+  });
+});

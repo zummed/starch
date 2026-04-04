@@ -372,8 +372,27 @@ export function executeNodeBody(
   const geometry = hints.geometry ?? [];
   const inlineProps = hints.inlineProps ?? [];
 
-  while (!ctx.atEnd() && ctx.is('identifier')) {
+  while (!ctx.atEnd() && (ctx.is('identifier') || ctx.is('atSign' as any))) {
     const tok = ctx.peek()!;
+
+    // Sigil: @styleName
+    if (hints.sigil && ctx.is('atSign' as any)) {
+      const atTok = ctx.next()!;
+      if (ctx.is('identifier')) {
+        const nameTok = ctx.next()!;
+        result[hints.sigil.key] = nameTok.value;
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.${hints.sigil.key}`,
+          from: atTok.offset,
+          to: nameTok.offset + nameTok.value.length,
+          value: nameTok.value,
+          dslRole: 'sigil',
+        });
+        continue;
+      }
+      // atSign but no identifier following — stop
+      break;
+    }
 
     // Try geometry keywords (rect, ellipse, etc.)
     if (geometry.includes(tok.value)) {
@@ -423,6 +442,28 @@ export function executeNodeBody(
 
     // Not a recognized token — break (inline parsing stops)
     break;
+  }
+
+  // Children: indented block
+  ctx.skipNewlines();
+  if (ctx.is('indent' as any) && hints.children?.children === 'block') {
+    ctx.next(); // consume indent
+    const children: Array<Record<string, unknown>> = [];
+    while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
+      ctx.skipNewlines();
+      if (ctx.is('dedent' as any)) break;
+      // Recursively parse child instance using the same schema
+      const child = executeInstance(ctx, schema, 'id', 'required', `${schemaPath}.children`);
+      if (child) {
+        children.push(child);
+        ctx.skipNewlines();
+      } else {
+        // Can't parse as instance — skip token to avoid infinite loop
+        ctx.next();
+      }
+    }
+    if (ctx.is('dedent' as any)) ctx.next();
+    if (children.length > 0) result.children = children;
   }
 
   return result;
