@@ -437,6 +437,7 @@ export default function App() {
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <StructuralEditor
+          key={activeTab.id}
           ref={editorRef}
           initialDsl={activeTab.dsl}
           onModelChange={handleModelChange}
