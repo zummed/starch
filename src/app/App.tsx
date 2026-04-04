@@ -214,7 +214,7 @@ export default function App() {
 
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabIdRef.current++);
-    const defaultDsl = '';
+    const defaultDsl = 'box: rect 100x60 fill steelblue at 200,150';
     setTabs(prev => [...prev, {
       id,
       label: 'Untitled',
