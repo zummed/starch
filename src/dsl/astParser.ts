@@ -1,4 +1,3 @@
-import JSON5 from 'json5';
 import { tokenize } from './tokenizer';
 import { resolveNamedColor } from '../types/color';
 import type { Color } from '../types/properties';
@@ -231,6 +230,15 @@ function parseJsonEscapeHatch(s: TokenStream): any {
         jsonStr += '(';
       } else if (tok.type === 'parenClose') {
         jsonStr += ')';
+      } else if (tok.type === 'identifier') {
+        const v = tok.value;
+        if (v === 'true' || v === 'false' || v === 'null') {
+          jsonStr += v;
+        } else {
+          jsonStr += `"${v}"`;
+        }
+      } else if (tok.type === 'number') {
+        jsonStr += tok.value;
       } else {
         jsonStr += tok.value;
       }
@@ -238,7 +246,7 @@ function parseJsonEscapeHatch(s: TokenStream): any {
       jsonStr += ' ';
     }
   }
-  return JSON5.parse(jsonStr.trim());
+  return JSON.parse(jsonStr.trim());
 }
 
 // ─── Tuple Parsing ──────────────────────────────────────────────
@@ -620,13 +628,27 @@ function isBlockPropertyLine(s: TokenStream): boolean {
 
 function isChildNodeLine(s: TokenStream): boolean {
   if (!s.is('identifier')) return false;
-  return s.peek(1).type === 'colon';
+  if (s.peek(1).type === 'colon') return true;
+  // Support dotted IDs: identifier.identifier: (e.g. a.bg:)
+  let offset = 1;
+  while (s.peek(offset).type === 'dot') {
+    offset++;
+    if (s.peek(offset).type !== 'identifier') return false;
+    offset++;
+    if (s.peek(offset).type === 'colon') return true;
+  }
+  return false;
 }
 
 // ─── Node Parsing ────────────────────────────────────────────────
 
 function parseNodeLine(s: TokenStream): any {
-  const id = s.expect('identifier').value;
+  let id = s.expect('identifier').value;
+  // Support dotted IDs: identifier.identifier.identifier:
+  while (s.is('dot')) {
+    s.next(); // consume '.'
+    id += '.' + s.expect('identifier').value;
+  }
   s.expect('colon');
 
   const node: any = { id };
@@ -645,6 +667,28 @@ function parseNodeLine(s: TokenStream): any {
       parseExplicitPath(s, node);
       return node;
     }
+  }
+
+  // Template: id: template templateName key=val key=val
+  // Template name may be a string literal (for names with hyphens) or an identifier
+  if (s.is('identifier', 'template')) {
+    s.next(); // consume 'template'
+    if (s.is('string')) {
+      node.template = s.next().value;
+    } else if (s.is('identifier')) {
+      node.template = s.next().value;
+    }
+    const props: any = {};
+    while (!s.atEnd() && !s.is('newline') && !s.is('eof')) {
+      const kv = parseKeyValue(s);
+      if (kv) {
+        props[kv[0]] = kv[1];
+      } else {
+        break;
+      }
+    }
+    if (Object.keys(props).length > 0) node.props = props;
+    return node;
   }
 
   // Geometry type
@@ -979,11 +1023,21 @@ function parseAnimateContent(s: TokenStream, animate: any, scopePrefix: string):
     // Timestamp
     if (s.is('number')) {
       const time = parseFloat(s.next().value);
-      const kf = parseKeyframeLine(s, scopePrefix);
+      const kf: any = { changes: {} };
       kf.time = time;
-      animate.keyframes.push(kf);
-      s.skipNewlines();
-      parseContinuationLines(s, kf, scopePrefix);
+      // Standalone timestamp line (number alone, changes indented below)
+      if (s.is('newline') || s.is('eof')) {
+        animate.keyframes.push(kf);
+        s.skipNewlines();
+        parseContinuationLines(s, kf, scopePrefix);
+      } else {
+        const parsedKf = parseKeyframeLine(s, scopePrefix);
+        kf.changes = parsedKf.changes;
+        if (parsedKf.easing) kf.easing = parsedKf.easing;
+        animate.keyframes.push(kf);
+        s.skipNewlines();
+        parseContinuationLines(s, kf, scopePrefix);
+      }
       continue;
     }
 

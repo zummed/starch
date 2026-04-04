@@ -3,11 +3,7 @@ import { parseScene } from '../../parser/parser';
 
 describe('parseScene', () => {
   it('parses a minimal scene with a rect node', () => {
-    const input = `{
-      objects: [
-        { id: "b1", rect: { w: 100, h: 60 } }
-      ]
-    }`;
+    const input = `b1: rect 100x60`;
     const scene = parseScene(input);
     expect(scene.nodes).toHaveLength(1);
     expect(scene.nodes[0].id).toBe('b1');
@@ -15,14 +11,11 @@ describe('parseScene', () => {
   });
 
   it('creates style nodes as first-class nodes in the tree', () => {
-    const input = `{
-      styles: {
-        primary: { fill: { h: 210, s: 70, l: 45 } }
-      },
-      objects: [
-        { id: "n1", style: "primary", rect: { w: 100, h: 60 } }
-      ]
-    }`;
+    const input = `\
+style primary
+  fill hsl 210 70 45
+
+n1: rect 100x60 @primary`;
     const scene = parseScene(input);
     // Style becomes a real node
     const styleNode = scene.nodes.find(n => n.id === 'primary');
@@ -38,11 +31,7 @@ describe('parseScene', () => {
   });
 
   it('generates track paths', () => {
-    const input = `{
-      objects: [
-        { id: "n1", rect: { w: 100, h: 60 }, fill: { h: 0, s: 100, l: 50 }, transform: { x: 50, y: 50 } }
-      ]
-    }`;
+    const input = `n1: rect 100x60 fill hsl 0 100 50 at 50,50`;
     const scene = parseScene(input);
     expect(scene.trackPaths).toContain('n1.fill');
     expect(scene.trackPaths).toContain('n1.transform.x');
@@ -50,26 +39,20 @@ describe('parseScene', () => {
   });
 
   it('validates and throws on duplicate IDs', () => {
-    const input = `{
-      objects: [
-        { id: "a", rect: { w: 10, h: 10 } },
-        { id: "a", rect: { w: 10, h: 10 } }
-      ]
-    }`;
+    const input = `\
+a: rect 10x10
+a: rect 10x10`;
     expect(() => parseScene(input)).toThrow(/duplicate/i);
   });
 
   it('parses animate config', () => {
-    const input = `{
-      objects: [{ id: "n1", rect: { w: 100, h: 60 } }],
-      animate: {
-        duration: 4,
-        keyframes: [
-          { time: 0, changes: { "n1.rect.w": 100 } },
-          { time: 2, changes: { "n1.rect.w": 200 } }
-        ]
-      }
-    }`;
+    const input = `\
+objects
+  n1: rect 100x60
+
+animate 4s
+  0 n1.rect.w: 100
+  2 n1.rect.w: 200`;
     const scene = parseScene(input);
     expect(scene.animate).toBeDefined();
     expect(scene.animate!.duration).toBe(4);
@@ -77,17 +60,10 @@ describe('parseScene', () => {
   });
 
   it('handles nested children', () => {
-    const input = `{
-      objects: [
-        {
-          id: "parent",
-          transform: { x: 100, y: 100 },
-          children: [
-            { id: "child", rect: { w: 50, h: 30 }, fill: { h: 0, s: 100, l: 50 } }
-          ]
-        }
-      ]
-    }`;
+    const input = `\
+objects
+  parent: at 100,100
+    child: rect 50x30 fill hsl 0 100 50`;
     const scene = parseScene(input);
     const parent = scene.nodes.find(n => n.id === 'parent')!;
     expect(parent.children).toHaveLength(1);
@@ -96,34 +72,30 @@ describe('parseScene', () => {
   });
 
   it('applies HSL fill directly', () => {
-    const input = `{
-      objects: [
-        { id: "n1", rect: { w: 50, h: 50 }, fill: { h: 0, s: 100, l: 50 } }
-      ]
-    }`;
+    const input = `n1: rect 50x50 fill hsl 0 100 50`;
     const scene = parseScene(input);
     expect(scene.nodes[0].fill).toEqual({ h: 0, s: 100, l: 50 });
   });
 
   it('extracts background', () => {
-    const input = `{ background: "#1a1a2e", objects: [] }`;
+    const input = `background #1a1a2e`;
     const scene = parseScene(input);
     expect(scene.background).toBe('#1a1a2e');
   });
 
   it('extracts name and description', () => {
-    const input = `{
-      name: "My Diagram",
-      description: "A test diagram",
-      objects: [{ id: "n1", rect: { w: 10, h: 10 } }]
-    }`;
+    const input = `\
+name "My Diagram"
+description "A test diagram"
+
+n1: rect 10x10`;
     const scene = parseScene(input);
     expect(scene.name).toBe('My Diagram');
     expect(scene.description).toBe('A test diagram');
   });
 
   it('returns undefined name and description when absent', () => {
-    const input = `{ objects: [{ id: "n1", rect: { w: 10, h: 10 } }] }`;
+    const input = `n1: rect 10x10`;
     const scene = parseScene(input);
     expect(scene.name).toBeUndefined();
     expect(scene.description).toBeUndefined();

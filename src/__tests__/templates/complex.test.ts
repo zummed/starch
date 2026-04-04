@@ -79,39 +79,33 @@ describe('stateNodeTemplate', () => {
 
 describe('complex template samples parse', () => {
   it('parses a flowchart diagram', () => {
-    const input = `{
-      objects: [
-        { template: "flowchart-node", id: "start", props: { title: "Start", subtitle: "Begin process", colour: "dodgerblue", transform: { x: 0, y: 0 } } },
-        { template: "flowchart-node", id: "process", props: { title: "Process", subtitle: "Handle data", status: "active", transform: { x: 200, y: 0 } } },
-        { template: "flowchart-node", id: "end", props: { title: "End", status: "success", transform: { x: 400, y: 0 } } },
-        { template: "line", id: "l1", props: { from: "start", to: "process" } },
-        { template: "line", id: "l2", props: { from: "process", to: "end" } }
-      ]
-    }`;
+    const input = `\
+objects
+  start: template "flowchart-node" title="Start" subtitle="Begin process" colour=dodgerblue
+  process: template "flowchart-node" title="Process" subtitle="Handle data" status=active
+  end: template "flowchart-node" title="End" status=success
+  l1: template line from=start to=process
+  l2: template line from=process to=end`;
     const scene = parseScene(input);
     expect(scene.nodes).toHaveLength(5);
   });
 
   it('parses a sequence diagram', () => {
-    const input = `{
-      objects: [
-        { template: "sequence-participant", id: "client", props: { name: "Client", colour: "dodgerblue", transform: { x: 0, y: 0 } } },
-        { template: "sequence-participant", id: "server", props: { name: "Server", colour: "mediumseagreen", transform: { x: 200, y: 0 } } }
-      ]
-    }`;
+    const input = `\
+objects
+  client: template "sequence-participant" name=Client colour=dodgerblue
+  server: template "sequence-participant" name=Server colour=mediumseagreen`;
     const scene = parseScene(input);
     expect(scene.nodes).toHaveLength(2);
     expect(scene.nodes[0].children).toHaveLength(3); // header, name, lifeline
   });
 
   it('parses a state machine', () => {
-    const input = `{
-      objects: [
-        { template: "state-node", id: "idle", props: { name: "Idle", transform: { x: 0, y: 0 } } },
-        { template: "state-node", id: "active", props: { name: "Active", active: true, entry: "start()", exit: "cleanup()", transform: { x: 200, y: 0 } } },
-        { template: "line", id: "t1", props: { from: "idle", to: "active", label: "activate" } }
-      ]
-    }`;
+    const input = `\
+objects
+  idle: template "state-node" name=Idle
+  active: template "state-node" name=Active active=true entry="start()" exit="cleanup()"
+  t1: template line from=idle to=active label=activate`;
     const scene = parseScene(input);
     expect(scene.nodes).toHaveLength(3);
   });
