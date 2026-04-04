@@ -464,11 +464,18 @@ export function executeNodeBody(
       if (propSchema) {
         const parsed = executeSchema(ctx, propSchema, `${schemaPath}.${fieldName}`);
         if (parsed != null && Object.keys(parsed).length > 0) {
-          result[fieldName] = parsed;
+          // Unwrap single _value key to scalar
+          if ('_value' in parsed && Object.keys(parsed).length === 1) {
+            result[fieldName] = parsed._value;
+          } else {
+            result[fieldName] = parsed;
+          }
           continue;
         }
       }
-      // Inline prop keyword recognized but couldn't parse — stop
+      // Inline prop keyword recognized but couldn't parse — skip rest of line
+      // to prevent tokens leaking into top-level parsing.
+      ctx.skipToNewline();
       break;
     }
 
@@ -634,12 +641,17 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
 
   const valTok = ctx.peek();
   if (!valTok) return { key: parts.join('.'), value: null };
+
+  // Attempt color parsing first — handles named, hex, hsl, rgb forms
+  const colorValue = executeColor(ctx, parts.join('.'));
+  if (colorValue != null) return { key: parts.join('.'), value: colorValue };
+
   let value: unknown;
-  if (valTok.type === 'number') value = parseFloat(valTok.value);
+  if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
   else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
     value = valTok.value;
+    ctx.next();
   }
-  ctx.next();
   return { key: parts.join('.'), value };
 }
 

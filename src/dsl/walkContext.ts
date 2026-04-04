@@ -66,6 +66,19 @@ export class WalkContext {
     while (this.is('newline')) this.next();
   }
 
+  /**
+   * Skip all tokens until the next newline, indent, dedent, or eof.
+   * Used to discard the remainder of a line when parsing stops early.
+   */
+  skipToNewline(): void {
+    while (!this.atEnd()) {
+      const t = this.peek();
+      if (!t) break;
+      if (t.type === 'newline' || t.type === 'indent' || t.type === 'dedent') break;
+      this.next();
+    }
+  }
+
   emitLeaf(leaf: Omit<AstLeaf, 'modelPath'> & { modelPath?: string }): void {
     this.leaves.push({
       modelPath: leaf.modelPath ?? this.modelPath(),

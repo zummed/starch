@@ -45,11 +45,67 @@ describe('DocumentSchema top-level annotations', () => {
   });
 });
 
+/**
+ * Deep parity assertion comparing walker output to astParser output.
+ * Both parsers should produce equivalent models for supported samples.
+ *
+ * Note on styles: the astParser always emits `styles: {}` even when
+ * no styles are present; the walker only emits it when styles exist.
+ * We normalise both to treat an empty/missing styles as equivalent.
+ */
+function assertParity(walkerModel: any, parserModel: any, name: string): void {
+  // Top-level metadata
+  expect(walkerModel.name, `${name}.name`).toEqual(parserModel.name);
+  expect(walkerModel.description, `${name}.description`).toEqual(parserModel.description);
+  expect(walkerModel.background, `${name}.background`).toEqual(parserModel.background);
+
+  // Objects array — count + deep compare each object
+  const wObjs = walkerModel.objects ?? [];
+  const pObjs = parserModel.objects ?? [];
+  expect(wObjs.length, `${name} objects count`).toEqual(pObjs.length);
+  for (let i = 0; i < pObjs.length; i++) {
+    expect(wObjs[i], `${name} objects[${i}]`).toEqual(pObjs[i]);
+  }
+
+  // Styles — normalise: treat undefined and {} as equivalent
+  const wStyles = walkerModel.styles ?? {};
+  const pStyles = parserModel.styles ?? {};
+  expect(wStyles, `${name}.styles`).toEqual(pStyles);
+
+  // Animate
+  if (parserModel.animate) {
+    expect(walkerModel.animate?.duration, `${name}.animate.duration`).toEqual(parserModel.animate.duration);
+    expect(walkerModel.animate?.loop, `${name}.animate.loop`).toEqual(parserModel.animate.loop);
+    expect(walkerModel.animate?.easing, `${name}.animate.easing`).toEqual(parserModel.animate.easing);
+    expect(walkerModel.animate?.keyframes?.length, `${name}.animate.keyframes count`)
+      .toEqual(parserModel.animate.keyframes?.length);
+    // Deep compare each keyframe
+    const wKfs = walkerModel.animate?.keyframes ?? [];
+    const pKfs = parserModel.animate?.keyframes ?? [];
+    for (let i = 0; i < pKfs.length; i++) {
+      expect(wKfs[i]?.time, `${name} keyframes[${i}].time`).toEqual(pKfs[i].time);
+      expect(wKfs[i]?.changes, `${name} keyframes[${i}].changes`).toEqual(pKfs[i].changes);
+    }
+  }
+
+  // Images
+  if (parserModel.images) {
+    expect(walkerModel.images, `${name}.images`).toEqual(parserModel.images);
+  }
+}
+
 describe('walker parity with astParser', () => {
   // Only test samples that the walker is expected to handle in the current
   // implementation state. Expand this list as features are added.
   const SUPPORTED_NAMES = new Set<string>([
+    // Primitives
     'rect', 'ellipse', 'text',
+    // Colors
+    'color-animation', 'hue-shortest-arc',
+    // Styles
+    'named-styles', 'style-animation',
+    // Animation
+    'position-animation', 'opacity-animation',
   ]);
 
   for (const sample of v2Samples) {
@@ -58,14 +114,7 @@ describe('walker parity with astParser', () => {
     it(`parity for ${sample.category}/${sample.name}`, () => {
       const walkerResult = walkDocument(sample.dsl);
       const parserResult = buildAstFromText(sample.dsl);
-
-      // Compare top-level fields (name, background, viewport)
-      expect(walkerResult.model.name).toEqual(parserResult.model.name);
-      expect(walkerResult.model.background).toEqual(parserResult.model.background);
-
-      // Compare objects count
-      expect(walkerResult.model.objects?.length ?? 0)
-        .toEqual(parserResult.model.objects?.length ?? 0);
+      assertParity(walkerResult.model, parserResult.model, sample.name);
     });
   }
 });
