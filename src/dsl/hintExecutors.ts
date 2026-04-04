@@ -659,10 +659,16 @@ export function executeNodeBody(
           continue;
         }
       }
-      // Inline prop keyword recognized but couldn't parse — skip rest of line
-      // to prevent tokens leaking into top-level parsing.
-      ctx.skipToNewline();
-      break;
+      // Inline prop keyword recognized but couldn't parse.
+      // If it's a node-level kwarg or flag, fall through to the kwarg/flag handler below.
+      const isNodeKwarg = hints.kwargs?.includes(fieldName) ?? false;
+      const isNodeFlag = hints.flags?.includes(fieldName) ?? false;
+      if (!isNodeKwarg && !isNodeFlag) {
+        // Truly unrecognized — skip rest of line to prevent token leakage.
+        ctx.skipToNewline();
+        break;
+      }
+      // Fall through to the kwarg/flag handlers below.
     }
 
     // Check for floating transform kwargs: `rotation=0`, `scale=2` without `at` keyword.
@@ -681,6 +687,20 @@ export function executeNodeBody(
           }
         }
       }
+    }
+
+    // Check for node-level kwargs (e.g. opacity=0.5, depth=3) and flags (e.g. visible).
+    // These are defined on the NodeSchema itself, not on any property sub-schema.
+    const isKwarg = ctx.peek(1)?.type === 'equals';
+    if (isKwarg && hints.kwargs?.includes(tok.value)) {
+      const kw = executeKwargs(ctx, hints.kwargs, schemaPath);
+      Object.assign(result, kw);
+      continue;
+    }
+    if (!isKwarg && hints.flags?.includes(tok.value)) {
+      const fl = executeFlags(ctx, hints.flags, schemaPath);
+      Object.assign(result, fl);
+      continue;
     }
 
     // Not a recognized token — break (inline parsing stops)

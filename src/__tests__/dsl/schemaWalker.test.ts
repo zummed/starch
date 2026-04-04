@@ -338,3 +338,127 @@ describe('walkDocument - animate block', () => {
     expect(model.animate?.keyframes[0].changes['box.transform.x']).toBe(100);
   });
 });
+
+// ─── Gap 1: Node-level kwargs/flags ───────────────────────────────────────────
+
+describe('walkDocument - node-level kwargs and flags (gap 1)', () => {
+  it('parses opacity kwarg on node declaration', () => {
+    const { model } = walkDocument('box: rect 100x60 opacity=0.5');
+    expect(model.objects[0].opacity).toBe(0.5);
+  });
+
+  it('parses depth kwarg on node declaration', () => {
+    const { model } = walkDocument('box: rect 100x60 depth=3');
+    expect(model.objects[0].depth).toBe(3);
+  });
+
+  it('parses visible flag on node declaration', () => {
+    const { model } = walkDocument('box: rect 100x60 visible');
+    expect(model.objects[0].visible).toBe(true);
+  });
+
+  it('parses multiple node-level kwargs and flags together', () => {
+    const { model } = walkDocument('box: rect 100x60 opacity=0.5 visible depth=3');
+    expect(model.objects[0].opacity).toBe(0.5);
+    expect(model.objects[0].visible).toBe(true);
+    expect(model.objects[0].depth).toBe(3);
+  });
+
+  it('parses node kwargs mixed with inline props', () => {
+    const { model } = walkDocument('box: rect 100x60 fill red opacity=0.5 visible');
+    expect(model.objects[0].fill).toBe('red');
+    expect(model.objects[0].opacity).toBe(0.5);
+    expect(model.objects[0].visible).toBe(true);
+  });
+});
+
+// ─── Gap 2: Colon-less node declarations in objects section ───────────────────
+
+describe('walkDocument - colon-less nodes in objects section (gap 2)', () => {
+  it('parses colon-less node in objects section', () => {
+    const dsl = `objects
+  box rect 100x60 fill red`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects).toHaveLength(1);
+    expect(model.objects[0].id).toBe('box');
+    expect(model.objects[0].rect).toEqual({ w: 100, h: 60 });
+    expect(model.objects[0].fill).toBe('red');
+  });
+
+  it('parses multiple colon-less nodes in objects section', () => {
+    const dsl = `objects
+  box rect 100x60
+  circle ellipse 50x50`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects).toHaveLength(2);
+    expect(model.objects[0].id).toBe('box');
+    expect(model.objects[1].id).toBe('circle');
+  });
+
+  it('mixes colon and colon-less nodes in objects section', () => {
+    const dsl = `objects
+  box: rect 100x60
+  circle ellipse 50x50`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects).toHaveLength(2);
+    expect(model.objects[0].id).toBe('box');
+    expect(model.objects[1].id).toBe('circle');
+  });
+});
+
+// ─── Gap 3: HSL alpha in colors ───────────────────────────────────────────────
+
+describe('walkDocument - HSL alpha in colors (gap 3)', () => {
+  it('parses hsl color with alpha kwarg on stroke', () => {
+    const { model } = walkDocument('box: rect 100x60 stroke hsl 0 0 60 a=0.5 width=3');
+    expect(model.objects[0].stroke?.color).toEqual({ h: 0, s: 0, l: 60, a: 0.5 });
+    expect(model.objects[0].stroke?.width).toBe(3);
+  });
+
+  it('parses bare hsl triplet fill', () => {
+    const { model } = walkDocument('box: rect 100x60 fill 210 70 45');
+    expect(model.objects[0].fill).toEqual({ h: 210, s: 70, l: 45 });
+  });
+
+  it('parses bare hsl triplet with alpha', () => {
+    const { model } = walkDocument('box: rect 100x60 fill 210 70 45 a=0.8');
+    expect(model.objects[0].fill).toEqual({ h: 210, s: 70, l: 45, a: 0.8 });
+  });
+});
+
+// ─── Gap 4: Partial transforms (single axis) ─────────────────────────────────
+
+describe('walkDocument - partial transforms (gap 4)', () => {
+  it('parses transform with only x kwarg', () => {
+    const { model } = walkDocument('box: rect 100x60 at x=50');
+    expect(model.objects[0].transform).toEqual({ x: 50 });
+  });
+
+  it('parses transform with only y kwarg', () => {
+    const { model } = walkDocument('box: rect 100x60 at y=-20');
+    expect(model.objects[0].transform).toEqual({ y: -20 });
+  });
+
+  it('parses transform with x and y as kwargs (no positional)', () => {
+    const { model } = walkDocument('box: rect 100x60 at x=100 y=200');
+    expect(model.objects[0].transform).toEqual({ x: 100, y: 200 });
+  });
+});
+
+// ─── Gap 5: Layout kwargs ─────────────────────────────────────────────────────
+
+describe('walkDocument - layout kwargs (gap 5)', () => {
+  it('parses layout with slot kwarg', () => {
+    const dsl = `row: rect 400x60
+  layout flex row gap=10 slot=container`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects[0].layout).toEqual({ type: 'flex', direction: 'row', gap: 10, slot: 'container' });
+  });
+
+  it('parses layout with justify and align kwargs', () => {
+    const dsl = `row: rect 400x60
+  layout flex row justify=center align=stretch`;
+    const { model } = walkDocument(dsl);
+    expect(model.objects[0].layout).toEqual({ type: 'flex', direction: 'row', justify: 'center', align: 'stretch' });
+  });
+});
