@@ -51,7 +51,7 @@ function colorToDsl(color: Color): string {
 export const clickPopupKey = new PluginKey('clickPopup');
 
 /** Offset from ProseMirror position to text position. */
-const PM_OFFSET = 2;
+const PM_OFFSET = 1;
 
 interface PopupState {
   active: boolean;

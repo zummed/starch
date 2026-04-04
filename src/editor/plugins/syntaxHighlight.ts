@@ -51,9 +51,8 @@ function buildDecorations(doc: any): DecorationSet {
     return DecorationSet.empty;
   }
 
-  // The code_block node adds an offset — text starts at position 2
-  // (doc node open + code_block node open)
-  const offset = 2;
+  // Text starts at PM position 1 inside the code_block.
+  const offset = 1;
 
   const decorations: Decoration[] = [];
 

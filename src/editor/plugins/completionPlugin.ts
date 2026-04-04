@@ -22,7 +22,7 @@ interface CompletionState {
 const EMPTY: CompletionState = { active: false, items: [], selectedIndex: 0, from: 0, to: 0 };
 
 /** Offset from ProseMirror position to text position (doc + code_block open tags). */
-const PM_OFFSET = 2;
+const PM_OFFSET = 1;
 
 function getCompletions(state: EditorState): CompletionState {
   const text = state.doc.textContent;
