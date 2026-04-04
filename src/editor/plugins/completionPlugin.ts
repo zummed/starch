@@ -32,12 +32,14 @@ export function getCompletionsFromState(state: EditorState): CompletionState {
 
 function getCompletions(state: EditorState): CompletionState {
   const text = state.doc.textContent;
-  const pmPos = state.selection.from;
-  const textPos = pmPos - PM_OFFSET;
+  const selFrom = state.selection.from;
+  const selTo = state.selection.to;
+  const hasSelection = selFrom !== selTo;
+  const textPos = selFrom - PM_OFFSET;
 
   if (textPos < 0) return EMPTY;
 
-  // Get the current line text
+  // Get the current line text (based on selection start)
   const before = text.slice(0, textPos);
   const lineStart = before.lastIndexOf('\n') + 1;
   const lineEnd = text.indexOf('\n', textPos);
@@ -52,20 +54,32 @@ function getCompletions(state: EditorState): CompletionState {
     model = result.model;
   } catch { /* partial parse is ok */ }
 
-  // Find the word being typed (for replacement range).
-  // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
-  // This prevents eating dimensions (100x60), numbers (0.5), etc.
-  let wordStart = textPos;
-  while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
-    wordStart--;
-  }
+  let from: number;
+  let to: number;
+  let typedWord = '';
 
-  const typedWord = text.slice(wordStart, textPos).toLowerCase();
+  if (hasSelection) {
+    // When there's a selection (e.g., active placeholder), replace the
+    // entire selection. Don't use word boundary.
+    from = selFrom;
+    to = selTo;
+  } else {
+    // Find the word being typed (for replacement range).
+    // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
+    let wordStart = textPos;
+    while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
+      wordStart--;
+    }
+    typedWord = text.slice(wordStart, textPos).toLowerCase();
+    from = wordStart + PM_OFFSET;
+    to = selFrom;
+  }
 
   let items = completionsAt(ast, textPos, lineText, model);
 
-  // Filter by typed prefix
-  if (typedWord) {
+  // Filter by typed prefix (only when no selection — selection means we're
+  // replacing a placeholder, not filtering by user input)
+  if (typedWord && !hasSelection) {
     items = items.filter(item => item.label.toLowerCase().startsWith(typedWord));
   }
 
@@ -75,8 +89,8 @@ function getCompletions(state: EditorState): CompletionState {
     active: true,
     items,
     selectedIndex: 0,
-    from: wordStart + PM_OFFSET,
-    to: pmPos,
+    from,
+    to,
   };
 }
 
