@@ -2,6 +2,7 @@ import type { WalkContext } from './walkContext';
 import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
 import type { z } from 'zod';
+import { HslColorSchema, RgbColorSchema } from '../types/properties';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -312,4 +313,47 @@ export function executeSchema(
   }
 
   return result;
+}
+
+/**
+ * Parse a color value — named, hex, hsl, or rgb form.
+ * Returns the parsed value (string for named/hex, object for hsl/rgb).
+ * Returns null if the next token is not a color.
+ */
+export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
+  const tok = ctx.peek();
+  if (!tok) return null;
+
+  if (tok.type === 'hexColor') {
+    ctx.next();
+    ctx.emitLeaf({
+      schemaPath,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
+      value: tok.value,
+      dslRole: 'value',
+    });
+    return tok.value;
+  }
+
+  if (tok.type === 'identifier') {
+    if (tok.value === 'hsl') {
+      return executeSchema(ctx, HslColorSchema, schemaPath);
+    }
+    if (tok.value === 'rgb') {
+      return executeSchema(ctx, RgbColorSchema, schemaPath);
+    }
+    // Named color
+    ctx.next();
+    ctx.emitLeaf({
+      schemaPath,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
+      value: tok.value,
+      dslRole: 'value',
+    });
+    return tok.value;
+  }
+
+  return null;
 }

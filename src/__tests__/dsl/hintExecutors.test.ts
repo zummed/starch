@@ -213,6 +213,7 @@ describe('executeFlags', () => {
 import { executeSchema } from '../../dsl/hintExecutors';
 import { RectGeomSchema, EllipseGeomSchema } from '../../types/node';
 import { StrokeSchema, TransformSchema } from '../../types/properties';
+import { executeColor } from '../../dsl/hintExecutors';
 
 describe('executeSchema - schema dispatch', () => {
   it('parses rect geometry', () => {
@@ -258,5 +259,41 @@ describe('executeSchema - schema dispatch', () => {
     const keywordLeaf = leaves.find(l => l.dslRole === 'keyword');
     expect(keywordLeaf?.value).toBe('rect');
     expect(keywordLeaf?.schemaPath).toBe('rect');
+  });
+});
+
+describe('executeColor', () => {
+  it('parses named color', () => {
+    const c = ctx('red');
+    expect(executeColor(c, 'fill')).toBe('red');
+  });
+
+  it('parses hex color', () => {
+    const c = ctx('#ff0000');
+    expect(executeColor(c, 'fill')).toBe('#ff0000');
+  });
+
+  it('parses hsl color', () => {
+    const c = ctx('hsl 200 80 50');
+    expect(executeColor(c, 'fill')).toEqual({ h: 200, s: 80, l: 50 });
+  });
+
+  it('parses rgb color', () => {
+    const c = ctx('rgb 255 0 0');
+    expect(executeColor(c, 'fill')).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it('returns null for non-color tokens', () => {
+    const c = ctx('123');
+    expect(executeColor(c, 'fill')).toBeNull();
+  });
+
+  it('emits AST leaf for named color', () => {
+    const c = ctx('red');
+    executeColor(c, 'fill');
+    const leaves = c.astLeaves();
+    const colorLeaf = leaves.find(l => l.value === 'red');
+    expect(colorLeaf).toBeDefined();
+    expect(colorLeaf?.schemaPath).toBe('fill');
   });
 });
