@@ -97,3 +97,42 @@
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   min-width: 200px;
 }
+
+/* Compound popup fields */
+.compound-popup-title {
+  font-size: 11px;
+  color: #a29bfe;
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.compound-popup-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.compound-popup-label {
+  color: #74b9ff;
+  font-size: 12px;
+  min-width: 60px;
+  text-align: right;
+}
+.compound-popup-input {
+  background: #14161c;
+  border: 1px solid #2a2d35;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  width: 100px;
+  outline: none;
+}
+.compound-popup-input:focus {
+  border-color: #6c5ce7;
+}
+.compound-popup-input[type="number"] {
+  width: 70px;
+}

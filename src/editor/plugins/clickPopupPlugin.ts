@@ -8,11 +8,12 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createRoot, type Root } from 'react-dom/client';
-import { createElement } from 'react';
+import { createElement, useState, type ReactElement } from 'react';
 import { buildAstFromText } from '../../dsl/astParser';
 import { nodeAt, findCompound } from '../../dsl/astTypes';
 import {
   getPropertySchema,
+  getAvailableProperties,
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
@@ -84,12 +85,26 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   const node = nodeAt(ast, textPos);
   if (!node) return null;
 
-  // Only show popups for value nodes
-  if (node.dslRole !== 'value' && node.dslRole !== 'kwarg-value') return null;
+  // For keywords and compounds, use the node's own schemaPath
+  // For values, walk up to the compound ancestor
+  let schemaPath: string;
+  let rangeFrom: number;
+  let rangeTo: number;
 
-  // Walk up to find the compound ancestor for schema context
-  const compound = findCompound(node);
-  const schemaPath = compound?.schemaPath ?? node.schemaPath;
+  if (node.dslRole === 'keyword' || node.dslRole === 'compound') {
+    schemaPath = node.schemaPath;
+    const compound = node.dslRole === 'compound' ? node : findCompound(node);
+    rangeFrom = compound?.from ?? node.from;
+    rangeTo = compound?.to ?? node.to;
+  } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
+    const compound = findCompound(node);
+    schemaPath = compound?.schemaPath ?? node.schemaPath;
+    rangeFrom = node.from;
+    rangeTo = node.to;
+  } else {
+    return null;
+  }
+
   if (!schemaPath) return null;
 
   const schema = getPropertySchema(schemaPath, NodeSchema);
@@ -97,20 +112,108 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
 
   const schemaType = detectSchemaType(schema);
 
-  // Only show popups for types that have widgets
-  if (!['color', 'number', 'enum'].includes(schemaType)) return null;
+  // Show popups for types that have widgets
+  if (!['color', 'number', 'enum', 'object'].includes(schemaType)) return null;
 
-  const coords = view.coordsAtPos(node.from + PM_OFFSET);
+  const coords = view.coordsAtPos(rangeFrom + PM_OFFSET);
 
   return {
     active: true,
     schemaType,
     schemaPath,
     value: node.value,
-    from: node.from + PM_OFFSET,
-    to: node.to + PM_OFFSET,
+    from: rangeFrom + PM_OFFSET,
+    to: rangeTo + PM_OFFSET,
     coords: { left: coords.left, top: coords.bottom + 4 },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Compound popup component — shows sub-properties as editable fields
+// ---------------------------------------------------------------------------
+
+interface CompoundPopupProps {
+  schemaPath: string;
+  currentText: string;
+  onReplace: (newText: string) => void;
+  onClose: () => void;
+}
+
+function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
+  const properties = getAvailableProperties(schemaPath, NodeSchema);
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    // Parse current text into field values (best-effort)
+    const fields: Record<string, string> = {};
+    // Simple parsing: extract key=value pairs and positional values
+    const parts = currentText.split(/\s+/);
+    // Skip the keyword (first part)
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.includes('=')) {
+        const [k, v] = part.split('=', 2);
+        fields[k] = v;
+      }
+    }
+    return fields;
+  });
+
+  const handleFieldChange = (name: string, value: string) => {
+    const updated = { ...values, [name]: value };
+    setValues(updated);
+
+    // Rebuild the DSL text from the fields
+    // Keep the keyword, update/add kwargs
+    const parts = currentText.split(/\s+/);
+    const keyword = parts[0] || schemaPath;
+
+    // Collect positional parts (non-kwarg)
+    const positionals = parts.slice(1).filter(p => !p.includes('='));
+
+    // Build new text
+    const kwargParts = Object.entries(updated)
+      .filter(([, v]) => v !== '')
+      .map(([k, v]) => `${k}=${v}`);
+
+    const newText = [keyword, ...positionals, ...kwargParts].join(' ');
+    onReplace(newText);
+  };
+
+  return createElement('div', { className: 'compound-popup' },
+    createElement('div', { className: 'compound-popup-title' }, schemaPath),
+    ...properties
+      .filter(p => p.name !== 'id' && p.name !== 'children')
+      .slice(0, 8) // limit to avoid overwhelming UI
+      .map(prop => {
+        const type = detectSchemaType(prop.schema);
+        const val = values[prop.name] ?? '';
+
+        return createElement('div', {
+          key: prop.name,
+          className: 'compound-popup-field',
+        },
+          createElement('label', { className: 'compound-popup-label' }, prop.name),
+          type === 'enum'
+            ? createElement('select', {
+                value: val,
+                onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
+                className: 'compound-popup-input',
+              },
+                createElement('option', { value: '' }, '—'),
+                ...(getEnumValues(prop.schema) ?? []).map(v =>
+                  createElement('option', { key: v, value: v }, v)
+                ),
+              )
+            : createElement('input', {
+                type: type === 'number' ? 'number' : 'text',
+                value: val,
+                placeholder: prop.description || prop.name,
+                onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
+                onKeyDown: (e: any) => e.stopPropagation(),
+                className: 'compound-popup-input',
+              }),
+        );
+      }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +277,18 @@ class PopupView {
 
     let widget;
 
-    if (schemaType === 'color') {
+    if (schemaType === 'object') {
+      widget = createElement(CompoundPopup, {
+        schemaPath,
+        currentText: this.view.state.doc.textBetween(this.state.from, this.state.to),
+        onReplace: (newText: string) => {
+          const tr = this.view.state.tr.insertText(newText, this.state.from, this.state.to);
+          this.view.dispatch(tr);
+          this.state.to = this.state.from + newText.length;
+        },
+        onClose: () => this.close(),
+      });
+    } else if (schemaType === 'color') {
       widget = createElement(ColorPicker, {
         value: value as any,
         onChange: handleChange,
