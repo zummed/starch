@@ -41,6 +41,16 @@
 .dsl-identifier { color: #dfe6e9; }
 .dsl-comment { color: #636e72; font-style: italic; }
 
+/* Snippet placeholders */
+.snippet-placeholder {
+  background: rgba(167, 139, 250, 0.15);
+  border-bottom: 1px dashed #a78bfa;
+}
+.snippet-active {
+  background: rgba(167, 139, 250, 0.3);
+  border-bottom: 1px solid #a78bfa;
+}
+
 /* Completion menu */
 .starch-completion-menu {
   position: fixed;

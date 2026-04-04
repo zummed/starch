@@ -23,6 +23,7 @@ import { syntaxHighlightPlugin } from './plugins/syntaxHighlight';
 import { parseOnChangePlugin } from './plugins/parseOnChange';
 import { completionPlugin } from './plugins/completionPlugin';
 import { clickPopupPlugin } from './plugins/clickPopupPlugin';
+import { snippetPlugin } from './plugins/snippetPlugin';
 
 import './editorStyles.css';
 
@@ -92,6 +93,7 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
       plugins: [
         history(),
         keymap({ 'Mod-z': undo, 'Mod-Shift-z': redo, 'Mod-y': redo }),
+        snippetPlugin(),
         completionPlugin(),
         clickPopupPlugin(),
         keymap(baseKeymap),
