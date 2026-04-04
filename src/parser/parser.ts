@@ -5,7 +5,7 @@ import { expandTemplates } from '../templates/registry';
 import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
-import { buildAstFromText } from '../dsl/astParser';
+import { walkDocument } from '../dsl/schemaWalker';
 
 export interface ParsedScene {
   name?: string;
@@ -69,7 +69,7 @@ export function parseScene(input: string): ParsedScene {
   registerBuiltinTemplates();
 
   const trimmed = input.trim();
-  const raw = buildAstFromText(trimmed).model;
+  const raw = walkDocument(trimmed).model;
 
   const name = typeof raw.name === 'string' ? raw.name : undefined;
   const description = typeof raw.description === 'string' ? raw.description : undefined;

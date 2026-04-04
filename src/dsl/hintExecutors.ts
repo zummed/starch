@@ -519,10 +519,11 @@ export function executeNodeBody(
   const blockProps = hints.blockProps ?? [];
 
   // ── Arrow/route detection ──────────────────────────────────────
-  // Check if current line starts with `identifier -> ...` (connection route).
+  // Check if current line starts with an arrow-based route.
+  // Handles: `a -> b`, `(a,10,20) -> (b,-5,0)`, `(250,100) -> b`, etc.
   // This must be checked BEFORE geometry keywords so that node IDs like 'a'
   // are not misidentified as geometry.
-  if (ctx.is('identifier') && hasArrowAhead(ctx)) {
+  if ((ctx.is('identifier') || ctx.is('parenOpen' as any)) && hasArrowAhead(ctx)) {
     const pathSchema = resolveFieldSchema(schema, 'path');
     if (pathSchema) {
       // Use the route variant hints directly (no keyword, format: 'arrow')
@@ -1085,6 +1086,25 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
       }
     }
     return tok.value;
+  }
+
+  // Bare HSL triplet: three consecutive numbers with no keyword (e.g., `fill 210 70 45`)
+  if (tok.type === 'number') {
+    const t1 = ctx.peek(1);
+    const t2 = ctx.peek(2);
+    if (t1?.type === 'number' && t2?.type === 'number') {
+      const h = parseFloat(ctx.next()!.value);
+      const s = parseFloat(ctx.next()!.value);
+      const l = parseFloat(ctx.next()!.value);
+      const color: Record<string, number> = { h, s, l };
+      // Optional alpha: `a=0.7`
+      if (ctx.is('identifier', 'a') && ctx.peek(1)?.type === 'equals') {
+        ctx.next(); ctx.next();
+        if (ctx.is('number')) color.a = parseFloat(ctx.next()!.value);
+      }
+      ctx.emitLeaf({ schemaPath, from: tok.offset, to: tok.offset, value: color, dslRole: 'value' });
+      return color;
+    }
   }
 
   if (tok.type === 'identifier') {
