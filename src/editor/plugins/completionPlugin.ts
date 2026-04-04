@@ -25,6 +25,11 @@ const EMPTY: CompletionState = { active: false, items: [], selectedIndex: 0, fro
 /** Offset from ProseMirror position to text position (doc + code_block open tags). */
 const PM_OFFSET = 1;
 
+/** Exported for testing. */
+export function getCompletionsFromState(state: EditorState): CompletionState {
+  return getCompletions(state);
+}
+
 function getCompletions(state: EditorState): CompletionState {
   const text = state.doc.textContent;
   const pmPos = state.selection.from;
@@ -175,10 +180,13 @@ export function completionPlugin(): Plugin<CompletionState> {
 
     state: {
       init: () => EMPTY,
-      apply(tr, value) {
+      apply(tr, value, _oldState, newState) {
         const meta = tr.getMeta(completionKey) as CompletionState | undefined;
         if (meta !== undefined) return meta;
-        if (tr.docChanged && value.active) return EMPTY;
+        // When the doc changes while the menu is open, re-filter
+        if (tr.docChanged && value.active) {
+          return getCompletions(newState);
+        }
         return value;
       },
     },
