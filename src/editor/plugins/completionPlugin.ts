@@ -7,6 +7,7 @@
 import { Plugin, PluginKey, TextSelection, type EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { buildAstFromText } from '../../dsl/astParser';
+import { walkDocument } from '../../dsl/schemaWalker';
 import { completionsAt, type CompletionItem } from '../../dsl/astCompletions';
 import { snippetKey, activateSnippet } from './snippetPlugin';
 
@@ -46,12 +47,15 @@ function getCompletions(state: EditorState): CompletionState {
   const lineText = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
 
   // Parse AST for context
+  // model: from schema-driven walker (Task 16 migration)
+  // ast: still from astParser for completionsAt() navigation (interim)
   let ast = null;
   let model = null;
   try {
-    const result = buildAstFromText(text);
-    ast = result.ast;
-    model = result.model;
+    model = walkDocument(text).model;
+  } catch { /* partial parse is ok */ }
+  try {
+    ast = buildAstFromText(text).ast;
   } catch { /* partial parse is ok */ }
 
   let from: number;
