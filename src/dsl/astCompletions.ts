@@ -191,11 +191,28 @@ function buildTopLevelKeywords(): CompletionItem[] {
   const skip = new Set(['objects']); // user types node IDs, not 'objects'
   // JSON field name → DSL keyword (where they differ)
   const dslKeywordMap: Record<string, string> = { styles: 'style' };
+  // Snippet templates per top-level keyword
+  const templates: Record<string, string> = {
+    name: 'name "${1:title}"',
+    description: 'description "${1:text}"',
+    background: 'background ${1:color}',
+    viewport: 'viewport ${1:W}x${2:H}',
+    images: 'images',
+    style: 'style ${1:name}',
+    animate: 'animate ${1:3}s',
+  };
   for (const [name, fieldSchema] of Object.entries(shape)) {
     if (skip.has(name)) continue;
     const keyword = dslKeywordMap[name] ?? name;
-    const desc = (fieldSchema as z.ZodType).description ?? '';
-    items.push({ label: keyword, type: 'keyword', detail: desc });
+    // Description lives on the inner (unwrapped) schema
+    const inner = (fieldSchema as any)._def?.innerType ?? fieldSchema;
+    const desc = (inner as z.ZodType).description ?? '';
+    items.push({
+      label: keyword,
+      type: 'keyword',
+      detail: desc,
+      snippetTemplate: templates[keyword],
+    });
   }
   return items;
 }

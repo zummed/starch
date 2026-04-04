@@ -17,9 +17,24 @@ import {
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
+  DocumentSchema,
   type SchemaType,
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
+import type { z } from 'zod';
+
+/** Resolve a schema path against NodeSchema first, then DocumentSchema. */
+function resolvePropertySchema(path: string): z.ZodType | null {
+  return getPropertySchema(path, NodeSchema)
+    ?? getPropertySchema(path, DocumentSchema);
+}
+
+/** List available properties at a path, trying both roots. */
+function resolveAvailableProperties(path: string) {
+  const nodeProps = getAvailableProperties(path, NodeSchema);
+  if (nodeProps.length > 0) return nodeProps;
+  return getAvailableProperties(path, DocumentSchema);
+}
 import type { Color } from '../../types/properties';
 import { ColorPicker } from '../views/widgets/ColorPicker';
 import { NumberSlider } from '../views/widgets/NumberSlider';
@@ -107,7 +122,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
 
   if (!schemaPath) return null;
 
-  const schema = getPropertySchema(schemaPath, NodeSchema);
+  const schema = resolvePropertySchema(schemaPath);
   if (!schema) return null;
 
   const schemaType = detectSchemaType(schema);
@@ -140,7 +155,7 @@ interface CompoundPopupProps {
 }
 
 function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
-  const properties = getAvailableProperties(schemaPath, NodeSchema);
+  const properties = resolveAvailableProperties(schemaPath);
   const [values, setValues] = useState<Record<string, string>>(() => {
     // Parse current text into field values (best-effort)
     const fields: Record<string, string> = {};
@@ -295,7 +310,7 @@ class PopupView {
       });
     } else if (schemaType === 'number') {
       const constraints = getNumberConstraints(
-        getPropertySchema(schemaPath, NodeSchema)!,
+        resolvePropertySchema(schemaPath)!,
       );
       widget = createElement(NumberSlider, {
         value: typeof value === 'number' ? value : parseFloat(String(value)) || 0,
@@ -305,7 +320,7 @@ class PopupView {
       });
     } else if (schemaType === 'enum') {
       const options = getEnumValues(
-        getPropertySchema(schemaPath, NodeSchema)!,
+        resolvePropertySchema(schemaPath)!,
       ) ?? [];
       widget = createElement(EnumDropdown, {
         value: String(value ?? ''),
