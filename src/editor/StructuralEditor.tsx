@@ -21,6 +21,8 @@ import { history, undo, redo } from 'prosemirror-history';
 import { buildAstFromText } from '../dsl/astParser';
 import { syntaxHighlightPlugin } from './plugins/syntaxHighlight';
 import { parseOnChangePlugin } from './plugins/parseOnChange';
+import { completionPlugin } from './plugins/completionPlugin';
+import { clickPopupPlugin } from './plugins/clickPopupPlugin';
 
 import './editorStyles.css';
 
@@ -92,6 +94,8 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
         keymap({ 'Mod-z': undo, 'Mod-Shift-z': redo, 'Mod-y': redo }),
         keymap(baseKeymap),
         syntaxHighlightPlugin(),
+        completionPlugin(),
+        clickPopupPlugin(),
         parseOnChangePlugin({
           onModelChange: (model) => onModelChangeRef.current(model),
           debounceMs: 150,
