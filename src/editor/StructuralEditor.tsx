@@ -92,10 +92,10 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
       plugins: [
         history(),
         keymap({ 'Mod-z': undo, 'Mod-Shift-z': redo, 'Mod-y': redo }),
-        keymap(baseKeymap),
-        syntaxHighlightPlugin(),
         completionPlugin(),
         clickPopupPlugin(),
+        keymap(baseKeymap),
+        syntaxHighlightPlugin(),
         parseOnChangePlugin({
           onModelChange: (model) => onModelChangeRef.current(model),
           debounceMs: 150,

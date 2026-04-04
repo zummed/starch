@@ -19,9 +19,34 @@ import {
   type SchemaType,
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
+import type { Color } from '../../types/properties';
 import { ColorPicker } from '../views/widgets/ColorPicker';
 import { NumberSlider } from '../views/widgets/NumberSlider';
 import { EnumDropdown } from '../views/widgets/EnumDropdown';
+
+/** Serialize a Color value to DSL text. */
+function colorToDsl(color: Color): string {
+  if (typeof color === 'string') return color; // named or hex
+  if (typeof color === 'object' && color !== null) {
+    if ('h' in color && 's' in color && 'l' in color) {
+      const c = color as { h: number; s: number; l: number; a?: number };
+      return c.a !== undefined ? `hsl ${c.h} ${c.s} ${c.l} a=${c.a}` : `hsl ${c.h} ${c.s} ${c.l}`;
+    }
+    if ('r' in color && 'g' in color && 'b' in color) {
+      const c = color as { r: number; g: number; b: number; a?: number };
+      return c.a !== undefined ? `rgb ${c.r} ${c.g} ${c.b} a=${c.a}` : `rgb ${c.r} ${c.g} ${c.b}`;
+    }
+    if ('name' in color) {
+      const c = color as { name: string; a?: number };
+      return c.a !== undefined ? `${c.name} a=${c.a}` : c.name;
+    }
+    if ('hex' in color) {
+      const c = color as { hex: string; a?: number };
+      return c.a !== undefined ? `${c.hex} a=${c.a}` : c.hex;
+    }
+  }
+  return String(color);
+}
 
 export const clickPopupKey = new PluginKey('clickPopup');
 
@@ -133,7 +158,9 @@ class PopupView {
     const { schemaType, schemaPath, value } = this.state;
 
     const handleChange = (newValue: unknown) => {
-      const text = String(newValue);
+      const text = schemaType === 'color'
+        ? colorToDsl(newValue as Color)
+        : String(newValue);
       const tr = this.view.state.tr.replaceWith(
         this.state.from,
         this.state.to,
