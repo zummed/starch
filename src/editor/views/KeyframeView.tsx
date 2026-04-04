@@ -2,10 +2,11 @@ import type { NodeViewProps } from '../reactNodeView';
 
 export function KeyframeBlockView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const time = node.attrs.time as number;
+  const easing = node.attrs.easing as string;
 
   return (
     <div className="keyframe-block">
-      <div className="keyframe-header">{time}</div>
+      <div className="keyframe-header">{time}{easing ? ` easing=${easing}` : ''}</div>
       <div data-content-hole="" />
     </div>
   );

@@ -1,9 +1,7 @@
 import type { Node as PmNode } from 'prosemirror-model';
-import JSON5 from 'json5';
 import { starchSchema } from '../schema/starchSchema';
 import { buildAstFromText } from '../../dsl/astParser';
 import type { FormatHints } from '../../dsl/formatHints';
-import { emptyFormatHints } from '../../dsl/formatHints';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -55,9 +53,8 @@ function geometryText(keyword: string, geom: Record<string, any>): string {
  * Serialise a scalar / compound value to a string for storage in a text node.
  *
  * Object values (hsl, rgb, hex+alpha, named+alpha, etc.) are serialised as
- * JSON5-compatible text that `parseSlotValue` in extractModel will treat as a
- * string — but for the round-trip we only need the compound_slot path to
- * reconstruct objects, so scalar values just need to stringify correctly.
+ * Scalar values just need to stringify correctly — compound values are
+ * reconstructed via the compound_slot path.
  */
 function valueToText(value: any): string {
   if (value === null || value === undefined) return '';
@@ -266,7 +263,7 @@ function buildAnimateBlock(animate: Record<string, any>): PmNode {
       }
 
       children.push(
-        starchSchema.node('keyframe_block', { time: kf.time ?? 0, schemaPath: kfSchemaPath }, entries),
+        starchSchema.node('keyframe_block', { time: kf.time ?? 0, easing: kf.easing ?? '', schemaPath: kfSchemaPath }, entries),
       );
     });
   }
@@ -362,17 +359,6 @@ function modelToDoc(model: Record<string, any>, formatHints: FormatHints): PmNod
 // ---------------------------------------------------------------------------
 
 export function importDsl(text: string): ImportResult {
-  const trimmed = text.trimStart();
-
-  // JSON5 format — parse directly, no AST
-  if (trimmed.startsWith('{')) {
-    const model = JSON5.parse(trimmed);
-    const formatHints = emptyFormatHints();
-    const doc = modelToDoc(model, formatHints);
-    return { doc, formatHints };
-  }
-
-  // DSL format — use the AST parser
   const { model, formatHints } = buildAstFromText(text);
   const doc = modelToDoc(model, formatHints);
   return { doc, formatHints };

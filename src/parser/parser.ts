@@ -1,4 +1,3 @@
-import JSON5 from 'json5';
 import type { Node } from '../types/node';
 import { createNode } from '../types/node';
 import type { AnimConfig } from '../types/animation';
@@ -70,8 +69,7 @@ export function parseScene(input: string): ParsedScene {
   registerBuiltinTemplates();
 
   const trimmed = input.trim();
-  const isDsl = trimmed.length === 0 || trimmed[0] !== '{';
-  const raw = isDsl ? buildAstFromText(trimmed).model : JSON5.parse(trimmed);
+  const raw = buildAstFromText(trimmed).model;
 
   const name = typeof raw.name === 'string' ? raw.name : undefined;
   const description = typeof raw.description === 'string' ? raw.description : undefined;

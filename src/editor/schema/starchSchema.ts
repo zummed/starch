@@ -109,6 +109,7 @@ export const starchSchema = new Schema({
     keyframe_block: {
       attrs: attrs({
         time: { default: 0 },
+        easing: { default: '' },
         schemaPath: { default: '' },
       }),
       content: 'keyframe_entry*',

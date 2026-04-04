@@ -214,7 +214,7 @@ export default function App() {
 
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabIdRef.current++);
-    const defaultDsl = '{\n  objects: [],\n  animate: {\n    duration: 3,\n    loop: true,\n    keyframes: [],\n  },\n}';
+    const defaultDsl = '';
     setTabs(prev => [...prev, {
       id,
       label: 'Untitled',
@@ -238,11 +238,11 @@ export default function App() {
     const raw = diagram.name;
     const name = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/[^\w\s-]/g, '_') : 'untitled';
     const text = editorRef.current?.getDsl() ?? tab.dsl;
-    const blob = new Blob([text], { type: 'application/json5' });
+    const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = name + '.json5';
+    a.download = name + '.starch';
     a.click();
     URL.revokeObjectURL(url);
   }, [tabs, activeTabId, diagram.name]);
@@ -250,7 +250,7 @@ export default function App() {
   const loadFileToTab = useCallback(() => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json5,.json';
+    input.accept = '.starch,.dsl,.txt';
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;

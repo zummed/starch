@@ -1,41 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parseScene } from '../../parser/parser';
 
-describe('parseScene DSL/JSON5 auto-detection', () => {
-  it('auto-detects JSON5 input (starts with {)', () => {
-    const json5Input = `{
-      objects: [
-        { id: "box1", rect: { w: 100, h: 60 } }
-      ]
-    }`;
-    const scene = parseScene(json5Input);
-    expect(scene.nodes).toHaveLength(1);
-    expect(scene.nodes[0].id).toBe('box1');
-  });
-
-  it('auto-detects DSL input (does not start with {)', () => {
+describe('parseScene DSL integration', () => {
+  it('parses DSL input', () => {
     const dslInput = `box1: rect 100x60`;
     const scene = parseScene(dslInput);
     expect(scene.nodes).toHaveLength(1);
     expect(scene.nodes[0].id).toBe('box1');
-  });
-
-  it('DSL and JSON5 produce equivalent ParsedScene for the same diagram', () => {
-    const json5Input = `{
-      objects: [
-        { id: "card", rect: { w: 200, h: 120 } }
-      ]
-    }`;
-
-    const dslInput = `card: rect 200x120`;
-
-    const sceneJson = parseScene(json5Input);
-    const sceneDsl = parseScene(dslInput);
-
-    expect(sceneDsl.nodes).toHaveLength(sceneJson.nodes.length);
-    expect(sceneDsl.nodes[0].id).toBe(sceneJson.nodes[0].id);
-    expect(sceneDsl.nodes[0].rect!.w).toBe(sceneJson.nodes[0].rect!.w);
-    expect(sceneDsl.nodes[0].rect!.h).toBe(sceneJson.nodes[0].rect!.h);
   });
 
   it('DSL input with styles, connections, and animation produces valid ParsedScene', () => {

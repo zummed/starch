@@ -136,7 +136,7 @@ function extractStyleBlock(node: Node): Record<string, unknown> {
 
 function extractAnimateBlock(node: Node): Record<string, unknown> {
   const animate: Record<string, unknown> = {};
-  const keyframes: Array<{ time: number; changes: Record<string, unknown> }> = [];
+  const keyframes: Array<Record<string, unknown>> = [];
 
   node.forEach((child) => {
     const type = child.type.name;
@@ -148,7 +148,7 @@ function extractAnimateBlock(node: Node): Record<string, unknown> {
     }
 
     if (type === 'keyframe_block') {
-      const { time } = child.attrs as { time: number };
+      const { time, easing } = child.attrs as { time: number; easing: string };
       const changes: Record<string, unknown> = {};
       child.forEach((entry) => {
         if (entry.type.name === 'keyframe_entry') {
@@ -161,7 +161,9 @@ function extractAnimateBlock(node: Node): Record<string, unknown> {
           changes[changePath] = parseSlotValue(schemaPath, entry.textContent);
         }
       });
-      keyframes.push({ time, changes });
+      const kf: Record<string, unknown> = { time, changes };
+      if (easing) kf.easing = easing;
+      keyframes.push(kf);
       return;
     }
   });
