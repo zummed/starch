@@ -18,7 +18,7 @@ import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { history, undo, redo } from 'prosemirror-history';
 
-import { buildAstFromText } from '../dsl/astParser';
+import { walkDocument } from '../dsl/schemaWalker';
 import { syntaxHighlightPlugin } from './plugins/syntaxHighlight';
 import { parseOnChangePlugin } from './plugins/parseOnChange';
 import { completionPlugin } from './plugins/completionPlugin';
@@ -111,7 +111,7 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
     // Emit initial model so the diagram renders immediately.
     if (initialDsl.trim()) {
       try {
-        const { model } = buildAstFromText(initialDsl);
+        const { model } = walkDocument(initialDsl);
         onModelChangeRef.current(model);
       } catch { /* parse error on init is ok */ }
     }
@@ -136,7 +136,7 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
       // Emit model immediately so the diagram updates
       if (text.trim()) {
         try {
-          const { model } = buildAstFromText(text);
+          const { model } = walkDocument(text);
           onModelChangeRef.current(model);
         } catch { /* ok */ }
       }
