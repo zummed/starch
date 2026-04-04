@@ -121,11 +121,42 @@ function matchSection(
     if (!found) continue;
     const { hints, schema: hintSchema } = found;
 
-    // sectionKeyword field (styles, images)
+    // sectionKeyword field (styles, images, objects)
     if (hints.sectionKeyword === keyword) {
       ctx.next(); // consume section keyword
 
-      if (hints.instanceDeclaration) {
+      if (hints.instanceDeclaration && hints.instanceDeclaration.colon === 'required') {
+        // "objects" section → indented list of instance declarations
+        // e.g.: objects\n  mybox: at 200,150\n    ...
+        ctx.skipNewlines();
+        if (ctx.is('indent' as any)) {
+          ctx.next(); // consume indent
+
+          // Get the element schema for resolving instances
+          const inner2 = (field as any)._def?.innerType ?? field;
+          const arrayDef = (inner2 as any)._def;
+          const elementSchema = arrayDef?.element ?? arrayDef?.type;
+          const resolvedSchema = (elementSchema as any)?._def?.getter
+            ? (elementSchema as any)._def.getter()
+            : elementSchema;
+
+          while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
+            ctx.skipNewlines();
+            if (ctx.is('dedent' as any)) break;
+            if (resolvedSchema) {
+              const instance = executeInstance(ctx, resolvedSchema, 'id', 'required', name);
+              if (instance) {
+                if (!model[name]) model[name] = [];
+                model[name].push(instance);
+                ctx.skipNewlines();
+                continue;
+              }
+            }
+            ctx.next(); // skip unrecognized
+          }
+          if (ctx.is('dedent' as any)) ctx.next();
+        }
+      } else if (hints.instanceDeclaration) {
         // "style primary" → followed by indented props
         const nameTok = ctx.peek();
         if (nameTok?.type === 'identifier') {
@@ -243,6 +274,17 @@ function matchInstance(
     const inner = (field as any)._def?.innerType ?? field;
     const hints = getDsl(inner);
     if (!hints?.instanceDeclaration) continue;
+
+    // Skip fields whose sectionKeyword matches the current token — those
+    // are section headers and should be handled by matchSection, not here.
+    // Fields with sectionKeyword can still match top-level instances WHEN the
+    // current token is NOT the section keyword (e.g., `box: rect` at top level
+    // goes into the `objects` field even though it has sectionKeyword: 'objects').
+    //
+    // However, fields where colon is 'optional' AND they have a sectionKeyword
+    // should NOT match at top level (avoid greedy style-name matching).
+    if (hints.sectionKeyword && hints.instanceDeclaration?.colon !== 'required') continue;
+    if (hints.sectionKeyword && ctx.peek()?.value === hints.sectionKeyword) continue;
 
     // The array's element schema is the instance schema
     const arrayDef = (inner as any)._def;

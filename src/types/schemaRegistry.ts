@@ -306,6 +306,7 @@ const viewportField = dsl(
 const objectsField = dsl(
   z.array(z.lazy(() => NodeSchema)).describe('Top-level scene objects'),
   {
+    sectionKeyword: 'objects',
     instanceDeclaration: { idKey: 'id', colon: 'required' },
     flatReference: true,
   },

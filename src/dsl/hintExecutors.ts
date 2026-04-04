@@ -177,6 +177,10 @@ export function executePositional(
   }
   // Identifier with optional suffix (e.g., '3s' when suffix='s')
   if (tok.type === 'identifier') {
+    // If the identifier is followed by '=', it is a kwarg, not a positional.
+    // Return null so the caller's kwarg loop handles it.
+    if (ctx.peek(1)?.type === 'equals') return null;
+
     if (hint.suffix) {
       const suffix = hint.suffix;
       if (tok.value.endsWith(suffix)) {
@@ -236,12 +240,15 @@ export function executeKwargs(
     const valTok = ctx.peek();
     if (!valTok) break;
     let value: unknown;
-    if (valTok.type === 'number') value = parseFloat(valTok.value);
-    else if (valTok.type === 'string') value = valTok.value;
-    else if (valTok.type === 'identifier') value = valTok.value;
-    else if (valTok.type === 'hexColor') value = valTok.value;
+    if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
+    else if (valTok.type === 'string') { value = valTok.value; ctx.next(); }
+    else if (valTok.type === 'identifier') { value = valTok.value; ctx.next(); }
+    else if (valTok.type === 'hexColor') { value = valTok.value; ctx.next(); }
+    else if (valTok.type === 'parenOpen') {
+      // Parenthesized value: (x,y) → [x, y] or (id) → ['id'] or (id,dx,dy) → [id, dx, dy]
+      value = parseKwargTuple(ctx);
+    }
     else break;
-    ctx.next();
 
     result[keyTok.value] = value;
     ctx.emitLeaf({
@@ -260,6 +267,30 @@ export function executeKwargs(
     });
   }
   return result;
+}
+
+/**
+ * Parse a parenthesized kwarg tuple: `(x,y)` → [x,y] or `(id)` → ['id'] or `(id,dx,dy)` → [id,dx,dy].
+ * Used for camera `look=(300,200)` style kwarg values.
+ */
+function parseKwargTuple(ctx: WalkContext): unknown[] {
+  const items: unknown[] = [];
+  if (!ctx.is('parenOpen')) return items;
+  ctx.next(); // consume (
+
+  while (!ctx.atEnd() && !ctx.is('parenClose')) {
+    const tok = ctx.peek();
+    if (!tok) break;
+    if (tok.type === 'number') { items.push(parseFloat(ctx.next()!.value)); }
+    else if (tok.type === 'identifier') { items.push(ctx.next()!.value); }
+    else if (tok.type === 'comma') { ctx.next(); } // skip comma
+    else break;
+  }
+  if (ctx.is('parenClose')) ctx.next(); // consume )
+
+  // If single element and it's a 2-element numeric tuple, return [x, y]
+  // Actually the astParser returns the full array regardless
+  return items;
 }
 
 /**
@@ -297,6 +328,9 @@ export function executeFlags(
  * Parse a construct driven by a schema's DslHints.
  * Consumes: keyword → positional args → kwargs/flags (interleaved).
  * Returns null if the keyword doesn't match, otherwise the parsed object.
+ *
+ * Supports `variants` on DslHints: picks the matching variant by peeking
+ * tokens, then uses that variant's hints for parsing.
  */
 export function executeSchema(
   ctx: WalkContext,
@@ -306,9 +340,19 @@ export function executeSchema(
   const hints = getDsl(schema);
   if (!hints) return null;
 
+  // Variant dispatch: if the schema has variants, pick the matching one.
+  // Variant selection is done by peeking tokens:
+  //   - 'points' variant: keyword='path', next token is parenOpen
+  //   - 'route' variant: no keyword, next token is identifier or parenOpen
+  // The variant's hints override the top-level hints for this parse.
+  const activeHints = hints.variants
+    ? selectVariantHints(ctx, hints)
+    : hints;
+  if (!activeHints) return null;
+
   // Match keyword if declared
-  if (hints.keyword) {
-    if (!ctx.is('identifier', hints.keyword)) return null;
+  if (activeHints.keyword) {
+    if (!ctx.is('identifier', activeHints.keyword)) return null;
     const kwTok = ctx.next()!;
     ctx.emitLeaf({
       schemaPath,
@@ -322,22 +366,27 @@ export function executeSchema(
   const result: Record<string, unknown> = {};
 
   // Positional args
-  if (hints.positional) {
-    for (const posHint of hints.positional) {
+  if (activeHints.positional) {
+    for (const posHint of activeHints.positional) {
       const posResult = executePositional(ctx, posHint, schemaPath);
       if (posResult) Object.assign(result, posResult);
     }
   }
 
-  // Kwargs and flags interleaved
+  // Kwargs and flags interleaved — merge both variant and top-level lists
+  const allKwargs = [...(activeHints.kwargs ?? []), ...(hints.kwargs ?? [])];
+  const allFlags = [...(activeHints.flags ?? []), ...(hints.flags ?? [])];
+  const kwargsSet = new Set(allKwargs);
+  const flagsSet = new Set(allFlags);
+
   while (!ctx.atEnd() && ctx.is('identifier')) {
     const tok = ctx.peek()!;
     const isKwarg = ctx.peek(1)?.type === 'equals';
-    if (isKwarg && hints.kwargs?.includes(tok.value)) {
-      const kw = executeKwargs(ctx, hints.kwargs, schemaPath);
+    if (isKwarg && kwargsSet.has(tok.value)) {
+      const kw = executeKwargs(ctx, allKwargs, schemaPath);
       Object.assign(result, kw);
-    } else if (!isKwarg && hints.flags?.includes(tok.value)) {
-      const fl = executeFlags(ctx, hints.flags, schemaPath);
+    } else if (!isKwarg && flagsSet.has(tok.value)) {
+      const fl = executeFlags(ctx, allFlags, schemaPath);
       Object.assign(result, fl);
     } else {
       break;
@@ -348,7 +397,42 @@ export function executeSchema(
 }
 
 /**
+ * Pick the matching variant hints by peeking at the token stream.
+ * Keyword-gated variants are tried first (they match when the current token
+ * is the variant's keyword). No-keyword variants are used as fallback.
+ * Returns null if no variants are available.
+ *
+ * For PathGeomSchema:
+ *   - 'points' variant: keyword='path', matched when current token is 'path'
+ *   - 'route' variant:  no keyword, used as fallback for arrow-based connections
+ */
+function selectVariantHints(
+  ctx: WalkContext,
+  hints: ReturnType<typeof getDsl>,
+): ReturnType<typeof getDsl> {
+  if (!hints?.variants?.length) return hints ?? null;
+
+  // First pass: try keyword-gated variants (more specific)
+  for (const variant of hints.variants) {
+    const vHints = variant.hints;
+    if (vHints.keyword && ctx.is('identifier', vHints.keyword)) {
+      return vHints;
+    }
+  }
+
+  // Second pass: use the first no-keyword variant as fallback
+  for (const variant of hints.variants) {
+    if (!variant.hints.keyword) {
+      return variant.hints;
+    }
+  }
+
+  return hints.variants[0].hints;
+}
+
+/**
  * Parse a single instance declaration: `id: body` or `id body`.
+ * Supports dotted IDs like `a.bg:` where the full dotted string becomes the id.
  * The idKey is assigned from the identifier. The body is parsed
  * against the instance schema's hints (geometry, inlineProps, sigil).
  */
@@ -360,14 +444,38 @@ export function executeInstance(
   schemaPath: string,
 ): Record<string, unknown> | null {
   if (!ctx.is('identifier')) return null;
-  const idTok = ctx.peek()!;
-  const id = idTok.value;
 
-  // Check for colon
-  const hasColon = ctx.peek(1)?.type === 'colon';
+  // Peek ahead to determine if this is a valid instance declaration.
+  // Handles dotted IDs: a.bg: or a.bg.sub:
+  let peekOffset = 0;
+  let idParts = [ctx.peek(peekOffset)!.value];
+  peekOffset++;
+  while (ctx.peek(peekOffset)?.type === 'dot') {
+    peekOffset++; // consume dot
+    const next = ctx.peek(peekOffset);
+    if (next?.type !== 'identifier') break;
+    idParts.push(next.value);
+    peekOffset++;
+  }
+  const id = idParts.join('.');
+
+  // Check for colon at the current peek position
+  const hasColon = ctx.peek(peekOffset)?.type === 'colon';
   if (colonMode === 'required' && !hasColon) return null;
 
-  ctx.next(); // consume identifier
+  // Also verify this looks like an instance line (avoid treating arrow lines as instances)
+  // An instance requires: id (possibly dotted) followed by colon, OR id followed by geometry keyword
+  // For 'required' mode, the colon check above is sufficient.
+  // For 'optional' mode, we need to be careful not to consume non-instance lines.
+
+  const idTok = ctx.peek()!;
+
+  // Consume id tokens (with dots)
+  ctx.next(); // consume first identifier
+  while (ctx.is('dot' as any)) {
+    ctx.next(); // consume dot
+    ctx.next(); // consume next identifier
+  }
   if (hasColon) ctx.next(); // consume colon
 
   ctx.emitLeaf({
@@ -391,6 +499,11 @@ export function executeInstance(
  * Parse the body of a node: geometry keyword + its args, followed by
  * inline properties. Uses the schema's hints (geometry, inlineProps) to
  * determine what to look for.
+ *
+ * Also handles:
+ * - Arrow/route syntax: `a -> b` (path with route variant, no keyword)
+ * - Template syntax: `template name key=val ...`
+ * - Indented block properties (blockProps) alongside children
  */
 export function executeNodeBody(
   ctx: WalkContext,
@@ -403,7 +516,78 @@ export function executeNodeBody(
 
   const geometry = hints.geometry ?? [];
   const inlineProps = hints.inlineProps ?? [];
+  const blockProps = hints.blockProps ?? [];
 
+  // ── Arrow/route detection ──────────────────────────────────────
+  // Check if current line starts with `identifier -> ...` (connection route).
+  // This must be checked BEFORE geometry keywords so that node IDs like 'a'
+  // are not misidentified as geometry.
+  if (ctx.is('identifier') && hasArrowAhead(ctx)) {
+    const pathSchema = resolveFieldSchema(schema, 'path');
+    if (pathSchema) {
+      // Use the route variant hints directly (no keyword, format: 'arrow')
+      const pathHints = getDsl(pathSchema);
+      const routeVariant = pathHints?.variants?.find(v => v.when === 'route');
+      if (routeVariant) {
+        // Parse route positional (arrow format)
+        const routeResult = executePositional(ctx, routeVariant.hints.positional![0], `${schemaPath}.path`);
+        const pathObj: Record<string, unknown> = {};
+        if (routeResult) Object.assign(pathObj, routeResult);
+        // Parse kwargs/flags from the route variant
+        const allKwargs = [...(routeVariant.hints.kwargs ?? []), ...(pathHints?.kwargs ?? [])];
+        const allFlags = [...(routeVariant.hints.flags ?? []), ...(pathHints?.flags ?? [])];
+        while (!ctx.atEnd() && ctx.is('identifier')) {
+          const kTok = ctx.peek()!;
+          const isKwarg = ctx.peek(1)?.type === 'equals';
+          if (isKwarg && allKwargs.includes(kTok.value)) {
+            Object.assign(pathObj, executeKwargs(ctx, allKwargs, `${schemaPath}.path`));
+          } else if (!isKwarg && allFlags.includes(kTok.value)) {
+            Object.assign(pathObj, executeFlags(ctx, allFlags, `${schemaPath}.path`));
+          } else {
+            break;
+          }
+        }
+        result.path = pathObj;
+        // Continue to parse inline props (stroke, fill, etc.) after route
+      }
+    }
+  }
+
+  // ── Template syntax ────────────────────────────────────────────
+  // `template name key=val ...` — sets node.template + node.props
+  if (!result.path && ctx.is('identifier', 'template')) {
+    ctx.next(); // consume 'template'
+    const templateSchema = resolveFieldSchema(schema, 'template');
+    let templateName: string | undefined;
+    if (ctx.is('string')) {
+      templateName = ctx.next()!.value;
+    } else if (ctx.is('identifier')) {
+      templateName = ctx.next()!.value;
+    }
+    if (templateName != null) {
+      result.template = templateName;
+      // Parse key=val props
+      const props: Record<string, unknown> = {};
+      while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
+        const keyTok = ctx.next()!;
+        ctx.next(); // consume =
+        const valTok = ctx.peek();
+        if (!valTok) break;
+        let val: unknown;
+        if (valTok.type === 'number') val = parseFloat(valTok.value);
+        else if (valTok.type === 'string') val = valTok.value;
+        else if (valTok.type === 'identifier') val = valTok.value;
+        else if (valTok.type === 'hexColor') val = valTok.value;
+        else break;
+        ctx.next();
+        props[keyTok.value] = val;
+      }
+      if (Object.keys(props).length > 0) result.props = props;
+    }
+    return result;
+  }
+
+  // ── Inline parsing loop ────────────────────────────────────────
   while (!ctx.atEnd() && (ctx.is('identifier') || ctx.is('atSign' as any))) {
     const tok = ctx.peek()!;
 
@@ -426,7 +610,10 @@ export function executeNodeBody(
       break;
     }
 
-    // Try geometry keywords (rect, ellipse, etc.)
+    // Skip geometry keyword 'path' if we already parsed a route above
+    if (result.path && tok.value === 'path') break;
+
+    // Try geometry keywords (rect, ellipse, path, etc.)
     if (geometry.includes(tok.value)) {
       const geomSchema = resolveFieldSchema(schema, tok.value);
       if (geomSchema) {
@@ -479,33 +666,150 @@ export function executeNodeBody(
       break;
     }
 
+    // Check for floating transform kwargs: `rotation=0`, `scale=2` without `at` keyword.
+    // These map to node.transform using the transform field's kwargs list.
+    // Used in camera nodes: `cam: camera look=all zoom=1 rotation=0`
+    if (ctx.peek(1)?.type === 'equals') {
+      const transformSchema = resolveFieldSchema(schema, 'transform');
+      if (transformSchema) {
+        const tHints = getDsl(transformSchema);
+        if (tHints?.kwargs?.includes(tok.value)) {
+          const kw = executeKwargs(ctx, tHints.kwargs, `${schemaPath}.transform`);
+          if (Object.keys(kw).length > 0) {
+            if (!result.transform) result.transform = {};
+            Object.assign(result.transform as Record<string, unknown>, kw);
+            continue;
+          }
+        }
+      }
+    }
+
     // Not a recognized token — break (inline parsing stops)
     break;
   }
 
-  // Children: indented block
+  // ── Indented block (block properties + children) ───────────────
   ctx.skipNewlines();
   if (ctx.is('indent' as any) && hints.children?.children === 'block') {
     ctx.next(); // consume indent
     const children: Array<Record<string, unknown>> = [];
+
     while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
       ctx.skipNewlines();
       if (ctx.is('dedent' as any)) break;
-      // Recursively parse child instance using the same schema
-      const child = executeInstance(ctx, schema, 'id', 'required', `${schemaPath}.children`);
-      if (child) {
-        children.push(child);
-        ctx.skipNewlines();
-      } else {
-        // Can't parse as instance — skip token to avoid infinite loop
-        ctx.next();
+
+      // Distinguish block properties from child nodes:
+      // A block property is an identifier in blockProps that is NOT followed by a colon
+      // (and not part of a dotted-id child declaration).
+      // A child node is an identifier (possibly dotted) followed by a colon.
+      if (ctx.is('identifier')) {
+        const firstTok = ctx.peek()!;
+        const isBlockProp = isBlockPropertyToken(ctx, blockProps, geometry);
+
+        if (isBlockProp) {
+          // Parse block property via the same inline prop logic
+          const fieldName = firstTok.value;
+          const isFillProp = fieldName === 'fill';
+
+          if (isFillProp) {
+            ctx.next(); // consume 'fill'
+            const color = executeColor(ctx, `${schemaPath}.fill`);
+            if (color != null) result.fill = color;
+          } else if (geometry.includes(fieldName)) {
+            // Geometry keyword as block property (e.g., `path (...)`)
+            const geomSchema = resolveFieldSchema(schema, fieldName);
+            if (geomSchema) {
+              const geom = executeSchema(ctx, geomSchema, `${schemaPath}.${fieldName}`);
+              if (geom != null) result[fieldName] = geom;
+            } else {
+              ctx.next(); // skip unrecognized geometry
+            }
+          } else {
+            // Other block prop (stroke, dash, layout, etc.)
+            const inlinePropField = findInlinePropField(schema, [...inlineProps, ...blockProps], fieldName);
+            if (inlinePropField) {
+              const propSchema = resolveFieldSchema(schema, inlinePropField.fieldName);
+              if (propSchema) {
+                const parsed = executeSchema(ctx, propSchema, `${schemaPath}.${inlinePropField.fieldName}`);
+                if (parsed != null && Object.keys(parsed).length > 0) {
+                  if ('_value' in parsed && Object.keys(parsed).length === 1) {
+                    result[inlinePropField.fieldName] = parsed._value;
+                  } else {
+                    result[inlinePropField.fieldName] = parsed;
+                  }
+                } else {
+                  ctx.skipToNewline();
+                }
+              } else {
+                ctx.skipToNewline();
+              }
+            } else {
+              ctx.skipToNewline();
+            }
+          }
+          ctx.skipNewlines();
+          continue;
+        }
+
+        // Try parsing as a child instance (dotted-id: body)
+        const child = executeInstance(ctx, schema, 'id', 'required', `${schemaPath}.children`);
+        if (child) {
+          children.push(child);
+          ctx.skipNewlines();
+          continue;
+        }
       }
+
+      // Can't parse — skip token to avoid infinite loop
+      ctx.next();
     }
+
     if (ctx.is('dedent' as any)) ctx.next();
     if (children.length > 0) result.children = children;
   }
 
   return result;
+}
+
+/**
+ * Detect if the current token starts an arrow/route connection.
+ * Peeks ahead on the current line for an arrow token.
+ */
+function hasArrowAhead(ctx: WalkContext): boolean {
+  let offset = 0;
+  while (true) {
+    const tok = ctx.peek(offset);
+    if (!tok) return false;
+    if (tok.type === 'newline' || tok.type === 'indent' || tok.type === 'dedent' || tok.type === 'eof') return false;
+    if (tok.type === 'arrow') return true;
+    offset++;
+  }
+}
+
+/**
+ * Determine if the current token is a block property (vs a child node declaration).
+ * Block properties: identifier in blockProps or geometry list, NOT followed by colon.
+ * Child nodes: identifier (possibly dotted) followed by colon.
+ */
+function isBlockPropertyToken(
+  ctx: WalkContext,
+  blockProps: string[],
+  geometry: string[],
+): boolean {
+  const tok = ctx.peek();
+  if (!tok || tok.type !== 'identifier') return false;
+
+  const name = tok.value;
+  const isKnownBlockProp = blockProps.includes(name) || geometry.includes(name);
+  if (!isKnownBlockProp) return false;
+
+  // If the next real token after (possibly dotted) identifier(s) is a colon, it's a child
+  // Check immediate next token:
+  const next = ctx.peek(1);
+  if (next?.type === 'colon') return false;  // id: ... = child
+  if (next?.type === 'dot') return false;    // dotted id = child
+
+  return true;
 }
 
 /** Unwrap Zod optional/default wrappers to get the inner schema. */
@@ -642,9 +946,39 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
   const valTok = ctx.peek();
   if (!valTok) return { key: parts.join('.'), value: null };
 
+  // Braced object: { value: N, easing: "name" } — used in easing-comparison
+  if (valTok.type === 'braceOpen') {
+    const obj = parseKeyframeValueObject(ctx);
+    return { key: parts.join('.'), value: obj };
+  }
+
+  // Parenthesized tuple: (a) or (a,b) → string[] array (used in camera-look-fit)
+  if (valTok.type === 'parenOpen') {
+    const arr = parseKeyframeTuple(ctx);
+    return { key: parts.join('.'), value: arr };
+  }
+
+  // Boolean literals
+  if (valTok.type === 'identifier' && valTok.value === 'true') {
+    ctx.next();
+    return { key: parts.join('.'), value: true };
+  }
+  if (valTok.type === 'identifier' && valTok.value === 'false') {
+    ctx.next();
+    return { key: parts.join('.'), value: false };
+  }
+
   // Attempt color parsing first — handles named, hex, hsl, rgb forms
   const colorValue = executeColor(ctx, parts.join('.'));
-  if (colorValue != null) return { key: parts.join('.'), value: colorValue };
+  if (colorValue != null) {
+    // Check for inline easing: value easing=name
+    if (ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
+      ctx.next(); ctx.next();
+      const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
+      if (easing) return { key: parts.join('.'), value: { value: colorValue, easing } };
+    }
+    return { key: parts.join('.'), value: colorValue };
+  }
 
   let value: unknown;
   if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
@@ -652,7 +986,76 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
     value = valTok.value;
     ctx.next();
   }
+
+  // Check for inline easing after value: `box.x: 500 easing=linear`
+  if (value != null && ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
+    ctx.next(); ctx.next();
+    const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
+    if (easing) return { key: parts.join('.'), value: { value, easing } };
+  }
+
   return { key: parts.join('.'), value };
+}
+
+/**
+ * Parse a parenthesized tuple value: `(a)` or `(a,b)` → string[].
+ * Used for camera-look-fit: `cam.camera.look: (a)` or `cam.camera.look: (a,b)`.
+ */
+function parseKeyframeTuple(ctx: WalkContext): unknown[] {
+  const items: unknown[] = [];
+  if (!ctx.is('parenOpen')) return items;
+  ctx.next(); // consume (
+
+  while (!ctx.atEnd() && !ctx.is('parenClose')) {
+    const tok = ctx.peek();
+    if (!tok) break;
+    if (tok.type === 'identifier') {
+      items.push(ctx.next()!.value);
+    } else if (tok.type === 'number') {
+      items.push(parseFloat(ctx.next()!.value));
+    } else if (tok.type === 'comma') {
+      ctx.next(); // skip comma
+    } else {
+      break;
+    }
+  }
+
+  if (ctx.is('parenClose')) ctx.next(); // consume )
+  return items;
+}
+
+/**
+ * Parse a braced keyframe value object: `{ value: N, easing: "name" }`.
+ * This is the JSON-escape-hatch syntax used in easing-comparison.
+ */
+function parseKeyframeValueObject(ctx: WalkContext): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+  if (!ctx.is('braceOpen')) return obj;
+  ctx.next(); // consume {
+
+  while (!ctx.atEnd() && !ctx.is('braceClose')) {
+    if (!ctx.is('identifier')) { ctx.next(); continue; }
+    const keyTok = ctx.next()!;
+    const key = keyTok.value;
+    if (!ctx.is('colon')) continue;
+    ctx.next(); // consume :
+
+    const valTok = ctx.peek();
+    if (!valTok) break;
+    let val: unknown;
+    if (valTok.type === 'number') { val = parseFloat(valTok.value); ctx.next(); }
+    else if (valTok.type === 'string') { val = valTok.value; ctx.next(); }
+    else if (valTok.type === 'identifier') { val = valTok.value; ctx.next(); }
+    else if (valTok.type === 'hexColor') { val = valTok.value; ctx.next(); }
+    else break;
+
+    obj[key] = val;
+    // Skip comma between entries
+    if (ctx.is('comma')) ctx.next();
+  }
+
+  if (ctx.is('braceClose')) ctx.next(); // consume }
+  return obj;
 }
 
 /**
@@ -673,6 +1076,14 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
       value: tok.value,
       dslRole: 'value',
     });
+    // Check for hex-alpha: `#rrggbb a=0.7`
+    if (ctx.is('identifier', 'a') && ctx.peek(1)?.type === 'equals') {
+      ctx.next(); ctx.next(); // consume 'a' and '='
+      if (ctx.is('number')) {
+        const a = parseFloat(ctx.next()!.value);
+        return { hex: tok.value, a };
+      }
+    }
     return tok.value;
   }
 
@@ -683,7 +1094,7 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
     if (tok.value === 'rgb') {
       return executeSchema(ctx, RgbColorSchema, schemaPath);
     }
-    // Named color
+    // Named color — may be followed by `a=N` for named-alpha
     ctx.next();
     ctx.emitLeaf({
       schemaPath,
@@ -692,6 +1103,14 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
       value: tok.value,
       dslRole: 'value',
     });
+    // Check for named-alpha: `black a=0.7`
+    if (ctx.is('identifier', 'a') && ctx.peek(1)?.type === 'equals') {
+      ctx.next(); ctx.next(); // consume 'a' and '='
+      if (ctx.is('number')) {
+        const a = parseFloat(ctx.next()!.value);
+        return { name: tok.value, a };
+      }
+    }
     return tok.value;
   }
 

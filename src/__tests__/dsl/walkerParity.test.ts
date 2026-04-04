@@ -100,12 +100,29 @@ describe('walker parity with astParser', () => {
   const SUPPORTED_NAMES = new Set<string>([
     // Primitives
     'rect', 'ellipse', 'text',
+    'dash-patterns',
     // Colors
     'color-animation', 'hue-shortest-arc',
     // Styles
     'named-styles', 'style-animation',
     // Animation
     'position-animation', 'opacity-animation',
+    'easing-comparison',
+    // Composition
+    'box-composition', 'line-composition',
+    // Connections
+    'edge-snapping', 'arrow', 'smooth-bend',
+    // Composition with animation
+    'nested-children',
+    // Inheritance
+    'fill-inheritance',
+    // Layout
+    'flex-row', 'flex-grow', 'slot-animation',
+    // Connections (more)
+    'smooth-spline', 'routed-polyline',
+    // Camera
+    'camera-target', 'camera-zoom', 'camera-look-fit', 'camera-follow', 'camera-switch',
+    'camera-ratio', 'camera-rotation', 'camera-combined',
   ]);
 
   for (const sample of v2Samples) {
