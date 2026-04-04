@@ -1,6 +1,6 @@
 import { tokenize } from './tokenizer';
 import { WalkContext } from './walkContext';
-import { executeSchema, executeInstance } from './hintExecutors';
+import { executeSchema, executeInstance, executeColor } from './hintExecutors';
 import { getDsl } from './dslMeta';
 import { DocumentSchema } from '../types/schemaRegistry';
 import type { z } from 'zod';
@@ -36,6 +36,12 @@ export function walkDocument(text: string): WalkResult {
     // Match against top-level fields by keyword
     const matched = matchTopLevel(ctx, tok.value, topLevelFields, model);
     if (matched) {
+      ctx.skipNewlines();
+      continue;
+    }
+
+    // Try matching a section keyword (style/animate/images)
+    if (matchSection(ctx, tok.value, shape, model)) {
       ctx.skipNewlines();
       continue;
     }
@@ -90,6 +96,117 @@ function matchTopLevel(
     model[field.name] = result;
   }
   return true;
+}
+
+function matchSection(
+  ctx: WalkContext,
+  keyword: string,
+  shape: Record<string, z.ZodType>,
+  model: Record<string, any>,
+): boolean {
+  for (const [name, field] of Object.entries(shape)) {
+    const inner = (field as any)._def?.innerType ?? field;
+    const hints = getDsl(inner);
+    if (!hints) continue;
+
+    // sectionKeyword field (styles, images)
+    if (hints.sectionKeyword === keyword) {
+      ctx.next(); // consume section keyword
+
+      if (hints.instanceDeclaration) {
+        // "style primary" → followed by indented props
+        const nameTok = ctx.peek();
+        if (nameTok?.type === 'identifier') {
+          const entryName = nameTok.value;
+          ctx.next();
+          const props = parsePropertyBlock(ctx, `${name}.${entryName}`);
+          if (!model[name]) model[name] = {};
+          model[name][entryName] = props;
+        }
+      } else if (hints.indentedEntries) {
+        // "images" → key: "value" entries
+        const entries = parseKeyValueBlock(ctx);
+        if (!model[name]) model[name] = {};
+        Object.assign(model[name], entries);
+      }
+      return true;
+    }
+
+    // animate uses keyword on the schema itself — see Task 14
+  }
+  return false;
+}
+
+/**
+ * Parse an indented block of `keyword value [kwargs]` lines.
+ * Used for style blocks (fill red, stroke darkred width=2).
+ */
+function parsePropertyBlock(ctx: WalkContext, schemaPath: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  ctx.skipNewlines();
+  if (!ctx.is('indent')) return result;
+  ctx.next(); // consume indent
+
+  while (!ctx.atEnd() && !ctx.is('dedent')) {
+    ctx.skipNewlines();
+    if (ctx.is('dedent')) break;
+    const tok = ctx.peek();
+    if (!tok || tok.type !== 'identifier') { ctx.next(); continue; }
+
+    if (tok.value === 'fill') {
+      ctx.next(); // consume 'fill'
+      const color = executeColor(ctx, `${schemaPath}.fill`);
+      if (color != null) result.fill = color;
+    } else if (tok.value === 'stroke') {
+      // stroke takes color + width=N
+      ctx.next(); // consume 'stroke'
+      const color = executeColor(ctx, `${schemaPath}.stroke.color`);
+      if (color != null) {
+        const stroke: any = { color };
+        // Check for width kwarg
+        if (ctx.is('identifier', 'width') && ctx.peek(1)?.type === 'equals') {
+          ctx.next(); ctx.next();
+          if (ctx.is('number')) {
+            stroke.width = parseFloat(ctx.next()!.value);
+          }
+        }
+        result.stroke = stroke;
+      }
+    } else {
+      // Unknown — skip to next line
+      ctx.next();
+    }
+    ctx.skipNewlines();
+  }
+
+  if (ctx.is('dedent')) ctx.next();
+  return result;
+}
+
+/**
+ * Parse an indented block of `key: "value"` lines.
+ * Used for images block.
+ */
+function parseKeyValueBlock(ctx: WalkContext): Record<string, string> {
+  const result: Record<string, string> = {};
+  ctx.skipNewlines();
+  if (!ctx.is('indent')) return result;
+  ctx.next(); // consume indent
+
+  while (!ctx.atEnd() && !ctx.is('dedent')) {
+    ctx.skipNewlines();
+    if (ctx.is('dedent')) break;
+    if (!ctx.is('identifier')) { ctx.next(); continue; }
+    const keyTok = ctx.next()!;
+    if (!ctx.is('colon')) continue;
+    ctx.next();
+    if (!ctx.is('string')) continue;
+    const valTok = ctx.next()!;
+    result[keyTok.value] = valTok.value;
+    ctx.skipNewlines();
+  }
+  if (ctx.is('dedent')) ctx.next();
+  return result;
 }
 
 function matchInstance(

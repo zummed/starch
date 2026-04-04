@@ -101,3 +101,32 @@ describe('walkDocument - children and sigils', () => {
     expect(model.objects[0].children[1].id).toBe('child2');
   });
 });
+
+describe('walkDocument - sections', () => {
+  it('parses style block', () => {
+    const dsl = `style primary
+  fill red`;
+    const { model } = walkDocument(dsl);
+    expect(model.styles?.primary).toBeDefined();
+    expect(model.styles.primary.fill).toBe('red');
+  });
+
+  it('parses style block with multiple properties', () => {
+    const dsl = `style danger
+  fill firebrick
+  stroke darkred width=2`;
+    const { model } = walkDocument(dsl);
+    expect(model.styles?.danger).toBeDefined();
+    expect(model.styles.danger.fill).toBe('firebrick');
+    expect(model.styles.danger.stroke).toEqual({ color: 'darkred', width: 2 });
+  });
+
+  it('parses images block', () => {
+    const dsl = `images
+  logo: "logo.png"
+  hero: "hero.jpg"`;
+    const { model } = walkDocument(dsl);
+    expect(model.images?.logo).toBe('logo.png');
+    expect(model.images?.hero).toBe('hero.jpg');
+  });
+});

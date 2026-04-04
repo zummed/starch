@@ -311,15 +311,32 @@ const objectsField = dsl(
   },
 );
 
+const stylesField = dsl(
+  z.record(z.string(), z.unknown()).describe('Named style definitions'),
+  {
+    sectionKeyword: 'style',
+    instanceDeclaration: { idKey: 'name', colon: 'optional' },
+    indentedEntries: true,
+  },
+);
+
+const imagesField = dsl(
+  z.record(z.string(), z.string()).describe('Named image sources (id → URL)'),
+  {
+    sectionKeyword: 'images',
+    indentedEntries: true,
+  },
+);
+
 export const DocumentSchema = z.object({
   name: nameField.optional(),
   description: descriptionField.optional(),
   objects: objectsField.optional(),
-  styles: z.record(z.string(), z.unknown()).describe('Named style definitions').optional(),
+  styles: stylesField.optional(),
   animate: AnimConfigSchema.describe('Animation configuration').optional(),
   background: backgroundField.optional(),
   viewport: viewportField.optional(),
-  images: z.record(z.string(), z.string()).describe('Named image sources (id → URL)').optional(),
+  images: imagesField.optional(),
 });
 
 /**
