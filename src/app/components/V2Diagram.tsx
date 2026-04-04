@@ -12,6 +12,7 @@ import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/c
 import { emitFrame } from '../../renderer/emitter';
 import { SvgRenderBackend } from '../../renderer/svgBackend';
 import type { RenderBackend } from '../../renderer/backend';
+import { colorToRgba } from '../../types/color';
 
 // Register layout strategies (idempotent)
 registerStrategy('flex', flexStrategy);
@@ -184,6 +185,22 @@ export function useV2Diagram(props: V2DiagramProps) {
       backendRef.current = null;
     };
   }, []);
+
+  // Apply background color from scene
+  useEffect(() => {
+    const backend = backendRef.current;
+    if (!backend) return;
+    const bg = scene.background;
+    if (bg) {
+      try {
+        backend.setBackground(colorToRgba(bg as any));
+      } catch {
+        backend.setBackground('transparent');
+      }
+    } else {
+      backend.setBackground('transparent');
+    }
+  }, [scene.background]);
 
   // Re-render when scene/tracks/time/viewport change
   useEffect(() => {
