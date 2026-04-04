@@ -143,8 +143,12 @@ export function reactNodeView(
       // Let ProseMirror handle mutations inside the contentDOM.
       ignoreMutation(mutation: MutationRecord | { type: 'selection'; target: Node }) {
         if (!contentDOM) return true;
-        if (!('addedNodes' in mutation)) return true; // selection mutations
-        return !contentDOM.contains(mutation.target);
+        // Selection mutations must NOT be ignored — ProseMirror needs them
+        // to track cursor position from clicks.
+        if (mutation.type === 'selection') return false;
+        // DOM mutations inside contentDOM are ProseMirror's responsibility.
+        if ('target' in mutation) return !contentDOM.contains(mutation.target);
+        return true;
       },
 
       stopEvent() {
