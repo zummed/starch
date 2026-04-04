@@ -288,8 +288,6 @@ function parseKwargTuple(ctx: WalkContext): unknown[] {
   }
   if (ctx.is('parenClose')) ctx.next(); // consume )
 
-  // If single element and it's a 2-element numeric tuple, return [x, y]
-  // Actually the astParser returns the full array regardless
   return items;
 }
 
