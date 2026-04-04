@@ -1,20 +1,17 @@
-import React from 'react';
-import { useNodeViewContext } from '@prosemirror-adapter/react';
+import type { NodeViewProps } from '../reactNodeView';
 
-export function KeyframeBlockView() {
-  const { node, contentRef } = useNodeViewContext();
+export function KeyframeBlockView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const time = node.attrs.time as number;
 
   return (
     <div className="keyframe-block">
       <div className="keyframe-header">{time}</div>
-      <div ref={contentRef} />
+      <div data-content-hole="" />
     </div>
   );
 }
 
-export function KeyframeEntryView() {
-  const { node, contentRef } = useNodeViewContext();
+export function KeyframeEntryView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const target = node.attrs.target as string;
   const property = node.attrs.property as string;
 
@@ -22,7 +19,7 @@ export function KeyframeEntryView() {
     <div className="keyframe-entry">
       <span className="target">{target}</span>.
       <span className="property">{property}</span>{' '}
-      <span ref={contentRef} />
+      <span data-content-hole="" />
     </div>
   );
 }

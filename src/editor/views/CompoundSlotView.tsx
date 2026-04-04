@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { useNodeViewContext } from '@prosemirror-adapter/react';
+import { useState } from 'react';
+import type { NodeViewProps } from '../reactNodeView';
 
-export function CompoundSlotView() {
-  const { node, contentRef } = useNodeViewContext();
+export function CompoundSlotView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const [expanded, setExpanded] = useState(true);
   const key = node.attrs.key as string;
 
@@ -11,7 +10,7 @@ export function CompoundSlotView() {
       <div className="compound-header" onClick={() => setExpanded(prev => !prev)}>
         {key}
       </div>
-      {expanded && <div ref={contentRef} />}
+      {expanded && <div data-content-hole="" />}
     </div>
   );
 }

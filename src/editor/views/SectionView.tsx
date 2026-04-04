@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { useNodeViewContext } from '@prosemirror-adapter/react';
+import { useState } from 'react';
+import type { NodeViewProps } from '../reactNodeView';
 
-export function StyleBlockView() {
-  const { node, contentRef } = useNodeViewContext();
+export function StyleBlockView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const [collapsed, setCollapsed] = useState(false);
   const name = node.attrs.name as string;
 
@@ -14,13 +13,12 @@ export function StyleBlockView() {
       >
         style {name}
       </div>
-      {!collapsed && <div ref={contentRef} />}
+      {!collapsed && <div data-content-hole="" />}
     </div>
   );
 }
 
-export function AnimateBlockView() {
-  const { node, contentRef } = useNodeViewContext();
+export function AnimateBlockView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -31,13 +29,12 @@ export function AnimateBlockView() {
       >
         animate
       </div>
-      {!collapsed && <div ref={contentRef} />}
+      {!collapsed && <div data-content-hole="" />}
     </div>
   );
 }
 
-export function ImagesBlockView() {
-  const { node, contentRef } = useNodeViewContext();
+export function ImagesBlockView({ node }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -48,7 +45,7 @@ export function ImagesBlockView() {
       >
         images
       </div>
-      {!collapsed && <div ref={contentRef} />}
+      {!collapsed && <div data-content-hole="" />}
     </div>
   );
 }

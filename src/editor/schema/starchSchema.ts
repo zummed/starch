@@ -1,5 +1,9 @@
-import { Schema } from 'prosemirror-model';
+import { Schema, type DOMOutputSpec } from 'prosemirror-model';
 import { attrs } from './schemaBuilder';
+
+/** Fallback toDOM for block nodes — used when no NodeView is registered. */
+const block0: DOMOutputSpec = ['div', 0];
+const inline0: DOMOutputSpec = ['span', 0];
 
 export const starchSchema = new Schema({
   nodes: {
@@ -17,6 +21,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -28,6 +33,7 @@ export const starchSchema = new Schema({
         geometryType: { default: '' },
       }),
       content: '(geometry_slot | property_slot | compound_slot | style_ref | scene_node)*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -37,6 +43,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -46,6 +53,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -55,6 +63,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'property_slot+',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -65,6 +74,7 @@ export const starchSchema = new Schema({
         parentKey: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -73,6 +83,7 @@ export const starchSchema = new Schema({
         name: { default: '' },
       }),
       atom: true,
+      toDOM: (node) => ['span', { class: 'style-ref' }, `@${node.attrs.name}`] as DOMOutputSpec,
       defining: true,
     },
 
@@ -82,6 +93,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: '(property_slot | compound_slot)*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -90,6 +102,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: '(property_slot | keyframe_block | chapter)*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -99,6 +112,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'keyframe_entry*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -109,6 +123,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -117,6 +132,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -125,6 +141,7 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'image_entry*',
+      toDOM: () => block0,
       defining: true,
     },
 
@@ -134,8 +151,8 @@ export const starchSchema = new Schema({
         schemaPath: { default: '' },
       }),
       content: 'text*',
+      toDOM: () => block0,
       defining: true,
     },
   },
 });
-

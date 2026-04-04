@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
-import { useNodeViewContext } from '@prosemirror-adapter/react';
+import { useState } from 'react';
+import type { NodeViewProps } from '../reactNodeView';
 
-export function SceneNodeView() {
-  const { node, contentRef } = useNodeViewContext();
+export function SceneNodeView({ node, contentDOM }: NodeViewProps & { contentDOM?: HTMLElement }) {
   const [collapsed, setCollapsed] = useState(false);
-
   const id = node.attrs.id as string;
 
   return (
@@ -15,7 +13,7 @@ export function SceneNodeView() {
         </span>
         <span className="scene-node-id">{id}</span>
       </div>
-      {!collapsed && <div ref={contentRef} />}
+      {!collapsed && <div data-content-hole="" />}
     </div>
   );
 }

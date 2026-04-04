@@ -1,7 +1,9 @@
 import type { Node as PmNode } from 'prosemirror-model';
+import JSON5 from 'json5';
 import { starchSchema } from '../schema/starchSchema';
 import { buildAstFromText } from '../../dsl/astParser';
 import type { FormatHints } from '../../dsl/formatHints';
+import { emptyFormatHints } from '../../dsl/formatHints';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -360,6 +362,17 @@ function modelToDoc(model: Record<string, any>, formatHints: FormatHints): PmNod
 // ---------------------------------------------------------------------------
 
 export function importDsl(text: string): ImportResult {
+  const trimmed = text.trimStart();
+
+  // JSON5 format — parse directly, no AST
+  if (trimmed.startsWith('{')) {
+    const model = JSON5.parse(trimmed);
+    const formatHints = emptyFormatHints();
+    const doc = modelToDoc(model, formatHints);
+    return { doc, formatHints };
+  }
+
+  // DSL format — use the AST parser
   const { model, formatHints } = buildAstFromText(text);
   const doc = modelToDoc(model, formatHints);
   return { doc, formatHints };
