@@ -99,7 +99,7 @@ function matchTopLevel(
 }
 
 /** Walk Zod schema chain (including _zod.parent) to find DslHints. */
-function findHints(schema: z.ZodType): { hints: ReturnType<typeof getDsl>; schema: z.ZodType } | null {
+function findHints(schema: z.ZodType): { hints: NonNullable<ReturnType<typeof getDsl>>; schema: z.ZodType } | null {
   let s: any = schema;
   while (s) {
     const h = getDsl(s as z.ZodType);

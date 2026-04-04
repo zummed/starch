@@ -410,7 +410,7 @@ function selectVariantHints(
   ctx: WalkContext,
   hints: ReturnType<typeof getDsl>,
 ): ReturnType<typeof getDsl> {
-  if (!hints?.variants?.length) return hints ?? null;
+  if (!hints?.variants?.length) return hints;
 
   // First pass: try keyword-gated variants (more specific)
   for (const variant of hints.variants) {
