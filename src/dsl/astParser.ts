@@ -628,8 +628,16 @@ function isBlockPropertyLine(s: TokenStream): boolean {
 
 function isChildNodeLine(s: TokenStream): boolean {
   if (!s.is('identifier')) return false;
+
+  const firstWord = s.peek().value;
+  // If the first word is a block property keyword (fill, stroke, rect, etc.),
+  // it's a property of the parent, not a child node declaration.
+  if (BLOCK_PROP_KEYWORDS.has(firstWord)) return false;
+
+  // Colon form: identifier:
   if (s.peek(1).type === 'colon') return true;
-  // Support dotted IDs: identifier.identifier: (e.g. a.bg:)
+
+  // Dotted IDs: identifier.identifier: (e.g. a.bg:)
   let offset = 1;
   while (s.peek(offset).type === 'dot') {
     offset++;
@@ -637,6 +645,19 @@ function isChildNodeLine(s: TokenStream): boolean {
     offset++;
     if (s.peek(offset).type === 'colon') return true;
   }
+
+  // Colon-less form: identifier followed by a node-body starter.
+  // Inside a node-list context, the second token indicates a node body:
+  // geometry keyword (rect, ellipse, ...), template, at, or an arrow.
+  const second = s.peek(1);
+  if (second.type === 'identifier') {
+    const w = second.value;
+    if (GEOM_KEYWORDS.has(w)) return true;
+    if (w === 'template') return true;
+    if (w === 'at') return true;
+  }
+  if (second.type === 'arrow') return true; // connection: id -> target
+
   return false;
 }
 
@@ -649,7 +670,8 @@ function parseNodeLine(s: TokenStream): any {
     s.next(); // consume '.'
     id += '.' + s.expect('identifier').value;
   }
-  s.expect('colon');
+  // Colon is optional — only required at top level (enforced by caller)
+  if (s.is('colon')) s.next();
 
   const node: any = { id };
 
@@ -2257,6 +2279,33 @@ export function buildAstFromText(input: string): ParseResult {
       s.next();
       result.animate = parseAnimateBlock(s);
       s.skipNewlines();
+      continue;
+    }
+
+    // objects section: explicit header for a list of nodes.
+    // Inside this section, nodes can be declared with or without colons.
+    if (s.is('identifier', 'objects')) {
+      s.next();
+      s.skipNewlines();
+      if (s.is('indent')) {
+        s.next();
+        while (!s.atEnd() && !s.is('dedent') && !s.is('eof')) {
+          s.skipNewlines();
+          if (s.is('dedent') || s.is('eof')) break;
+          if (isChildNodeLine(s)) {
+            const node = parseNodeLine(s);
+            s.skipNewlines();
+            if (s.is('indent')) {
+              parseChildren(s, node);
+            }
+            result.objects.push(node);
+            s.skipNewlines();
+          } else {
+            s.next();
+          }
+        }
+        if (s.is('dedent')) s.next();
+      }
       continue;
     }
 
