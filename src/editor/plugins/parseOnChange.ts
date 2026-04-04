@@ -3,7 +3,7 @@
  * Calls onModelChange whenever the document changes.
  */
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { buildAstFromText } from '../../dsl/astParser';
+import { walkDocument } from '../../dsl/schemaWalker';
 
 export const parseKey = new PluginKey('parseOnChange');
 
@@ -25,7 +25,7 @@ export function parseOnChangePlugin({ onModelChange, debounceMs = 100 }: ParsePl
           timer = setTimeout(() => {
             const text = view.state.doc.textContent;
             try {
-              const { model } = buildAstFromText(text);
+              const { model } = walkDocument(text);
               onModelChange(model);
             } catch {
               // Parse error — don't update model
