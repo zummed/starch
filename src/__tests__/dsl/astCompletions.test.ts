@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { completionsAt, type CompletionItem } from '../../dsl/astCompletions';
 import { buildAstFromModel } from '../../dsl/astEmitter';
-import { buildAstFromText } from '../../dsl/astParser';
+import { walkDocument } from '../../dsl/schemaWalker';
+import { leavesToAst } from '../../dsl/astAdapter';
 import { emptyFormatHints } from '../../dsl/formatHints';
 
 const hints = emptyFormatHints();
@@ -38,7 +39,8 @@ function completionsWithPrefix(
   const lineText = wordMatch ? fullLine.slice(0, fullLine.length - prefix.length) : fullLine;
   const pos = wordMatch ? cursorOffset - prefix.length : cursorOffset;
 
-  const { ast } = buildAstFromText(text);
+  const { ast: ctx } = walkDocument(text);
+  const ast = leavesToAst(ctx.astLeaves(), text.length);
   const items = completionsAt(ast, pos, lineText, modelJson);
   return { items, prefix };
 }
@@ -229,7 +231,8 @@ describe('completionsAt', () => {
 
   describe('two-tier scoped completions', () => {
     it('after "stroke red ": width in stroke scope, properties in node scope', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 stroke red ');
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
       const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
       expect(scoped(items, 'stroke')).toContain('width');
       expect(scoped(items, 'node')).toContain('fill');
@@ -237,7 +240,8 @@ describe('completionsAt', () => {
     });
 
     it('after "rect 140x80 ": radius in rect scope, properties in node scope', () => {
-      const { ast } = buildAstFromText('box: rect 140x80 ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
       const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       expect(scoped(items, 'rect')).toContain('radius');
       expect(scoped(items, 'node')).toContain('fill');
@@ -245,14 +249,16 @@ describe('completionsAt', () => {
     });
 
     it('after "fill red ": no scope tags (color is a leaf type)', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 fill red ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
       const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
       const scopedItems = items.filter(i => i.scope !== undefined);
       expect(scopedItems).toHaveLength(0);
     });
 
     it('after "rect 140x80 radius=8 ": rect scope empty, node scope only', () => {
-      const { ast } = buildAstFromText('box: rect 140x80 radius=8 ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 radius=8 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 radius=8 '.length);
       const items = completionsAt(ast, 26, 'box: rect 140x80 radius=8 ');
       expect(scoped(items, 'rect')).toHaveLength(0);
       // Node properties should still be available
@@ -261,7 +267,8 @@ describe('completionsAt', () => {
     });
 
     it('after "stroke red width=2 ": stroke scope empty, node scope only', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 stroke red width=2 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 stroke red width=2 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 stroke red width=2 '.length);
       const items = completionsAt(ast, 37, 'box: rect 100x100 stroke red width=2 ');
       expect(scoped(items, 'stroke')).toHaveLength(0);
     });
@@ -271,7 +278,8 @@ describe('completionsAt', () => {
 
   describe('positional fields excluded', () => {
     it('rect completions do NOT include w or h (positional, not kwargs)', () => {
-      const { ast } = buildAstFromText('box: rect 140x80 ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
       const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       const rectItems = scoped(items, 'rect');
       expect(rectItems).not.toContain('w');
@@ -280,7 +288,8 @@ describe('completionsAt', () => {
     });
 
     it('stroke completions do NOT include color (positional)', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 stroke red ');
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
       const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
       const strokeItems = scoped(items, 'stroke');
       expect(strokeItems).not.toContain('color');
@@ -288,7 +297,8 @@ describe('completionsAt', () => {
     });
 
     it('transform completions do NOT include x or y (positional)', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 at 50,75 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 at 50,75 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 at 50,75 '.length);
       const items = completionsAt(ast, 27, 'box: rect 100x100 at 50,75 ');
       const atItems = scoped(items, 'transform');
       expect(atItems).not.toContain('x');
@@ -303,35 +313,40 @@ describe('completionsAt', () => {
 
   describe('snippet templates', () => {
     it('fill has a color snippet template', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const fill = items.find(i => i.label === 'fill');
       expect(fill?.snippetTemplate).toBe('fill ${1:color}');
     });
 
     it('stroke has a color snippet template', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const stroke = items.find(i => i.label === 'stroke');
       expect(stroke?.snippetTemplate).toContain('${1:color}');
     });
 
     it('at has a position snippet template', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const at = items.find(i => i.label === 'at');
       expect(at?.snippetTemplate).toContain('${1:X},${2:Y}');
     });
 
     it('kwarg completions have value snippets', () => {
-      const { ast } = buildAstFromText('box: rect 140x80 ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
       const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       const radius = items.find(i => i.label === 'radius');
       expect(radius?.snippetTemplate).toMatch(/radius=\$\{1:\d+\}/);
     });
 
     it('layout has a type snippet template', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const layout = items.find(i => i.label === 'layout');
       expect(layout?.snippetTemplate).toContain('${1:type}');
@@ -385,7 +400,8 @@ describe('completionsAt', () => {
 
   describe('node property completions', () => {
     it('does not offer geometry keywords when geometry already present', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const l = labels(items);
       expect(l).not.toContain('rect');
@@ -393,7 +409,8 @@ describe('completionsAt', () => {
     });
 
     it('does not offer properties already present on the node', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 fill red ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
       const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
       const l = labels(items);
       expect(l).not.toContain('fill');  // already present
@@ -402,7 +419,8 @@ describe('completionsAt', () => {
 
     it('offers @style references when styles exist in model', () => {
       const model = { styles: { primary: {} }, objects: [{ id: 'box', rect: { w: 100, h: 100 } }] };
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ', model);
       const l = labels(items);
       expect(l).toContain('@primary');
@@ -427,7 +445,8 @@ describe('completionsAt', () => {
     });
 
     it('node properties come from NodeSchema hints', () => {
-      const { ast } = buildAstFromText('box: rect 100x100 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const l = labels(items);
       // These are derived from inlineProps/blockProps/kwargs/flags
