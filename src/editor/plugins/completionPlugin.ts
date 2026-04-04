@@ -49,9 +49,11 @@ function getCompletions(state: EditorState): CompletionState {
   const items = completionsAt(ast, textPos, lineText, model);
   if (items.length === 0) return EMPTY;
 
-  // Find the word being typed (for replacement range)
+  // Find the word being typed (for replacement range).
+  // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
+  // This prevents eating dimensions (100x60), numbers (0.5), etc.
   let wordStart = textPos;
-  while (wordStart > lineStart && /[\w\-#]/.test(text[wordStart - 1])) {
+  while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
     wordStart--;
   }
 
