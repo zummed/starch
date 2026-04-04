@@ -15,6 +15,8 @@
 .scene-node-header { display: flex; align-items: baseline; gap: 6px; }
 .scene-node-id { color: #a29bfe; font-weight: bold; }
 .scene-node-id::after { content: ':'; color: #555; }
+.scene-node.inline .scene-node-header { flex-wrap: wrap; }
+.scene-node-inline-summary { color: #b2bec3; margin-left: 2px; }
 .geometry-slot .keyword { color: #6c5ce7; font-weight: bold; }
 .geometry-slot .value { color: #fd79a8; }
 .property-slot { padding-left: 16px; display: flex; align-items: center; gap: 6px; }

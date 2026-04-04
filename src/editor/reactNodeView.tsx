@@ -103,6 +103,21 @@ export function reactNodeView(
         if (updatedNode.type !== currentNode.type) return false;
         currentNode = updatedNode;
         render();
+
+        // Reattach or detach contentDOM after React re-renders.
+        // When a node toggles between inline/block, the [data-content-hole]
+        // element may appear or disappear.
+        if (contentDOM) {
+          queueMicrotask(() => {
+            const hole = dom.querySelector('[data-content-hole]');
+            if (hole && !hole.contains(contentDOM!)) {
+              hole.appendChild(contentDOM!);
+            } else if (!hole && contentDOM!.parentNode) {
+              contentDOM!.remove();
+            }
+          });
+        }
+
         return true;
       },
 
