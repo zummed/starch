@@ -165,8 +165,19 @@ export function tokenize(input: string): Token[] {
     const startCol = col;
     const startOffset = pos;
     let value = '';
-    while (pos < len && isAlphaNum(peek())) {
-      value += advance();
+    while (pos < len) {
+      const ch = peek();
+      if (isAlphaNum(ch)) {
+        value += advance();
+        continue;
+      }
+      // Allow hyphens inside identifiers (e.g., hint-bg, easing-name)
+      // — but only when followed by another alpha char (not end of ident, not `->` arrow)
+      if (ch === '-' && isAlpha(peek(1))) {
+        value += advance();
+        continue;
+      }
+      break;
     }
     emit('identifier', value, startLine, startCol, startOffset);
   }

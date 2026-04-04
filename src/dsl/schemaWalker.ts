@@ -144,7 +144,8 @@ function matchSection(
             ctx.skipNewlines();
             if (ctx.is('dedent' as any)) break;
             if (resolvedSchema) {
-              const instance = executeInstance(ctx, resolvedSchema, 'id', 'required', name);
+              // Inside an objects section, colons are optional (colon-less syntax supported)
+              const instance = executeInstance(ctx, resolvedSchema, 'id', 'optional', name);
               if (instance) {
                 if (!model[name]) model[name] = [];
                 model[name].push(instance);

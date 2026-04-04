@@ -64,7 +64,7 @@ export const StrokeSchema = dsl(z.object({
   width: z.number().min(0).max(20).describe('Stroke width in pixels (number, 0-20, default 1)').optional(),
 }), {
   keyword: 'stroke',
-  positional: [{ keys: ['color'] }],
+  positional: [{ keys: ['color'], format: 'color' }],
   kwargs: ['width'],
 });
 

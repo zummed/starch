@@ -37,6 +37,15 @@ export function executePositional(
     return result;
   }
 
+  // color: named/hex/hsl/rgb variant
+  if (format === 'color') {
+    const [k] = hint.keys;
+    const color = executeColor(ctx, `${schemaPath}.${k}`);
+    if (color == null) return null;
+    result[k] = color;
+    return result;
+  }
+
   // quoted: single string literal
   if (format === 'quoted') {
     if (!ctx.is('string')) return null;
@@ -371,8 +380,13 @@ export function executeSchema(
     }
   }
 
-  // Kwargs and flags interleaved — merge both variant and top-level lists
-  const allKwargs = [...(activeHints.kwargs ?? []), ...(hints.kwargs ?? [])];
+  // Kwargs and flags interleaved — merge both variant and top-level lists.
+  // Positional keys with fallbackToKwarg are also accepted as kwargs.
+  const fallbackKwargs: string[] = [];
+  for (const posHint of activeHints.positional ?? []) {
+    if (posHint.fallbackToKwarg) fallbackKwargs.push(...posHint.keys);
+  }
+  const allKwargs = [...(activeHints.kwargs ?? []), ...(hints.kwargs ?? []), ...fallbackKwargs];
   const allFlags = [...(activeHints.flags ?? []), ...(hints.flags ?? [])];
   const kwargsSet = new Set(allKwargs);
   const flagsSet = new Set(allFlags);
@@ -659,16 +673,50 @@ export function executeNodeBody(
           continue;
         }
       }
-      // Inline prop keyword recognized but couldn't parse.
-      // If it's a node-level kwarg or flag, fall through to the kwarg/flag handler below.
+      // Inline prop keyword recognized but couldn't parse via executeSchema.
+      // Try shorthand `keyword value` syntax (e.g. `opacity 0.5`, `depth 3`).
+      // Applies when the field has no DslHints and the next token is a scalar.
       const isNodeKwarg = hints.kwargs?.includes(fieldName) ?? false;
       const isNodeFlag = hints.flags?.includes(fieldName) ?? false;
-      if (!isNodeKwarg && !isNodeFlag) {
+      if (isNodeKwarg) {
+        ctx.next(); // consume keyword
+        // Accept both `keyword=value` and `keyword value` forms
+        if (ctx.is('equals')) ctx.next();
+        const valTok = ctx.peek();
+        if (valTok?.type === 'number') {
+          ctx.next();
+          result[fieldName] = parseFloat(valTok.value);
+          ctx.emitLeaf({
+            schemaPath: `${schemaPath}.${fieldName}`,
+            from: valTok.offset,
+            to: valTok.offset + valTok.value.length,
+            value: result[fieldName],
+            dslRole: 'value',
+          });
+          continue;
+        }
+        if (valTok?.type === 'string' || valTok?.type === 'identifier' || valTok?.type === 'hexColor') {
+          ctx.next();
+          result[fieldName] = valTok.value;
+          ctx.emitLeaf({
+            schemaPath: `${schemaPath}.${fieldName}`,
+            from: valTok.offset,
+            to: valTok.offset + valTok.value.length,
+            value: valTok.value,
+            dslRole: 'value',
+          });
+          continue;
+        }
+        // Couldn't parse a value — break to avoid loop.
+        break;
+      }
+      if (isNodeFlag) {
+        // Flag without value — fall through to flag handler below.
+      } else {
         // Truly unrecognized — skip rest of line to prevent token leakage.
         ctx.skipToNewline();
         break;
       }
-      // Fall through to the kwarg/flag handlers below.
     }
 
     // Check for floating transform kwargs: `rotation=0`, `scale=2` without `at` keyword.
