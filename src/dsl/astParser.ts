@@ -66,6 +66,7 @@ class TokenStream {
 
 const BLOCK_PROP_KEYWORDS = new Set([
   'fill', 'stroke', 'layout', 'dash',
+  'rect', 'ellipse', 'text', 'image', 'camera', 'path',
 ]);
 
 const GEOM_KEYWORDS = new Set([
@@ -503,6 +504,42 @@ function parseExplicitPath(s: TokenStream, node: any): void {
 
 function parseBlockProperty(s: TokenStream, node: any): void {
   const keyword = s.next().value;
+
+  if (GEOM_KEYWORDS.has(keyword)) {
+    if (keyword === 'rect') {
+      node.rect = { w: 0, h: 0 };
+      if (s.is('dimensions')) {
+        const [w, h] = s.next().value.split('x').map(Number);
+        node.rect.w = w;
+        node.rect.h = h;
+      }
+    } else if (keyword === 'ellipse') {
+      if (s.is('dimensions')) {
+        const [w, h] = s.next().value.split('x').map(Number);
+        node.ellipse = { rx: w / 2, ry: h / 2 };
+      } else {
+        node.ellipse = { rx: 0, ry: 0 };
+      }
+    } else if (keyword === 'text') {
+      node.text = { content: '' };
+      if (s.is('string')) {
+        node.text.content = s.next().value;
+      }
+    } else if (keyword === 'image') {
+      node.image = { src: '', w: 0, h: 0 };
+      if (s.is('string')) {
+        node.image.src = s.next().value;
+      }
+      if (s.is('dimensions')) {
+        const [w, h] = s.next().value.split('x').map(Number);
+        node.image.w = w;
+        node.image.h = h;
+      }
+    } else if (keyword === 'camera') {
+      node.camera = {};
+    }
+    return;
+  }
 
   if (keyword === 'fill') {
     const color = tryParseColor(s);
@@ -2121,6 +2158,9 @@ export function buildAstFromText(input: string): ParseResult {
         result.background = s.next().value;
       } else if (s.is('hexColor')) {
         result.background = s.next().value;
+      } else if (s.is('identifier')) {
+        const color = tryParseColor(s);
+        if (color !== null) result.background = color;
       }
       s.skipNewlines();
       continue;
