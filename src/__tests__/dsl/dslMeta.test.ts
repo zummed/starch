@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { dsl, getDsl } from '../../dsl/dslMeta';
+import type { DslHints } from '../../dsl/dslMeta';
 
 describe('dslMeta', () => {
   it('attaches and retrieves hints from a schema', () => {
@@ -50,5 +51,35 @@ describe('dslMeta', () => {
       sigil: { key: 'style', prefix: '@' },
     });
     expect(getDsl(schema)!.sigil!.prefix).toBe('@');
+  });
+});
+
+describe('DslHints new types', () => {
+  it('supports topLevel hint', () => {
+    const hints: DslHints = { topLevel: true, keyword: 'name' };
+    expect(hints.topLevel).toBe(true);
+  });
+
+  it('supports instanceDeclaration hint', () => {
+    const hints: DslHints = {
+      instanceDeclaration: { idKey: 'id', colon: 'optional' },
+    };
+    expect(hints.instanceDeclaration?.idKey).toBe('id');
+    expect(hints.instanceDeclaration?.colon).toBe('optional');
+  });
+
+  it('supports flatReference hint', () => {
+    const hints: DslHints = { flatReference: true };
+    expect(hints.flatReference).toBe(true);
+  });
+
+  it('supports sectionKeyword hint', () => {
+    const hints: DslHints = { sectionKeyword: 'animate' };
+    expect(hints.sectionKeyword).toBe('animate');
+  });
+
+  it('supports indentedEntries hint', () => {
+    const hints: DslHints = { indentedEntries: true };
+    expect(hints.indentedEntries).toBe(true);
   });
 });

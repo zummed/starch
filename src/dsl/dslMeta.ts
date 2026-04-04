@@ -31,6 +31,19 @@ export interface DslHints {
   inlineProps?: string[];
   blockProps?: string[];
   inlineLayoutHints?: string[];
+  // Top-level document field — parseable at document root
+  topLevel?: boolean;
+  // Array items are user-named instances (e.g., objects, children)
+  instanceDeclaration?: {
+    idKey: string;               // field name holding the ID (e.g., 'id')
+    colon: 'required' | 'optional'; // whether `id: body` colon is required
+  };
+  // Array with flat-reference assignment support (box.fill: red → objects[box].fill)
+  flatReference?: boolean;
+  // Field opened by a section keyword header (style name, animate, images)
+  sectionKeyword?: string;
+  // Section body is indented entries (vs inline)
+  indentedEntries?: boolean;
 }
 
 const dslRegistry = new WeakMap<z.ZodType, DslHints>();
