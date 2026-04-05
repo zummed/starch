@@ -125,6 +125,34 @@ const INTERNAL_KEYS = new Set(['id', 'children', 'template', 'props', 'style']);
  * - At a sub-object: returns the sub-object's declared fields.
  * - At a leaf: returns an empty list (terminal).
  */
+/**
+ * Read the scalar or sub-object at a dotted path. Returns undefined if the
+ * path is unresolvable OR the property is not set on the actual model value.
+ *
+ * Note the distinction from pathExists: a schema-reachable path that is
+ * unset on the model resolves to location.modelValue === undefined, so this
+ * function returns undefined. pathExists would return true for the same
+ * path (it exists in the schema).
+ */
+export function currentValueAt(modelJson: any, path: string): unknown {
+  if (!path) return undefined;
+  const segments = path.split('.');
+  const loc = resolvePath(modelJson, segments);
+  if (!loc) return undefined;
+  return loc.modelValue;
+}
+
+/**
+ * Check whether a dotted path is resolvable through the scene model +
+ * schemas. Returns true even if the property is not set on the model,
+ * as long as the path is schema-valid from an existing root node.
+ */
+export function pathExists(modelJson: any, path: string): boolean {
+  if (!path) return false;
+  const segments = path.split('.');
+  return resolvePath(modelJson, segments) !== null;
+}
+
 export function enumerateNextSegments(location: ResolvedLocation): NextSegment[] {
   if (location.kind === 'leaf') return [];
 

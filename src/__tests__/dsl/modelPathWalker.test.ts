@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolvePath, enumerateNextSegments } from '../../dsl/modelPathWalker';
+import { resolvePath, enumerateNextSegments, currentValueAt, pathExists } from '../../dsl/modelPathWalker';
 
 const scene = {
   objects: [
@@ -144,5 +144,44 @@ describe('enumerateNextSegments', () => {
     const names = segs.map(s => s.name);
     expect(names).not.toContain('id');
     expect(names).not.toContain('children');
+  });
+});
+
+describe('currentValueAt', () => {
+  it('returns the scalar at a leaf path', () => {
+    expect(currentValueAt(scene, 'card.bg.fill')).toBe('midnightblue');
+    expect(currentValueAt(scene, 'card.bg.stroke.width')).toBe(2);
+    expect(currentValueAt(scene, 'solo.opacity')).toBe(0.8);
+  });
+
+  it('returns the sub-object at a drill path', () => {
+    const v = currentValueAt(scene, 'card.bg.stroke');
+    expect(v).toEqual({ color: 'steelblue', width: 2 });
+  });
+
+  it('returns undefined for unknown paths', () => {
+    expect(currentValueAt(scene, 'card.bg.nope')).toBeUndefined();
+    expect(currentValueAt(scene, 'nope.bg.fill')).toBeUndefined();
+  });
+
+  it('returns undefined for property that is not set on the object', () => {
+    // solo has no fill explicitly set
+    expect(currentValueAt(scene, 'solo.fill')).toBeUndefined();
+  });
+});
+
+describe('pathExists', () => {
+  it('returns true for valid schema paths', () => {
+    expect(pathExists(scene, 'card.bg.fill')).toBe(true);
+    expect(pathExists(scene, 'card.bg.stroke.width')).toBe(true);
+    // Paths that are schema-reachable but not set on this model still "exist"
+    // in the schema sense (the walker resolves them).
+    expect(pathExists(scene, 'solo.opacity')).toBe(true);
+  });
+
+  it('returns false for unresolvable paths', () => {
+    expect(pathExists(scene, 'nope')).toBe(false);
+    expect(pathExists(scene, 'card.nope')).toBe(false);
+    expect(pathExists(scene, 'card.bg.nope.further')).toBe(false);
   });
 });
