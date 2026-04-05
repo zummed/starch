@@ -125,3 +125,60 @@ describe('collectAnimatedPaths', () => {
     );
   });
 });
+
+import { tierCandidate } from '../../dsl/animateCompletions';
+
+const tierScene = {
+  objects: [
+    {
+      id: 'card',
+      children: [
+        {
+          id: 'bg',
+          rect: { w: 100, h: 50 },
+          fill: 'blue',
+          stroke: { color: 'red', width: 2 },
+        },
+      ],
+    },
+  ],
+};
+
+describe('tierCandidate', () => {
+  it('returns animated for candidate under an animated path', () => {
+    const animated = new Set(['card.bg.fill']);
+    const tier = tierCandidate('fill', 'card.bg', tierScene, animated);
+    expect(tier).toBe('animated');
+  });
+
+  it('returns animated for drill target leading to animated path', () => {
+    const animated = new Set(['card.bg.fill']);
+    // Candidate "bg" at prefix "card" → extends to "card.bg" which is a
+    // prefix of an animated path.
+    expect(tierCandidate('bg', 'card', tierScene, animated)).toBe('animated');
+  });
+
+  it('returns set for candidate with explicit model value', () => {
+    const animated = new Set<string>();
+    // card.bg.fill is set on the model
+    expect(tierCandidate('fill', 'card.bg', tierScene, animated)).toBe('set');
+  });
+
+  it('returns set for drill target with set descendants', () => {
+    const animated = new Set<string>();
+    // stroke has color and width set
+    expect(tierCandidate('stroke', 'card.bg', tierScene, animated)).toBe('set');
+  });
+
+  it('returns available for unset schema-reachable properties', () => {
+    const animated = new Set<string>();
+    // opacity is schema-reachable on bg but not set
+    expect(tierCandidate('opacity', 'card.bg', tierScene, animated)).toBe('available');
+  });
+
+  it('animated beats set', () => {
+    const animated = new Set(['card.bg.fill']);
+    // fill is both animated AND set; animated wins.
+    expect(tierCandidate('fill', 'card.bg', tierScene, animated)).toBe('animated');
+  });
+});

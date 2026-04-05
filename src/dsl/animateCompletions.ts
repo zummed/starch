@@ -7,6 +7,7 @@ import type { CompletionItem } from './astCompletions';
 import { AnimConfigSchema, EasingNameSchema } from '../types/animation';
 import { getDsl } from './dslMeta';
 import { getEnumValues } from '../types/schemaRegistry';
+import { currentValueAt, resolvePath, enumerateNextSegments } from './modelPathWalker';
 
 /**
  * Scan backwards from the end of `headerText` to find the last token.
@@ -153,4 +154,38 @@ export function animateKeyframeStartCompletions(): CompletionItem[] {
       snippetTemplate: 'chapter "${1:name}" at ${2:0}',
     },
   ];
+}
+
+export type Tier = 'animated' | 'set' | 'available';
+
+/**
+ * Classify a candidate next-segment by tier:
+ *   - 'animated': extending to `prefix.candidate` reaches (or is a prefix of)
+ *     some path in the animated set.
+ *   - 'set': `prefix.candidate` has an explicit value in the model — or,
+ *     for drill targets, some descendant leaf is set.
+ *   - 'available': schema-reachable but neither of the above.
+ */
+export function tierCandidate(
+  candidate: string,
+  prefix: string,
+  modelJson: any,
+  animatedPaths: Set<string>,
+): Tier {
+  const fullPath = prefix ? `${prefix}.${candidate}` : candidate;
+
+  // Tier 1: animated — any animated path starts with fullPath (or equals it).
+  for (const ap of animatedPaths) {
+    if (ap === fullPath) return 'animated';
+    if (ap.startsWith(fullPath + '.')) return 'animated';
+  }
+
+  // Tier 2: set — fullPath leads to a currently-set value.
+  const value = currentValueAt(modelJson, fullPath);
+  if (value !== undefined && value !== null) {
+    // For scalars and present sub-objects, treat as set.
+    return 'set';
+  }
+
+  return 'available';
 }
