@@ -223,6 +223,8 @@ const TOP_LEVEL_KEYWORDS: CompletionItem[] = buildTopLevelKeywords();
 
 /**
  * Generate context-aware completions at the given cursor position.
+ *
+ * @param lineText Text on the current line up to (not past) the cursor.
  */
 export function completionsAt(
   ast: AstNode | null,
@@ -237,6 +239,17 @@ export function completionsAt(
   }
 
   if (!ast) return TOP_LEVEL_KEYWORDS;
+
+  // When the cursor is on a fresh line (only whitespace before cursor on this line),
+  // the indentation determines context:
+  //   - no indent → document-level, show top-level keywords
+  //   - indented → continuation of preceding node, show node-context completions
+  const onFreshLine = !lineText || /^\s*$/.test(lineText);
+  const freshLineIndent = onFreshLine ? (lineText?.length ?? 0) : -1;
+
+  if (onFreshLine && freshLineIndent === 0) {
+    return topLevelCompletions(ast, modelJson);
+  }
 
   // Find deepest node at cursor
   let node = nodeAt(ast, pos);

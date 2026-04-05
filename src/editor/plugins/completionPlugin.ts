@@ -40,11 +40,10 @@ function getCompletions(state: EditorState): CompletionState {
 
   if (textPos < 0) return EMPTY;
 
-  // Get the current line text (based on selection start)
+  // Get the current line text up to the cursor (regex patterns use $ anchors)
   const before = text.slice(0, textPos);
   const lineStart = before.lastIndexOf('\n') + 1;
-  const lineEnd = text.indexOf('\n', textPos);
-  const lineText = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+  const lineText = text.slice(lineStart, textPos);
 
   // Parse AST for context using the schema-driven walker.
   let ast = null;

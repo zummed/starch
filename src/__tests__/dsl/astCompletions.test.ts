@@ -386,12 +386,14 @@ describe('completionsAt', () => {
     });
 
     it('typing "wid" after "stroke red " shows width', () => {
-      const fl = filteredLabels('box: rect 100x100 stroke red wid\n', 33);
+      // cursor at end of "wid" on line 1, before the \n (position 32)
+      const fl = filteredLabels('box: rect 100x100 stroke red wid\n', 32);
       expect(fl).toContain('width');
     });
 
     it('typing "rot" after "at 50,75 " shows rotation', () => {
-      const fl = filteredLabels('box: rect 100x100 at 50,75 rot\n', 31);
+      // cursor at end of "rot" on line 1, before the \n (position 30)
+      const fl = filteredLabels('box: rect 100x100 at 50,75 rot\n', 30);
       expect(fl).toContain('rotation');
     });
   });

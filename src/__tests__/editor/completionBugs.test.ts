@@ -11,8 +11,7 @@ function getCompletions(text: string, cursorPos: number) {
   const ast = leavesToAst(ctx.astLeaves(), text.length);
   const before = text.slice(0, cursorPos);
   const lineStart = before.lastIndexOf('\n') + 1;
-  const lineEnd = text.indexOf('\n', cursorPos);
-  const lineText = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+  const lineText = text.slice(lineStart, cursorPos);
   return completionsAt(ast, cursorPos, lineText, model);
 }
 

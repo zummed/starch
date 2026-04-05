@@ -49,12 +49,13 @@ describe('completion with active selection (placeholder)', () => {
   });
 
   it('word boundary does not walk past selection start', () => {
-    // With "fi" typed, no selection, cursor at 2 (after "fi")
-    // word boundary should walk back to 0 (start of "fi")
-    const state = stateWithSelection('fill color', 2, 2);
+    // With "na" typed at top level, cursor at 2 (after "na")
+    // Top-level completion includes "name" — so from/to should be populated.
+    const state = stateWithSelection('na', 2, 2);
     const cs = getCompletionsFromState(state);
 
-    // Replacement range covers "fi"
+    expect(cs.active).toBe(true);
+    // Replacement range covers "na"
     expect(cs.from).toBe(0 + PM_OFFSET); // 1
     expect(cs.to).toBe(2 + PM_OFFSET);   // 3
   });
