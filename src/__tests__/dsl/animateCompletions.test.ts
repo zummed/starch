@@ -268,6 +268,14 @@ describe('animatePathCompletions', () => {
     const items = animatePathCompletions('card.bg.fill.', pathScene, pathScene.animate);
     expect(items).toEqual([]);
   });
+
+  it('drill targets have retrigger=true, leaves do not', () => {
+    const items = animatePathCompletions('card.bg.', pathScene, pathScene.animate);
+    const stroke = items.find(i => i.label === 'stroke');
+    const fill = items.find(i => i.label === 'fill');
+    expect(stroke!.retrigger).toBe(true);  // sub-object → drill
+    expect(fill!.retrigger).toBeUndefined(); // color leaf → no retrigger
+  });
 });
 
 const valueScene = {

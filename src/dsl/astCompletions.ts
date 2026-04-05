@@ -38,6 +38,7 @@ export interface CompletionItem {
   detail?: string;
   scope?: string;   // section label: 'stroke', 'rect', 'node', etc.
   snippetTemplate?: string;  // e.g., "rect ${1:W}x${2:H}"
+  retrigger?: boolean;  // insert label + '.' and re-trigger completions
 }
 
 // ─── Schema-Derived Lookup Tables ───────────────────────────────

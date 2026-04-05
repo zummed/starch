@@ -165,6 +165,16 @@ class CompletionMenuView {
 }
 
 function applyCompletion(view: EditorView, cState: CompletionState, item: CompletionItem) {
+  // Drill targets: insert label + '.' and re-trigger completions at the new position.
+  // The plugin's apply method re-fires getCompletions when docChanged && active.
+  if (item.retrigger) {
+    const tr = view.state.tr.insertText(item.label + '.', cState.from, cState.to);
+    // Don't set meta to EMPTY — leave menu active so docChanged re-triggers.
+    view.dispatch(tr);
+    view.focus();
+    return;
+  }
+
   // Strip snippet placeholders for the inserted text: ${1:W} → W
   const insertText = item.snippetTemplate
     ? item.snippetTemplate.replace(/\$\{\d+:([^}]+)\}/g, '$1')

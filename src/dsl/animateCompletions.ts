@@ -273,11 +273,13 @@ function makeCandidateItem(
   tier: Tier,
   kind: 'drill' | 'leaf',
 ): CompletionItem {
-  return {
+  const item: CompletionItem = {
     label: name,
     type: kind === 'leaf' ? 'property' : 'keyword',
     detail: tier,
   };
+  if (kind === 'drill') item.retrigger = true;
+  return item;
 }
 
 /**
