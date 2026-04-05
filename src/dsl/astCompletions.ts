@@ -10,6 +10,7 @@ import {
   animateHeaderCompletions,
   animateKeyframeStartCompletions,
   animatePathCompletions,
+  animateValueCompletions,
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
@@ -897,7 +898,20 @@ function routeAnimateContext(
     return animateKeyframeStartCompletions();
   }
 
-  // Path context: extract partial by backward scan from cursor.
+  // Path or Value context. Find whether a ':' appears on this line before cursor.
+  const colonIdx = lineBeforeCursor.lastIndexOf(':');
+  if (colonIdx >= 0) {
+    // Value context: extract the full path from before the colon.
+    const beforeColon = lineBeforeCursor.slice(0, colonIdx);
+    // The keyframe path is the last dotted token before the colon.
+    const pathMatch = extractPartialPath(beforeColon);
+    if (pathMatch) {
+      return animateValueCompletions(pathMatch, modelJson);
+    }
+    return [];
+  }
+
+  // Path context: extract partial by backward scan.
   const partial = extractPartialPath(lineBeforeCursor);
   return animatePathCompletions(partial, modelJson, (modelJson as any)?.animate);
 }

@@ -548,6 +548,49 @@ describe('completionsAt', () => {
     });
   });
 
+  // ─── Animate Value Context ────────────────────────────────────
+
+  describe('animate value context', () => {
+    const valueSceneModel = {
+      objects: [
+        {
+          id: 'box',
+          rect: { w: 100, h: 50 },
+          fill: 'midnightblue',
+          opacity: 0.5,
+        },
+      ],
+      animate: { duration: 3, keyframes: [] },
+    };
+
+    it('offers colors after "box.fill: " on inline change', () => {
+      const text = 'animate 3s\n  1 box.fill: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('red');
+      expect(l).toContain('hsl');
+    });
+
+    it('ranks current value first for colors', () => {
+      const text = 'animate 3s\n  1 box.fill: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
+      expect(items[0].label).toBe('midnightblue');
+    });
+
+    it('offers only current-value for a number property', () => {
+      const text = 'animate 3s\n  1 box.opacity: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.opacity: ', valueSceneModel, text);
+      expect(items.length).toBeGreaterThanOrEqual(1);
+      expect(items[0].label).toBe('0.5');
+    });
+  });
+
   // ─── Derived from Schema (no hardcoded strings) ───────────────
 
   describe('schema-derived (single source of truth)', () => {
