@@ -3,7 +3,7 @@
  *
  * After a completion inserts snippet text (e.g., "rect WxH"), this plugin
  * tracks placeholder positions, selects the active one, and handles:
- *   - Tab → advance to next placeholder (or exit)
+ *   - Tab / Enter → advance to next placeholder (or exit with trailing space)
  *   - Typing → replace active placeholder text, shift later placeholders
  *   - Escape → exit snippet mode
  */
@@ -23,35 +23,27 @@ export interface SnippetState {
   active: boolean;
   placeholders: Placeholder[];
   activeIndex: number;
+  snippetEnd: number;  // text offset of end of entire expanded snippet
 }
 
-const EMPTY: SnippetState = { active: false, placeholders: [], activeIndex: 0 };
+const EMPTY: SnippetState = { active: false, placeholders: [], activeIndex: 0, snippetEnd: 0 };
 
 export const snippetKey = new PluginKey<SnippetState>('snippet');
 
 /**
  * Parse a snippet template string and extract placeholder definitions.
  * Template format: "rect ${1:W}x${2:H}"
- * Returns placeholders with positions relative to the expanded text.
+ * Returns placeholders with positions relative to the expanded text,
+ * plus the total length of the expanded text.
  */
-function parsePlaceholders(template: string): Placeholder[] {
-  const placeholders: Placeholder[] = [];
-  const regex = /\$\{(\d+):([^}]+)\}/g;
-  let match;
-
-  // Build the expanded text to calculate positions
-  let expanded = '';
-  let lastIndex = 0;
-
-  // First pass: find all placeholders and their positions in expanded text
+function parsePlaceholders(template: string): { placeholders: Placeholder[]; expandedLength: number } {
   const raw = template;
-  let offset = 0;
   const tempRegex = /\$\{(\d+):([^}]+)\}/g;
   let m;
+  let lastIndex = 0;
 
   // Calculate expanded text by removing ${N:...} wrappers
   let expandedPos = 0;
-  let remaining = template;
   const results: Array<{ index: number; from: number; to: number; text: string }> = [];
 
   while ((m = tempRegex.exec(raw)) !== null) {
@@ -71,9 +63,12 @@ function parsePlaceholders(template: string): Placeholder[] {
     lastIndex = m.index + m[0].length;
   }
 
+  // Account for any text after the last placeholder (e.g. the "s" in "${1:3}s")
+  expandedPos += raw.length - lastIndex;
+
   // Sort by index
   results.sort((a, b) => a.index - b.index);
-  return results;
+  return { placeholders: results, expandedLength: expandedPos };
 }
 
 /**
@@ -88,7 +83,8 @@ export function activateSnippet(
   insertFrom: number,
   template: string,
 ): EditorState {
-  const placeholders = parsePlaceholders(template).map(ph => ({
+  const { placeholders: rawPhs, expandedLength } = parsePlaceholders(template);
+  const placeholders = rawPhs.map(ph => ({
     ...ph,
     from: ph.from + insertFrom,
     to: ph.to + insertFrom,
@@ -101,6 +97,7 @@ export function activateSnippet(
     active: true,
     placeholders,
     activeIndex: 0,
+    snippetEnd: insertFrom + expandedLength,
   };
 
   // Select the first placeholder text
@@ -134,7 +131,8 @@ export function snippetPlugin(): Plugin<SnippetState> {
             from: mapping.map(ph.from + PM_OFFSET) - PM_OFFSET,
             to: mapping.map(ph.to + PM_OFFSET) - PM_OFFSET,
           }));
-          return { ...value, placeholders: updated };
+          const snippetEnd = mapping.map(value.snippetEnd + PM_OFFSET) - PM_OFFSET;
+          return { ...value, placeholders: updated, snippetEnd };
         }
 
         return value;
@@ -166,17 +164,18 @@ export function snippetPlugin(): Plugin<SnippetState> {
         const ss = snippetKey.getState(view.state);
         if (!ss || !ss.active) return false;
 
-        if (event.key === 'Tab' && !event.shiftKey) {
+        if ((event.key === 'Tab' || event.key === 'Enter') && !event.shiftKey) {
           event.preventDefault();
 
           const nextIndex = ss.activeIndex + 1;
           if (nextIndex >= ss.placeholders.length) {
-            // Exit snippet
-            const lastPh = ss.placeholders[ss.placeholders.length - 1];
-            const cursorPos = lastPh.to + PM_OFFSET;
+            // Exit snippet — insert trailing space after the full snippet text
+            const insertPos = ss.snippetEnd + PM_OFFSET;
             const tr = view.state.tr
-              .setSelection(TextSelection.create(view.state.doc, cursorPos))
+              .insertText(' ', insertPos)
               .setMeta(snippetKey, { ...ss, active: false });
+            // Cursor lands after the inserted space
+            tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
             view.dispatch(tr);
           } else {
             // Move to next placeholder

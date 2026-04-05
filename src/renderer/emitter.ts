@@ -40,7 +40,11 @@ function resolveAnchorPixels(anchor: AnchorPoint | undefined, node: Node): [numb
 
 function fillToRgba(fill: Color | undefined): RgbaColor | null {
   if (fill === undefined || fill === null) return null;
-  return colorToRgba(fill);
+  try {
+    return colorToRgba(fill);
+  } catch {
+    return null;
+  }
 }
 
 function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number; pattern: string } | undefined {
@@ -58,7 +62,12 @@ function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number;
 
 function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeStyle | null {
   if (!stroke || !stroke.color) return null;
-  const color = colorToRgba(stroke.color);
+  let color: RgbaColor;
+  try {
+    color = colorToRgba(stroke.color);
+  } catch {
+    return null;
+  }
   const style: StrokeStyle = {
     color,
     width: stroke.width ?? 1,

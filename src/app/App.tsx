@@ -129,8 +129,12 @@ export default function App() {
   const handleModelChange = useCallback((_model: any) => {
     // The editor IS the DSL text — grab it directly
     const text = editorRef.current?.getDsl() ?? '';
-    if (text) setActiveDsl(text);
-  }, []);
+    if (text) {
+      setActiveDsl(text);
+      // Persist edits back to the tab so switching away and back restores them
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl: text } : t));
+    }
+  }, [activeTabId]);
 
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
   useEffect(() => {

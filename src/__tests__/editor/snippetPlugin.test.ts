@@ -3,8 +3,8 @@
  *
  * After completing e.g. "rect", the editor inserts "rect WxH" where W and H
  * are placeholder regions. The user types into the active placeholder (replacing
- * it), then Tab advances to the next. After the last placeholder, Tab exits
- * the snippet.
+ * it), then Tab or Enter advances to the next. After the last placeholder,
+ * Tab/Enter exits the snippet and inserts a trailing space.
  */
 import { describe, it, expect } from 'vitest';
 import { Schema } from 'prosemirror-model';
@@ -162,6 +162,41 @@ describe('Tab navigation', () => {
     const ss = getSnippetState(tabbed);
     expect(ss!.active).toBe(false);
   });
+
+  it('exit inserts trailing space and positions cursor after it', () => {
+    const state = createEditor('rect WxH', 0);
+    const withSnippet = activateSnippet(state, 0, 'rect ${1:W}x${2:H}');
+
+    const tab1 = simulateTab(withSnippet);  // → placeholder 2
+    const tab2 = simulateTab(tab1);          // → exit snippet
+
+    expect(getText(tab2)).toBe('rect WxH ');
+    expect(getCursor(tab2)).toBe(9); // after the trailing space
+  });
+
+  it('single-placeholder exit inserts trailing space', () => {
+    const state = createEditor('fill color', 0);
+    const withSnippet = activateSnippet(state, 0, 'fill ${1:color}');
+
+    const typed = simulateType(withSnippet, '#fff');
+    const exited = simulateTab(typed);
+
+    expect(getText(exited)).toBe('fill #fff ');
+    expect(getCursor(exited)).toBe(10);
+  });
+
+  it('trailing space goes after suffix text, not after placeholder (animate Ns)', () => {
+    // Template "animate ${1:3}s" → expanded "animate 3s"
+    // The "s" is a suffix after the placeholder, space must go after it
+    const state = createEditor('animate 3s', 0);
+    const withSnippet = activateSnippet(state, 0, 'animate ${1:3}s');
+
+    const typed = simulateType(withSnippet, '5');
+    const exited = simulateTab(typed);
+
+    expect(getText(exited)).toBe('animate 5s ');
+    expect(getCursor(exited)).toBe(11);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -214,8 +249,10 @@ describe('typing into placeholder', () => {
     const typed2 = simulateType(tabbed, '80');
     const exited = simulateTab(typed2);
 
-    expect(getText(exited)).toBe('rect 140x80');
+    expect(getText(exited)).toBe('rect 140x80 ');
     expect(getSnippetState(exited)!.active).toBe(false);
+    // Cursor after the trailing space
+    expect(getCursor(exited)).toBe(12);
   });
 });
 
@@ -223,18 +260,19 @@ describe('typing into placeholder', () => {
 // Helpers to simulate user actions via EditorState transforms
 // ---------------------------------------------------------------------------
 
-/** Simulate pressing Tab — advances to next placeholder or exits snippet. */
+/** Simulate pressing Tab/Enter — advances to next placeholder or exits with trailing space. */
 function simulateTab(state: EditorState): EditorState {
   const ss = getSnippetState(state);
   if (!ss || !ss.active) return state;
 
   const nextIndex = ss.activeIndex + 1;
   if (nextIndex >= ss.placeholders.length) {
-    // Exit snippet — place cursor after the snippet
-    const lastPh = ss.placeholders[ss.placeholders.length - 1];
-    const cursorPos = lastPh.to + PM_OFFSET;
-    let tr = state.tr.setSelection(TextSelection.create(state.doc, cursorPos));
-    tr = tr.setMeta(snippetKey, { ...ss, active: false });
+    // Exit snippet — insert trailing space after the full snippet text
+    const insertPos = ss.snippetEnd + PM_OFFSET;
+    const tr = state.tr
+      .insertText(' ', insertPos)
+      .setMeta(snippetKey, { ...ss, active: false });
+    tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
     return state.apply(tr);
   }
 
@@ -268,7 +306,7 @@ function simulateType(state: EditorState, text: string): EditorState {
       }
       return ph;
     });
-    tr.setMeta(snippetKey, { ...ss, placeholders: updatedPlaceholders });
+    tr.setMeta(snippetKey, { ...ss, placeholders: updatedPlaceholders, snippetEnd: ss.snippetEnd + delta });
   }
 
   return state.apply(tr);
