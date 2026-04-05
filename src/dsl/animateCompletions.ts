@@ -98,6 +98,26 @@ export function animateHeaderCompletions(headerText: string): CompletionItem[] {
 }
 
 /**
+ * Scan backwards from the end of `textBeforeCursor` to extract the dotted
+ * path the user is typing. Stops at whitespace or ':' (value terminator).
+ *
+ * This is tokenisation-style scanning — it reads characters until a
+ * delimiter, not pattern-matching on content shape.
+ */
+export function extractPartialPath(textBeforeCursor: string): string {
+  let i = textBeforeCursor.length;
+  while (i > 0) {
+    const ch = textBeforeCursor[i - 1];
+    if (/[a-zA-Z0-9_\-.]/.test(ch)) { i--; continue; }
+    break;
+  }
+  const raw = textBeforeCursor.slice(i);
+  // If what we captured contains ':', it's past a terminator — reject.
+  if (raw.includes(':')) return '';
+  return raw;
+}
+
+/**
  * Keyframe-start context: cursor is on an indented line under the animate
  * header, before typing a timestamp. Offer a numeric-time snippet and the
  * `chapter` keyword.

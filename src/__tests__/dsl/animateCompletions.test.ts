@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { animateHeaderCompletions, animateKeyframeStartCompletions } from '../../dsl/animateCompletions';
+import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath } from '../../dsl/animateCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -63,5 +63,35 @@ describe('animateKeyframeStartCompletions', () => {
     const ts = items.find(i => i.detail === 'Keyframe timestamp');
     expect(ts).toBeDefined();
     expect(ts!.snippetTemplate).toBeDefined();
+  });
+});
+
+describe('extractPartialPath', () => {
+  it('returns empty string when no identifier characters before cursor', () => {
+    expect(extractPartialPath('    ')).toBe('');
+    expect(extractPartialPath('')).toBe('');
+    expect(extractPartialPath('  1 ')).toBe('');
+  });
+
+  it('returns single segment', () => {
+    expect(extractPartialPath('    card')).toBe('card');
+    expect(extractPartialPath('  1 ca')).toBe('ca');
+  });
+
+  it('returns dotted path', () => {
+    expect(extractPartialPath('  1 card.bg')).toBe('card.bg');
+    expect(extractPartialPath('  1 card.bg.f')).toBe('card.bg.f');
+    expect(extractPartialPath('  1 card.bg.stroke.')).toBe('card.bg.stroke.');
+  });
+
+  it('stops at whitespace', () => {
+    expect(extractPartialPath('  1 card.bg.fill ')).toBe('');
+    expect(extractPartialPath('  a.b c.d')).toBe('c.d');
+  });
+
+  it('stops at colon (path terminator)', () => {
+    expect(extractPartialPath('  1 card.bg.fill: ')).toBe('');
+    // Cursor right after colon (no trailing space):
+    expect(extractPartialPath('  1 card.bg.fill:')).toBe('');
   });
 });
