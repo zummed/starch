@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath, collectAnimatedPaths } from '../../dsl/animateCompletions';
 import { animatePathCompletions } from '../../dsl/animateCompletions';
 import { animateValueCompletions } from '../../dsl/animateCompletions';
+import { walkDocument } from '../../dsl/schemaWalker';
+import { leavesToAst } from '../../dsl/astAdapter';
+import { completionsAt } from '../../dsl/astCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -309,5 +312,73 @@ describe('animateValueCompletions', () => {
     const l = labels(items);
     expect(l).toContain('true');
     expect(l).toContain('false');
+  });
+});
+
+describe('animate completions end-to-end', () => {
+  const dsl = `objects
+  card: at 100,100
+    bg: rect 160x100 fill midnightblue stroke steelblue width=2
+    badge: ellipse 8x8 fill limegreen
+
+animate 3s loop
+  1 card.bg.fill: crimson
+  `;
+
+  it('header offers flags/kwargs after "animate 3s loop "', () => {
+    // Position on the animate header line after "loop".
+    // The header line is "animate 3s loop" — find it and place cursor at end.
+    const headerLine = 'animate 3s loop';
+    const headerStart = dsl.indexOf(headerLine);
+    const idx = headerStart + headerLine.length;
+    // lineText as it would appear to the editor (the text before cursor on the line)
+    const lineText = 'animate 3s loop ';
+    const { ast: ctx } = walkDocument(dsl);
+    const ast = leavesToAst(ctx.astLeaves(), dsl.length);
+    const { model } = walkDocument(dsl);
+    const items = completionsAt(ast, idx, lineText, model, dsl);
+    const l = items.map(i => i.label);
+    expect(l).toContain('autoKey');
+    expect(l).toContain('easing=');
+    expect(l).not.toContain('loop'); // already present
+  });
+
+  it('path context offers scene-aware tiered completions', () => {
+    // Position at end of document (after "  ")
+    const pos = dsl.length;
+    const { ast: ctx } = walkDocument(dsl);
+    const ast = leavesToAst(ctx.astLeaves(), dsl.length);
+    const { model } = walkDocument(dsl);
+    // The last line is "  " (fresh indented line) — this is keyframe-start.
+    const items = completionsAt(ast, pos, '  ', model, dsl);
+    const l = items.map(i => i.label);
+    expect(l).toContain('chapter');
+    expect(l).toContain('time');
+  });
+
+  it('path context after typing "  2 card." offers children', () => {
+    const augmented = dsl + '2 card.';
+    const pos = augmented.length;
+    const { ast: ctx } = walkDocument(augmented);
+    const ast = leavesToAst(ctx.astLeaves(), augmented.length);
+    const { model } = walkDocument(augmented);
+    const items = completionsAt(ast, pos, '  2 card.', model, augmented);
+    const l = items.map(i => i.label);
+    expect(l).toContain('bg');
+    expect(l).toContain('badge');
+  });
+
+  it('value context after "card.bg.fill: " offers colors with current first', () => {
+    const augmented = dsl + '2 card.bg.fill: ';
+    const pos = augmented.length;
+    const { ast: ctx } = walkDocument(augmented);
+    const ast = leavesToAst(ctx.astLeaves(), augmented.length);
+    const { model } = walkDocument(augmented);
+    const items = completionsAt(ast, pos, '  2 card.bg.fill: ', model, augmented);
+    // First item should be the current value
+    expect(items[0].label).toBe('midnightblue');
+    // Other colors present
+    const l = items.map(i => i.label);
+    expect(l).toContain('red');
   });
 });
