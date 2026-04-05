@@ -5,8 +5,11 @@
  * No hardcoded property names, keyword lists, or regex patterns.
  */
 import type { AstNode } from './astTypes';
-import { nodeAt, findCompound, lineOf } from './astTypes';
-import { animateHeaderCompletions } from './animateCompletions';
+import { nodeAt, findCompound, lineOf, indentOf } from './astTypes';
+import {
+  animateHeaderCompletions,
+  animateKeyframeStartCompletions,
+} from './animateCompletions';
 import { getAllColorNames } from '../types/color';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
@@ -872,18 +875,66 @@ function routeAnimateContext(
   text: string,
   modelJson: any,
 ): CompletionItem[] | null {
-  // Find the enclosing animate node (compound or section), if any.
   const animateNode = ast.children.find(c => c.schemaPath === 'animate');
   if (!animateNode) return null;
 
   // Header context: cursor line === animate node start line.
   if (lineOf(pos, text) === lineOf(animateNode.from, text)) {
-    // animateNode.from is the position of the "animate" keyword's first char.
     const headerText = text.slice(animateNode.from, pos);
     return animateHeaderCompletions(headerText);
   }
 
-  // Other animate sub-contexts are wired in later tasks; return null for now
-  // so the caller falls through to existing logic.
+  // Below the header: must be inside the animate body.
+  if (!isInsideAnimateBody(animateNode, pos, text)) return null;
+
+  const lineStart = findLineStart(text, pos);
+  const lineBeforeCursor = text.slice(lineStart, pos);
+
+  // Keyframe-start: fresh indented line (whitespace-only before cursor).
+  if (/^\s*$/.test(lineBeforeCursor)) {
+    return animateKeyframeStartCompletions();
+  }
+
+  // Other animate sub-contexts wired in later tasks.
   return null;
+}
+
+function findLineStart(text: string, pos: number): number {
+  let i = Math.min(pos, text.length);
+  while (i > 0 && text.charCodeAt(i - 1) !== 10) i--;
+  return i;
+}
+
+/**
+ * Returns true iff `pos` sits on a line that belongs to the animate block's
+ * body — i.e., it is below the header line AND indented deeper than the
+ * header AND no non-blank line at indent <= headerIndent appears between the
+ * header and the cursor.
+ */
+function isInsideAnimateBody(
+  animateNode: AstNode,
+  pos: number,
+  text: string,
+): boolean {
+  const headerLine = lineOf(animateNode.from, text);
+  const cursorLine = lineOf(pos, text);
+  if (cursorLine <= headerLine) return false;
+
+  const headerIndent = indentOf(animateNode.from, text);
+  const cursorIndent = indentOf(pos, text);
+  if (cursorIndent <= headerIndent) return false;
+
+  // Scan lines strictly between header and cursor for dedents.
+  const lines = text.split('\n');
+  for (let ln = headerLine + 1; ln < cursorLine; ln++) {
+    const line = lines[ln] ?? '';
+    if (line.trim() === '') continue; // blank lines OK
+    let ind = 0;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === ' ' || line[i] === '\t') ind++;
+      else break;
+    }
+    if (ind <= headerIndent) return false; // dedented out of animate body
+  }
+  return true;
 }

@@ -481,6 +481,20 @@ describe('completionsAt', () => {
     });
   });
 
+  // ─── Animate Keyframe-start Context ──────────────────────────
+
+  describe('animate keyframe-start context', () => {
+    it('offers timestamp snippet and chapter keyword on fresh indented line', () => {
+      const text = 'animate 5s loop\n  ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  ', undefined, text);
+      const l = labels(items);
+      expect(l).toContain('chapter');
+      expect(l).toContain('time');
+    });
+  });
+
   // ─── Derived from Schema (no hardcoded strings) ───────────────
 
   describe('schema-derived (single source of truth)', () => {
