@@ -57,7 +57,7 @@ function resolveDashDefaults(dash: Node['dash']): { length: number; gap: number;
 }
 
 function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeStyle | null {
-  if (!stroke) return null;
+  if (!stroke || !stroke.color) return null;
   const color = colorToRgba(stroke.color);
   const style: StrokeStyle = {
     color,
