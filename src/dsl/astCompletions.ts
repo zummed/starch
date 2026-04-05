@@ -5,7 +5,8 @@
  * No hardcoded property names, keyword lists, or regex patterns.
  */
 import type { AstNode } from './astTypes';
-import { nodeAt, findCompound } from './astTypes';
+import { nodeAt, findCompound, lineOf } from './astTypes';
+import { animateHeaderCompletions } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
@@ -225,13 +226,23 @@ const TOP_LEVEL_KEYWORDS: CompletionItem[] = buildTopLevelKeywords();
  * Generate context-aware completions at the given cursor position.
  *
  * @param lineText Text on the current line up to (not past) the cursor.
+ * @param text     Full document text (optional). When provided, enables
+ *                 animate sub-context routing via structural line info.
  */
 export function completionsAt(
   ast: AstNode | null,
   pos: number,
   lineText?: string,
   modelJson?: any,
+  text?: string,
 ): CompletionItem[] {
+  // NEW: animate sub-context routing. Runs before lineTextCompletions to
+  // bypass the content-regex branches for animate-specific positions.
+  if (text !== undefined && ast) {
+    const animateItems = routeAnimateContext(ast, pos, text, modelJson);
+    if (animateItems) return animateItems;
+  }
+
   // Content-dependent completions from line text (works even without AST context)
   if (lineText) {
     const lineItems = lineTextCompletions(lineText, modelJson);
@@ -843,4 +854,36 @@ function extractNodeIds(modelJson: any): CompletionItem[] {
   };
   walk(modelJson.objects);
   return ids;
+}
+
+/**
+ * Dispatch to animate-specific handlers based on structural cursor context.
+ * Returns null when the cursor is NOT in an animate sub-context (caller
+ * should fall through to existing logic).
+ *
+ * Note: in the walker-based AST (leavesToAst, used by completionPlugin),
+ * animate appears as a document-level COMPOUND with schemaPath='animate',
+ * NOT a section. In the older model-based AST (buildAstFromModel), it's a
+ * section. We match on schemaPath alone to handle both.
+ */
+function routeAnimateContext(
+  ast: AstNode,
+  pos: number,
+  text: string,
+  modelJson: any,
+): CompletionItem[] | null {
+  // Find the enclosing animate node (compound or section), if any.
+  const animateNode = ast.children.find(c => c.schemaPath === 'animate');
+  if (!animateNode) return null;
+
+  // Header context: cursor line === animate node start line.
+  if (lineOf(pos, text) === lineOf(animateNode.from, text)) {
+    // animateNode.from is the position of the "animate" keyword's first char.
+    const headerText = text.slice(animateNode.from, pos);
+    return animateHeaderCompletions(headerText);
+  }
+
+  // Other animate sub-contexts are wired in later tasks; return null for now
+  // so the caller falls through to existing logic.
+  return null;
 }

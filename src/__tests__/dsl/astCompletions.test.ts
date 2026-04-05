@@ -456,6 +456,31 @@ describe('completionsAt', () => {
     });
   });
 
+  // ─── Animate Header Context ───────────────────────────────────
+
+  describe('animate header context', () => {
+    it('offers loop, autoKey, easing= after "animate 10s "', () => {
+      const text = 'animate 10s ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, text, undefined, text);
+      const l = labels(items);
+      expect(l).toContain('loop');
+      expect(l).toContain('autoKey');
+      expect(l).toContain('easing=');
+    });
+
+    it('omits loop when already present in header', () => {
+      const text = 'animate 10s loop ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, text, undefined, text);
+      const l = labels(items);
+      expect(l).not.toContain('loop');
+      expect(l).toContain('autoKey');
+    });
+  });
+
   // ─── Derived from Schema (no hardcoded strings) ───────────────
 
   describe('schema-derived (single source of truth)', () => {

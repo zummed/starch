@@ -75,7 +75,7 @@ function getCompletions(state: EditorState): CompletionState {
     to = selFrom;
   }
 
-  let items = completionsAt(ast, textPos, lineText, model);
+  let items = completionsAt(ast, textPos, lineText, model, text);
 
   // Filter by typed prefix (only when no selection — selection means we're
   // replacing a placeholder, not filtering by user input)
