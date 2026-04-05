@@ -9,6 +9,8 @@ import { nodeAt, findCompound, lineOf, indentOf } from './astTypes';
 import {
   animateHeaderCompletions,
   animateKeyframeStartCompletions,
+  animatePathCompletions,
+  extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
 import {
@@ -895,8 +897,9 @@ function routeAnimateContext(
     return animateKeyframeStartCompletions();
   }
 
-  // Other animate sub-contexts wired in later tasks.
-  return null;
+  // Path context: extract partial by backward scan from cursor.
+  const partial = extractPartialPath(lineBeforeCursor);
+  return animatePathCompletions(partial, modelJson, (modelJson as any)?.animate);
 }
 
 function findLineStart(text: string, pos: number): number {

@@ -495,6 +495,59 @@ describe('completionsAt', () => {
     });
   });
 
+  describe('animate path context', () => {
+    const sceneModel = {
+      objects: [
+        {
+          id: 'card',
+          children: [
+            {
+              id: 'bg',
+              rect: { w: 100, h: 50 },
+              fill: 'blue',
+              stroke: { color: 'red', width: 2 },
+            },
+          ],
+        },
+      ],
+      animate: {
+        duration: 5,
+        keyframes: [{ time: 1, changes: { 'card.bg.fill': 'green' } }],
+      },
+    };
+
+    it('offers scene nodes on inline-change after timestamp', () => {
+      const text = 'animate 5s\n  1 ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 ', sceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('card');
+    });
+
+    it('offers children and props after "card." on inline change', () => {
+      const text = 'animate 5s\n  1 card.';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 card.', sceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('bg');
+      expect(l).toContain('opacity');
+    });
+
+    it('offers tiered completions after "card.bg." on block change', () => {
+      const text = 'animate 5s\n  1\n    card.bg.';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '    card.bg.', sceneModel, text);
+      // fill is animated — must appear before stroke (set) and opacity (available)
+      const fillIdx = items.findIndex(i => i.label === 'fill');
+      const opacityIdx = items.findIndex(i => i.label === 'opacity');
+      expect(fillIdx).toBeGreaterThanOrEqual(0);
+      expect(fillIdx).toBeLessThan(opacityIdx);
+    });
+  });
+
   // ─── Derived from Schema (no hardcoded strings) ───────────────
 
   describe('schema-derived (single source of truth)', () => {
