@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath } from '../../dsl/animateCompletions';
+import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath, collectAnimatedPaths } from '../../dsl/animateCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -93,5 +93,35 @@ describe('extractPartialPath', () => {
     expect(extractPartialPath('  1 card.bg.fill: ')).toBe('');
     // Cursor right after colon (no trailing space):
     expect(extractPartialPath('  1 card.bg.fill:')).toBe('');
+  });
+});
+
+describe('collectAnimatedPaths', () => {
+  it('returns empty set for empty animate block', () => {
+    expect(collectAnimatedPaths(undefined)).toEqual(new Set());
+    expect(collectAnimatedPaths({ duration: 5, keyframes: [] })).toEqual(new Set());
+  });
+
+  it('collects paths from a single keyframe', () => {
+    const block = {
+      duration: 5,
+      keyframes: [
+        { time: 1, changes: { 'card.bg.fill': 'blue' } },
+      ],
+    };
+    expect(collectAnimatedPaths(block)).toEqual(new Set(['card.bg.fill']));
+  });
+
+  it('collects paths across multiple keyframes', () => {
+    const block = {
+      duration: 5,
+      keyframes: [
+        { time: 1, changes: { 'card.bg.fill': 'blue', 'card.opacity': 0.5 } },
+        { time: 2, changes: { 'card.bg.fill': 'red' } },
+      ],
+    };
+    expect(collectAnimatedPaths(block)).toEqual(
+      new Set(['card.bg.fill', 'card.opacity']),
+    );
   });
 });

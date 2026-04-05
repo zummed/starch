@@ -118,6 +118,22 @@ export function extractPartialPath(textBeforeCursor: string): string {
 }
 
 /**
+ * Collect all paths that appear in any keyframe's `changes` record on this
+ * animate block. Used by tier-1 classification during path completion.
+ */
+export function collectAnimatedPaths(animateBlock: any): Set<string> {
+  const paths = new Set<string>();
+  if (!animateBlock?.keyframes) return paths;
+  for (const kf of animateBlock.keyframes) {
+    if (!kf?.changes) continue;
+    for (const path of Object.keys(kf.changes)) {
+      paths.add(path);
+    }
+  }
+  return paths;
+}
+
+/**
  * Keyframe-start context: cursor is on an indented line under the animate
  * header, before typing a timestamp. Offer a numeric-time snippet and the
  * `chapter` keyword.
