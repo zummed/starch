@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath, collectAnimatedPaths } from '../../dsl/animateCompletions';
+import { animatePathCompletions } from '../../dsl/animateCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -180,5 +181,87 @@ describe('tierCandidate', () => {
     const animated = new Set(['card.bg.fill']);
     // fill is both animated AND set; animated wins.
     expect(tierCandidate('fill', 'card.bg', tierScene, animated)).toBe('animated');
+  });
+});
+
+const pathScene = {
+  objects: [
+    {
+      id: 'card',
+      children: [
+        {
+          id: 'bg',
+          rect: { w: 100, h: 50 },
+          fill: 'blue',
+          stroke: { color: 'red', width: 2 },
+        },
+        { id: 'title', text: { content: 'hi', size: 14 } },
+      ],
+    },
+    { id: 'solo', rect: { w: 20, h: 20 } },
+  ],
+  animate: {
+    duration: 5,
+    keyframes: [{ time: 1, changes: { 'card.bg.fill': 'green' } }],
+  },
+};
+
+describe('animatePathCompletions', () => {
+  it('at empty prefix, returns all scene node ids', () => {
+    const items = animatePathCompletions('', pathScene, pathScene.animate);
+    const l = labels(items);
+    expect(l).toContain('card');
+    expect(l).toContain('solo');
+  });
+
+  it('at empty prefix, marks node with animated descendant as tier 1', () => {
+    const items = animatePathCompletions('', pathScene, pathScene.animate);
+    const card = items.find(i => i.label === 'card');
+    expect(card!.detail).toBe('animated');
+  });
+
+  it('after "card.", returns children and node properties', () => {
+    const items = animatePathCompletions('card.', pathScene, pathScene.animate);
+    const l = labels(items);
+    expect(l).toContain('bg');
+    expect(l).toContain('title');
+    expect(l).toContain('fill'); // card's own property (unset)
+    expect(l).toContain('opacity');
+  });
+
+  it('after "card.bg.", fill is animated, stroke is set', () => {
+    const items = animatePathCompletions('card.bg.', pathScene, pathScene.animate);
+    const fill = items.find(i => i.label === 'fill');
+    const stroke = items.find(i => i.label === 'stroke');
+    const opacity = items.find(i => i.label === 'opacity');
+    expect(fill!.detail).toBe('animated');
+    expect(stroke!.detail).toBe('set');
+    expect(opacity!.detail).toBe('available');
+  });
+
+  it('tier 1 items come before tier 2, before tier 3', () => {
+    const items = animatePathCompletions('card.bg.', pathScene, pathScene.animate);
+    const fillIdx = items.findIndex(i => i.label === 'fill');
+    const strokeIdx = items.findIndex(i => i.label === 'stroke');
+    const opacityIdx = items.findIndex(i => i.label === 'opacity');
+    expect(fillIdx).toBeLessThan(strokeIdx);
+    expect(strokeIdx).toBeLessThan(opacityIdx);
+  });
+
+  it('unknown root falls back to all nodes + info item', () => {
+    const items = animatePathCompletions('typo.', pathScene, pathScene.animate);
+    const l = labels(items);
+    expect(l).toContain('card');
+    expect(l).toContain('solo');
+    // Info item signals no match
+    const info = items.find(i => i.type === 'info');
+    expect(info).toBeDefined();
+    expect(info!.label).toContain('typo');
+  });
+
+  it('after a leaf segment returns empty', () => {
+    // card.bg.fill is a leaf — drilling further is invalid
+    const items = animatePathCompletions('card.bg.fill.', pathScene, pathScene.animate);
+    expect(items).toEqual([]);
   });
 });

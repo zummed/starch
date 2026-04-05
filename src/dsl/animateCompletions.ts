@@ -189,3 +189,92 @@ export function tierCandidate(
 
   return 'available';
 }
+
+/**
+ * Enumerate all top-level scene node ids from the model. Used as the
+ * root-segment candidate list (when partial has no dot yet or is empty).
+ */
+function sceneNodeIds(modelJson: any): string[] {
+  if (!Array.isArray(modelJson?.objects)) return [];
+  return modelJson.objects.map((o: any) => o?.id).filter((id: any) => typeof id === 'string');
+}
+
+/**
+ * Main path-completion handler. Given a partial dot-path, resolves as far
+ * as possible through the scene model and returns tiered next-segment
+ * candidates.
+ *
+ * When the partial ends with '.' or is empty at a segment boundary, we've
+ * committed the previous segments. Otherwise, the last segment is a
+ * filter-prefix for the caller (we return all options at the resolved
+ * parent).
+ */
+export function animatePathCompletions(
+  partialPath: string,
+  modelJson: any,
+  animateBlock: any,
+): CompletionItem[] {
+  const animated = collectAnimatedPaths(animateBlock);
+
+  // Split on '.'. The last segment is the user's filter-prefix (possibly
+  // empty if they just typed a dot). Everything before it is committed.
+  const segments = partialPath.split('.');
+  const committed = segments.slice(0, -1);
+  const prefix = committed.join('.');
+
+  // Empty committed → we're at the root. Return top-level scene node ids.
+  if (committed.length === 0) {
+    const ids = sceneNodeIds(modelJson);
+    return ids.map(id => {
+      const tier = tierCandidate(id, '', modelJson, animated);
+      return makeCandidateItem(id, tier, 'drill');
+    });
+  }
+
+  // Resolve the walk through the committed segments.
+  const loc = resolvePath(modelJson, committed);
+  if (!loc) {
+    // Fallback: unknown root — return all nodes + info item.
+    const ids = sceneNodeIds(modelJson);
+    const items: CompletionItem[] = ids.map(id => {
+      const tier = tierCandidate(id, '', modelJson, animated);
+      return makeCandidateItem(id, tier, 'drill');
+    });
+    items.push({
+      label: `no match for "${committed[0]}"`,
+      type: 'info',
+      detail: 'Showing all scene nodes',
+    });
+    return items;
+  }
+
+  // Enumerate next-level options and tier them.
+  const nexts = enumerateNextSegments(loc);
+  const items = nexts.map(n => {
+    const tier = tierCandidate(n.name, prefix, modelJson, animated);
+    return makeCandidateItem(n.name, tier, n.kind);
+  });
+
+  // Sort by tier: animated → set → available, then alphabetical.
+  const tierOrder: Record<Tier, number> = { animated: 0, set: 1, available: 2 };
+  items.sort((a, b) => {
+    const ta = tierOrder[(a.detail as Tier) ?? 'available'];
+    const tb = tierOrder[(b.detail as Tier) ?? 'available'];
+    if (ta !== tb) return ta - tb;
+    return a.label.localeCompare(b.label);
+  });
+
+  return items;
+}
+
+function makeCandidateItem(
+  name: string,
+  tier: Tier,
+  kind: 'drill' | 'leaf',
+): CompletionItem {
+  return {
+    label: name,
+    type: kind === 'leaf' ? 'property' : 'keyword',
+    detail: tier,
+  };
+}
