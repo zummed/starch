@@ -793,6 +793,9 @@ function colorCompletions(): CompletionItem[] {
 function findNearestContext(ast: AstNode, pos: number): AstNode | null {
   let best: AstNode | null = null;
   for (const section of ast.children) {
+    // Only actual sections provide a context — skip top-level metadata
+    // compounds (name, background, viewport, description).
+    if (section.dslRole !== 'section') continue;
     if (section.to <= pos) {
       const lastCompound = section.children.length > 0
         ? section.children[section.children.length - 1]

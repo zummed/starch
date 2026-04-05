@@ -183,7 +183,7 @@ function matchSection(
         // Parse indented keyframes block
         if (hints.children?.keyframes === 'block') {
           const kfs = parseKeyframesBlock(ctx, `${name}.keyframes`);
-          if (kfs.length > 0) parsed.keyframes = kfs;
+          parsed.keyframes = kfs; // always set, even if empty (consumers iterate it)
         }
         model[name] = parsed;
       }
