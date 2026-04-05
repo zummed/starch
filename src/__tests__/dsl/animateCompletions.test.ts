@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { animateHeaderCompletions, animateKeyframeStartCompletions, extractPartialPath, collectAnimatedPaths } from '../../dsl/animateCompletions';
 import { animatePathCompletions } from '../../dsl/animateCompletions';
+import { animateValueCompletions } from '../../dsl/animateCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -263,5 +264,50 @@ describe('animatePathCompletions', () => {
     // card.bg.fill is a leaf — drilling further is invalid
     const items = animatePathCompletions('card.bg.fill.', pathScene, pathScene.animate);
     expect(items).toEqual([]);
+  });
+});
+
+const valueScene = {
+  objects: [
+    {
+      id: 'box',
+      rect: { w: 100, h: 50 },
+      fill: 'midnightblue',
+      opacity: 0.7,
+    },
+  ],
+};
+
+describe('animateValueCompletions', () => {
+  it('returns color completions for a color property', () => {
+    const items = animateValueCompletions('box.fill', valueScene);
+    const l = labels(items);
+    expect(l).toContain('red');
+    expect(l).toContain('hsl');
+  });
+
+  it('includes current value at top for colors', () => {
+    const items = animateValueCompletions('box.fill', valueScene);
+    expect(items[0].label).toBe('midnightblue');
+    expect(items[0].detail).toContain('current');
+  });
+
+  it('returns only current-value for numeric property', () => {
+    const items = animateValueCompletions('box.opacity', valueScene);
+    expect(items).toHaveLength(1);
+    expect(items[0].label).toBe('0.7');
+    expect(items[0].detail).toContain('current');
+  });
+
+  it('returns empty list for unresolvable path', () => {
+    const items = animateValueCompletions('nope.path', valueScene);
+    expect(items).toEqual([]);
+  });
+
+  it('returns boolean true/false for a boolean property', () => {
+    const items = animateValueCompletions('box.visible', valueScene);
+    const l = labels(items);
+    expect(l).toContain('true');
+    expect(l).toContain('false');
   });
 });

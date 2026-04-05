@@ -6,7 +6,8 @@
 import type { CompletionItem } from './astCompletions';
 import { AnimConfigSchema, EasingNameSchema } from '../types/animation';
 import { getDsl } from './dslMeta';
-import { getEnumValues } from '../types/schemaRegistry';
+import { getEnumValues, detectSchemaType } from '../types/schemaRegistry';
+import { getAllColorNames } from '../types/color';
 import { currentValueAt, resolvePath, enumerateNextSegments } from './modelPathWalker';
 
 /**
@@ -277,4 +278,78 @@ function makeCandidateItem(
     type: kind === 'leaf' ? 'property' : 'keyword',
     detail: tier,
   };
+}
+
+/**
+ * Produce value completions for a full keyframe change path.
+ * Includes the current scene value (if concise) as a top-ranked item.
+ */
+export function animateValueCompletions(
+  fullPath: string,
+  modelJson: any,
+): CompletionItem[] {
+  const segments = fullPath.split('.');
+  const loc = resolvePath(modelJson, segments);
+  if (!loc || !loc.schema) return [];
+
+  const type = detectSchemaType(loc.schema);
+  const items: CompletionItem[] = [];
+
+  // Current-value item (top-ranked).
+  const current = currentValueAt(modelJson, fullPath);
+  if (current !== undefined && current !== null) {
+    const asText = conciseValue(current);
+    if (asText !== null) {
+      items.push({
+        label: asText,
+        type: 'value',
+        detail: `current: ${asText}`,
+      });
+    }
+  }
+
+  // Type-specific completions.
+  if (type === 'color') {
+    for (const name of getAllColorNames()) {
+      if (items[0]?.label === name) continue; // don't duplicate the current
+      items.push({ label: name, type: 'value', detail: 'Named color' });
+    }
+    items.push({
+      label: 'hsl',
+      type: 'keyword',
+      detail: 'HSL color',
+      snippetTemplate: 'hsl ${1:H} ${2:S} ${3:L}',
+    });
+    items.push({
+      label: 'rgb',
+      type: 'keyword',
+      detail: 'RGB color',
+      snippetTemplate: 'rgb ${1:R} ${2:G} ${3:B}',
+    });
+  } else if (type === 'enum') {
+    const vals = getEnumValues(loc.schema) ?? [];
+    for (const v of vals) {
+      if (items[0]?.label === v) continue;
+      items.push({ label: v, type: 'value' });
+    }
+  } else if (type === 'boolean') {
+    for (const v of ['true', 'false']) {
+      if (items[0]?.label === v) continue;
+      items.push({ label: v, type: 'value' });
+    }
+  }
+  // number → only current-value item (no free list).
+
+  return items;
+}
+
+/**
+ * Format a model value as a concise DSL-compatible string. Returns null for
+ * structured values that can't be rendered concisely.
+ */
+function conciseValue(v: unknown): string | null {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'boolean') return String(v);
+  return null;
 }
