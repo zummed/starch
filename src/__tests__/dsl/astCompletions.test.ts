@@ -70,6 +70,33 @@ describe('completionsAt', () => {
       expect(l).toContain('animate');
       expect(l).toContain('style');
     });
+
+    it('typing "a" on fresh line after a node still shows top-level keywords', () => {
+      // Regression: "A ctrl+space at the top level offers animate, but if I
+      // start typing animate it switches to anchor." The partial word "a" on
+      // an unindented fresh line must still be classified as top-level.
+      const text = 'box: rect 100x60 fill red\na';
+      const fl = filteredLabels(text, text.length);
+      expect(fl).toContain('animate');
+      expect(fl).not.toContain('anchor');
+      expect(fl).not.toContain('at');
+    });
+
+    it('completionPlugin-style lineText (including partial word) stays top-level', () => {
+      // completionPlugin.ts passes lineText WITH the partial word included.
+      // The context detection must strip it before classifying fresh-line vs
+      // continuation.
+      const text = 'box: rect 100x60 fill red\na';
+      const pos = text.length;
+      const lineStart = text.lastIndexOf('\n') + 1;
+      const lineText = text.slice(lineStart, pos); // "a" — word included
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const l = labels(completionsAt(ast, pos, lineText));
+      expect(l).toContain('animate');
+      expect(l).not.toContain('anchor');
+      expect(l).not.toContain('at');
+    });
   });
 
   // ─── Geometry Keywords ────────────────────────────────────────

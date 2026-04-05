@@ -105,7 +105,10 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
       ],
     });
 
-    const view = new EditorView(containerRef.current, { state });
+    const view = new EditorView(containerRef.current, {
+      state,
+      attributes: { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' },
+    });
     viewRef.current = view;
 
     // Emit initial model so the diagram renders immediately.

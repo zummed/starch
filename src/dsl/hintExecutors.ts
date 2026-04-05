@@ -208,6 +208,10 @@ export function executePositional(
           return result;
         }
       }
+      // Suffix hint signals a numeric field. If the identifier doesn't
+      // form a valid <number><suffix>, don't assign the raw string —
+      // leave duration unset so downstream defaults apply.
+      return null;
     }
     result[k] = tok.value;
   } else if (tok.type === 'string' || tok.type === 'hexColor') {

@@ -27,4 +27,19 @@ describe('animate block always has keyframes array', () => {
     const { model } = walkDocument(dsl);
     expect(model.animate?.keyframes).toHaveLength(1);
   });
+
+  it('"animate s" does not assign a string to duration', () => {
+    // Regression: after autocompleting `animate 3s` and deleting the `3`,
+    // the parser previously assigned the raw string "s" to duration, which
+    // crashed V2Diagram's numeric timeline code.
+    const { model } = walkDocument('animate s');
+    expect(typeof model.animate?.duration).not.toBe('string');
+    expect(model.animate?.keyframes).toEqual([]);
+  });
+
+  it('"animate abc" does not assign a string to duration', () => {
+    const { model } = walkDocument('animate abc');
+    expect(typeof model.animate?.duration).not.toBe('string');
+    expect(model.animate?.keyframes).toEqual([]);
+  });
 });

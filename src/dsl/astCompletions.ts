@@ -240,14 +240,18 @@ export function completionsAt(
 
   if (!ast) return TOP_LEVEL_KEYWORDS;
 
-  // When the cursor is on a fresh line (only whitespace before cursor on this line),
-  // the indentation determines context:
-  //   - no indent → document-level, show top-level keywords
-  //   - indented → continuation of preceding node, show node-context completions
-  const onFreshLine = !lineText || /^\s*$/.test(lineText);
-  const freshLineIndent = onFreshLine ? (lineText?.length ?? 0) : -1;
+  // Determine context from line indent (separating the partial word being typed
+  // from prior content on the same line).
+  //   - line with no content before the partial word at column 0 → document-level
+  //   - line with only whitespace before the partial word → indented continuation
+  //   - line with non-whitespace content before the partial word → mid-line (use existing logic)
+  const wordAtEnd = lineText?.match(/[\w\-#@]+$/);
+  const beforeWord = wordAtEnd
+    ? lineText!.slice(0, wordAtEnd.index)
+    : (lineText ?? '');
+  const onFreshLine = /^\s*$/.test(beforeWord);
 
-  if (onFreshLine && freshLineIndent === 0) {
+  if (onFreshLine && beforeWord.length === 0) {
     return topLevelCompletions(ast, modelJson);
   }
 
