@@ -118,14 +118,6 @@ export interface NextSegment {
 const INTERNAL_KEYS = new Set(['id', 'children', 'template', 'props', 'style']);
 
 /**
- * List the next-level segment options at a resolved location.
- *
- * - At a node: returns child-node ids (drill) + the node's schema fields
- *   (classified by type).
- * - At a sub-object: returns the sub-object's declared fields.
- * - At a leaf: returns an empty list (terminal).
- */
-/**
  * Read the scalar or sub-object at a dotted path. Returns undefined if the
  * path is unresolvable OR the property is not set on the actual model value.
  *
@@ -153,6 +145,14 @@ export function pathExists(modelJson: any, path: string): boolean {
   return resolvePath(modelJson, segments) !== null;
 }
 
+/**
+ * List the next-level segment options at a resolved location.
+ *
+ * - At a node: returns child-node ids (drill) + the node's schema fields
+ *   (classified by type).
+ * - At a sub-object: returns the sub-object's declared fields.
+ * - At a leaf: returns an empty list (terminal).
+ */
 export function enumerateNextSegments(location: ResolvedLocation): NextSegment[] {
   if (location.kind === 'leaf') return [];
 
