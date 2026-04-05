@@ -95,23 +95,19 @@ export function TabLayout({ canvasContent, timelineContent, editorContent, onSam
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'canvas' && (
-          <>
-            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-              {canvasContent}
-            </div>
-            {timelineContent}
-          </>
-        )}
-        {activeTab === 'editor' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <InlineSampleBrowser onSelect={onSampleSelect} activeSampleId={activeSampleId} />
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              {editorContent}
-            </div>
-          </div>
-        )}
+      {/* Both tabs are always mounted — CSS hides the inactive one.
+           This preserves ProseMirror editor state across tab switches. */}
+      <div style={{ flex: 1, overflow: 'hidden', display: activeTab === 'canvas' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {canvasContent}
+        </div>
+        {timelineContent}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden', display: activeTab === 'editor' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <InlineSampleBrowser onSelect={onSampleSelect} activeSampleId={activeSampleId} />
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          {editorContent}
+        </div>
       </div>
 
       {/* Tab bar */}
