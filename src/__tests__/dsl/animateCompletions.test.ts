@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { animateHeaderCompletions } from '../../dsl/animateCompletions';
+import { animateHeaderCompletions, animateKeyframeStartCompletions } from '../../dsl/animateCompletions';
 
 function labels(items: { label: string }[]): string[] {
   return items.map(i => i.label);
@@ -47,5 +47,21 @@ describe('animateHeaderCompletions', () => {
     // Handler returns full list; caller filters by prefix.
     expect(l).toContain('easeIn');
     expect(l).toContain('linear');
+  });
+});
+
+describe('animateKeyframeStartCompletions', () => {
+  it('returns timestamp snippet and chapter keyword', () => {
+    const items = animateKeyframeStartCompletions();
+    const l = labels(items);
+    expect(l.some(lbl => /^\d/.test(lbl) || lbl.includes('time') || lbl.includes('seconds'))).toBe(true);
+    expect(l).toContain('chapter');
+  });
+
+  it('timestamp item has a snippet template', () => {
+    const items = animateKeyframeStartCompletions();
+    const ts = items.find(i => i.detail === 'Keyframe timestamp');
+    expect(ts).toBeDefined();
+    expect(ts!.snippetTemplate).toBeDefined();
   });
 });

@@ -96,3 +96,25 @@ export function animateHeaderCompletions(headerText: string): CompletionItem[] {
 
   return items;
 }
+
+/**
+ * Keyframe-start context: cursor is on an indented line under the animate
+ * header, before typing a timestamp. Offer a numeric-time snippet and the
+ * `chapter` keyword.
+ */
+export function animateKeyframeStartCompletions(): CompletionItem[] {
+  return [
+    {
+      label: 'time',
+      type: 'keyword',
+      detail: 'Keyframe timestamp',
+      snippetTemplate: '${1:1} ${2:path}: ${3:value}',
+    },
+    {
+      label: 'chapter',
+      type: 'keyword',
+      detail: 'Named chapter marker',
+      snippetTemplate: 'chapter "${1:name}" at ${2:0}',
+    },
+  ];
+}
