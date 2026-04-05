@@ -3,7 +3,7 @@
  * usable from completions, hover, diagnostics.
  */
 import type { z } from 'zod';
-import { getPropertySchema, detectSchemaType } from '../types/schemaRegistry';
+import { getPropertySchema, detectSchemaType, getAvailableProperties } from '../types/schemaRegistry';
 import { NodeSchema } from '../types/node';
 
 export type LocationKind = 'node' | 'subobject' | 'leaf';
@@ -100,4 +100,60 @@ export function resolvePath(
     kind: currentKind,
     path: consumed.join('.'),
   };
+}
+
+export interface NextSegment {
+  /** The segment name (property key or child node id). */
+  name: string;
+  /** 'drill' means "this has substructure, keep drilling with another dot."
+   *  'leaf' means "this is terminal — insert colon to assign a value." */
+  kind: 'drill' | 'leaf';
+  /** Where this segment came from — helps consumers format display. */
+  source: 'child' | 'property';
+  /** For 'property' entries, the Zod schema of that field. Consumers use
+   *  this for value-completion dispatch. */
+  schema?: z.ZodType;
+}
+
+const INTERNAL_KEYS = new Set(['id', 'children', 'template', 'props', 'style']);
+
+/**
+ * List the next-level segment options at a resolved location.
+ *
+ * - At a node: returns child-node ids (drill) + the node's schema fields
+ *   (classified by type).
+ * - At a sub-object: returns the sub-object's declared fields.
+ * - At a leaf: returns an empty list (terminal).
+ */
+export function enumerateNextSegments(location: ResolvedLocation): NextSegment[] {
+  if (location.kind === 'leaf') return [];
+
+  const segments: NextSegment[] = [];
+
+  // If at a node, add children first.
+  if (location.kind === 'node') {
+    const children = (location.modelValue as any)?.children;
+    if (Array.isArray(children)) {
+      for (const child of children) {
+        if (child && typeof child.id === 'string') {
+          segments.push({ name: child.id, kind: 'drill', source: 'child' });
+        }
+      }
+    }
+  }
+
+  // Add schema-declared properties.
+  if (location.schema) {
+    const props = getAvailableProperties('', location.schema);
+    for (const p of props) {
+      if (INTERNAL_KEYS.has(p.name)) continue;
+      // Don't re-emit child ids as properties.
+      if (segments.some(s => s.name === p.name)) continue;
+      const type = detectSchemaType(p.schema);
+      const kind: 'drill' | 'leaf' = type === 'object' ? 'drill' : 'leaf';
+      segments.push({ name: p.name, kind, source: 'property', schema: p.schema });
+    }
+  }
+
+  return segments;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolvePath } from '../../dsl/modelPathWalker';
+import { resolvePath, enumerateNextSegments } from '../../dsl/modelPathWalker';
 
 const scene = {
   objects: [
@@ -85,5 +85,64 @@ describe('resolvePath', () => {
 
   it('returns null when model has no objects array', () => {
     expect(resolvePath({} as any, ['card'])).toBeNull();
+  });
+});
+
+describe('enumerateNextSegments', () => {
+  it('at a node returns child ids and its animatable properties', () => {
+    const loc = resolvePath(scene, ['card']);
+    const segs = enumerateNextSegments(loc!);
+    const names = segs.map(s => s.name);
+    expect(names).toContain('bg');      // child
+    expect(names).toContain('badge');   // child
+    expect(names).toContain('fill');    // leaf property
+    expect(names).toContain('opacity'); // leaf property
+    expect(names).toContain('stroke');  // drill target (sub-object)
+    expect(names).toContain('transform'); // drill target (sub-object)
+  });
+
+  it('classifies child ids as drill targets', () => {
+    const loc = resolvePath(scene, ['card']);
+    const segs = enumerateNextSegments(loc!);
+    const bg = segs.find(s => s.name === 'bg');
+    expect(bg!.kind).toBe('drill');
+    expect(bg!.source).toBe('child');
+  });
+
+  it('classifies colors and numbers as leaves', () => {
+    const loc = resolvePath(scene, ['card']);
+    const segs = enumerateNextSegments(loc!);
+    expect(segs.find(s => s.name === 'fill')!.kind).toBe('leaf');
+    expect(segs.find(s => s.name === 'opacity')!.kind).toBe('leaf');
+  });
+
+  it('classifies multi-field sub-objects as drill targets', () => {
+    const loc = resolvePath(scene, ['card']);
+    const segs = enumerateNextSegments(loc!);
+    expect(segs.find(s => s.name === 'stroke')!.kind).toBe('drill');
+    expect(segs.find(s => s.name === 'transform')!.kind).toBe('drill');
+  });
+
+  it('at a sub-object returns its declared fields as leaves', () => {
+    const loc = resolvePath(scene, ['card', 'bg', 'stroke']);
+    const segs = enumerateNextSegments(loc!);
+    const names = segs.map(s => s.name);
+    expect(names).toContain('color');
+    expect(names).toContain('width');
+    expect(segs.find(s => s.name === 'width')!.kind).toBe('leaf');
+  });
+
+  it('at a leaf returns empty list', () => {
+    const loc = resolvePath(scene, ['card', 'bg', 'fill']);
+    const segs = enumerateNextSegments(loc!);
+    expect(segs).toEqual([]);
+  });
+
+  it('does not include id/children/_internal keys', () => {
+    const loc = resolvePath(scene, ['card']);
+    const segs = enumerateNextSegments(loc!);
+    const names = segs.map(s => s.name);
+    expect(names).not.toContain('id');
+    expect(names).not.toContain('children');
   });
 });
