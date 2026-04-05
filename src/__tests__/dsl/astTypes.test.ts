@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createAstNode, nodeAt, findCompound, flattenLeaves } from '../../dsl/astTypes';
+import { createAstNode, nodeAt, findCompound, flattenLeaves, lineOf, indentOf } from '../../dsl/astTypes';
 
 describe('AST tree queries', () => {
   // Build a small test tree:
@@ -85,5 +85,57 @@ describe('AST tree queries', () => {
     for (let i = 1; i < leaves.length; i++) {
       expect(leaves[i].from).toBeGreaterThanOrEqual(leaves[i - 1].from);
     }
+  });
+});
+
+describe('lineOf', () => {
+  it('returns 0 for position on first line', () => {
+    const text = 'animate 10s\n  1 box.fill: red';
+    expect(lineOf(0, text)).toBe(0);
+    expect(lineOf(5, text)).toBe(0);
+    expect(lineOf(11, text)).toBe(0); // before newline
+  });
+
+  it('returns 1 for position on second line', () => {
+    const text = 'animate 10s\n  1 box.fill: red';
+    expect(lineOf(12, text)).toBe(1); // just after newline
+    expect(lineOf(text.length, text)).toBe(1);
+  });
+
+  it('handles multiple newlines', () => {
+    const text = 'a\nb\nc\nd';
+    expect(lineOf(0, text)).toBe(0);
+    expect(lineOf(2, text)).toBe(1);
+    expect(lineOf(4, text)).toBe(2);
+    expect(lineOf(6, text)).toBe(3);
+  });
+
+  it('returns 0 for empty text', () => {
+    expect(lineOf(0, '')).toBe(0);
+  });
+});
+
+describe('indentOf', () => {
+  it('returns 0 for unindented line', () => {
+    const text = 'animate 10s\n  1 box.fill: red';
+    expect(indentOf(0, text)).toBe(0);
+    expect(indentOf(5, text)).toBe(0);
+  });
+
+  it('returns leading-space count on indented line', () => {
+    const text = 'animate 10s\n  1 box.fill: red';
+    expect(indentOf(12, text)).toBe(2); // start of "  1..."
+    expect(indentOf(14, text)).toBe(2); // mid-line
+    expect(indentOf(text.length, text)).toBe(2);
+  });
+
+  it('counts tabs and spaces as 1 char each', () => {
+    const text = '\t\t body';
+    expect(indentOf(5, text)).toBe(3); // two tabs + one space
+  });
+
+  it('returns 0 for empty line', () => {
+    const text = 'a\n\nb';
+    expect(indentOf(2, text)).toBe(0);
   });
 });

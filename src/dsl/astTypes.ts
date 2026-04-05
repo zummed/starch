@@ -57,3 +57,37 @@ export function flattenLeaves(root: AstNode): AstNode[] {
   leaves.sort((a, b) => a.from - b.from);
   return leaves;
 }
+
+/**
+ * Returns the 0-based line index for a character position in text.
+ * Counts newlines strictly before `pos` — a position immediately after
+ * a newline is on the next line.
+ */
+export function lineOf(pos: number, text: string): number {
+  let line = 0;
+  const end = Math.min(pos, text.length);
+  for (let i = 0; i < end; i++) {
+    if (text.charCodeAt(i) === 10) line++; // '\n'
+  }
+  return line;
+}
+
+/**
+ * Returns the number of leading whitespace characters on the line
+ * containing `pos`. Counts any whitespace character (space, tab) as 1.
+ */
+export function indentOf(pos: number, text: string): number {
+  // Find line start
+  let lineStart = Math.min(pos, text.length);
+  while (lineStart > 0 && text.charCodeAt(lineStart - 1) !== 10) {
+    lineStart--;
+  }
+  // Count whitespace forward from lineStart
+  let indent = 0;
+  for (let i = lineStart; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    if (ch === 32 || ch === 9) indent++; // space or tab
+    else break;
+  }
+  return indent;
+}
