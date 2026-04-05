@@ -493,6 +493,21 @@ describe('completionsAt', () => {
       expect(l).toContain('chapter');
       expect(l).toContain('time');
     });
+
+    it('offers keyframe-start completions on a blank line between keyframes', () => {
+      // Blank line (no whitespace) BETWEEN existing keyframes in an
+      // unindented animate block. Cursor is on the blank line at column 0.
+      const text = 'animate 5s\n  1 box.fill: red\n\n  2 box.fill: blue';
+      // Position of the blank line (line 2, col 0): after 'red\n' newline
+      const pos = text.indexOf('red') + 'red\n'.length;
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, pos, '', undefined, text);
+      const l = labels(items);
+      // Should route to keyframe-start handler, not fall through.
+      expect(l).toContain('chapter');
+      expect(l).toContain('time');
+    });
   });
 
   describe('animate path context', () => {

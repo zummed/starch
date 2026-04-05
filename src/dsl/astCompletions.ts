@@ -939,10 +939,14 @@ function isInsideAnimateBody(
 
   const headerIndent = indentOf(animateNode.from, text);
   const cursorIndent = indentOf(pos, text);
-  if (cursorIndent <= headerIndent) return false;
+  // Blank cursor lines don't signal a dedent — a user can ctrl+space on
+  // an empty line between keyframes. Only dedent-to-header is rejecting.
+  const lines = text.split('\n');
+  const cursorLineText = lines[cursorLine] ?? '';
+  const cursorIsBlank = cursorLineText.trim() === '';
+  if (!cursorIsBlank && cursorIndent <= headerIndent) return false;
 
   // Scan lines strictly between header and cursor for dedents.
-  const lines = text.split('\n');
   for (let ln = headerLine + 1; ln < cursorLine; ln++) {
     const line = lines[ln] ?? '';
     if (line.trim() === '') continue; // blank lines OK

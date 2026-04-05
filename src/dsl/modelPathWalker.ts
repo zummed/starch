@@ -22,7 +22,9 @@ export interface ResolvedLocation {
 }
 
 /**
- * Find a node by id in an array of nodes (recursively searching children).
+ * Find a node by id via a shallow single-level scan of the given array.
+ * (Deep traversal across a tree is handled by the walker calling this at
+ * each step.)
  * Returns null if not found.
  */
 function findNodeById(nodes: any[] | undefined, id: string): any | null {
