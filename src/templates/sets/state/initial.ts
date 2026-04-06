@@ -22,5 +22,7 @@ export function stateInitialTemplate(id: string, props: Record<string, unknown>)
       createNode({ id: `${id}.dot`, ellipse: { rx: r, ry: r }, fill }),
     ],
     ...(props.transform ? { transform: props.transform as any } : {}),
+    ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
+    ...(props.style ? { style: props.style as string } : {}),
   });
 }

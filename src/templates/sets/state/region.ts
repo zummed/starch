@@ -48,5 +48,7 @@ export function stateRegionTemplate(id: string, props: Record<string, unknown>):
     ],
     layout: { type: 'flex', direction, gap, padding: 30 },
     ...(props.transform ? { transform: props.transform as any } : {}),
+    ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
+    ...(props.style ? { style: props.style as string } : {}),
   });
 }

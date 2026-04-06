@@ -23,5 +23,7 @@ export function stateFinalTemplate(id: string, props: Record<string, unknown>): 
       createNode({ id: `${id}.inner`, ellipse: { rx: r * 0.6, ry: r * 0.6 }, fill: color }),
     ],
     ...(props.transform ? { transform: props.transform as any } : {}),
+    ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
+    ...(props.style ? { style: props.style as string } : {}),
   });
 }

@@ -76,5 +76,6 @@ export function stateNodeTemplate(id: string, props: Record<string, unknown>): N
     children,
     ...(props.transform ? { transform: props.transform as any } : {}),
     ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
+    ...(props.style ? { style: props.style as string } : {}),
   });
 }
