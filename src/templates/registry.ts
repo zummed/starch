@@ -51,13 +51,16 @@ export function resolveTemplateName(
   name: string,
   searchPath: string[],
 ): TemplateFn | undefined {
+  // Fully-qualified name (contains dot) — direct lookup
   if (name.includes('.')) {
     return templates.get(name);
   }
+  // Unqualified — walk search path
   for (const setName of searchPath) {
     const fn = templates.get(`${setName}.${name}`);
     if (fn) return fn;
   }
+  // Fall back to flat template names (for primitives if any remain)
   return templates.get(name);
 }
 
