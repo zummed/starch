@@ -47,6 +47,20 @@ export function listSets(): ShapeSet[] {
   return Array.from(shapeSets.values());
 }
 
+export function getSetNames(): string[] {
+  return Array.from(shapeSets.keys());
+}
+
+export function getShapeNames(setName: string): string[] {
+  const set = shapeSets.get(setName);
+  if (!set) return [];
+  return Array.from(set.shapes.keys());
+}
+
+export function getShapeDefinition(setName: string, shapeName: string): ShapeDefinition | undefined {
+  return shapeSets.get(setName)?.shapes.get(shapeName);
+}
+
 export function resolveTemplateName(
   name: string,
   searchPath: string[],

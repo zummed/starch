@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { completionsAt, type CompletionItem } from '../../dsl/astCompletions';
 import { buildAstFromModel } from '../../dsl/astEmitter';
 import { walkDocument } from '../../dsl/schemaWalker';
 import { leavesToAst } from '../../dsl/astAdapter';
 import { emptyFormatHints } from '../../dsl/formatHints';
+import { registerBuiltinTemplates } from '../../templates/index';
 
 const hints = emptyFormatHints();
 
@@ -607,6 +608,82 @@ describe('completionsAt', () => {
   });
 
   // ─── Derived from Schema (no hardcoded strings) ───────────────
+
+  // ─── Shape Set Completions ────────────────────────────────────
+
+  describe('shape set completions', () => {
+    // Ensure shape sets are registered before these tests run
+    beforeAll(() => {
+      registerBuiltinTemplates();
+    });
+
+    it('shape set prefixes appear in geometry keyword completions after "id:"', () => {
+      const items = completionsAt(null, 0, 'box: ');
+      const l = labels(items);
+      expect(l).toContain('rect');     // geometry keyword still present
+      expect(l).toContain('core');     // shape set prefix
+      expect(l).toContain('state');    // shape set prefix
+    });
+
+    it('shape set prefixes have retrigger=true', () => {
+      const items = completionsAt(null, 0, 'box: ');
+      const coreItem = items.find(i => i.label === 'core');
+      const stateItem = items.find(i => i.label === 'state');
+      expect(coreItem?.retrigger).toBe(true);
+      expect(stateItem?.retrigger).toBe(true);
+    });
+
+    it('shape names appear after a set prefix + dot', () => {
+      const items = completionsAt(null, 0, 'box: state.');
+      const l = labels(items);
+      expect(l).toContain('node');
+      expect(l).toContain('initial');
+      expect(l).toContain('final');
+      expect(l).toContain('region');
+      expect(l).toContain('choice');
+    });
+
+    it('core shape names appear after "core."', () => {
+      const items = completionsAt(null, 0, 'box: core.');
+      const l = labels(items);
+      expect(l).toContain('box');
+      expect(l).toContain('circle');
+      expect(l).toContain('arrow');
+    });
+
+    it('set names appear after "use" keyword', () => {
+      const items = completionsAt(null, 0, 'use ');
+      const l = labels(items);
+      expect(l).toContain('core');
+      expect(l).toContain('state');
+    });
+
+    it('set names appear after "use [" bracket syntax', () => {
+      const items = completionsAt(null, 0, 'use [');
+      const l = labels(items);
+      expect(l).toContain('core');
+      expect(l).toContain('state');
+    });
+
+    it('"use" appears in top-level keyword completions', () => {
+      const l = labels(completionsAt(null, 0));
+      expect(l).toContain('use');
+    });
+
+    it('"use" has a snippet template', () => {
+      const items = completionsAt(null, 0);
+      const useItem = items.find(i => i.label === 'use');
+      expect(useItem?.snippetTemplate).toBe('use [${1:core}]');
+    });
+
+    it('unknown set prefix + dot returns empty (falls through)', () => {
+      const items = completionsAt(null, 0, 'box: unknown.');
+      // Should not return shape completions for an unknown set
+      const l = labels(items);
+      expect(l).not.toContain('node');
+      expect(l).not.toContain('box');
+    });
+  });
 
   describe('schema-derived (single source of truth)', () => {
     it('geometry list comes from NodeSchema hints, not hardcoded', () => {

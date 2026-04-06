@@ -14,6 +14,7 @@ import {
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
+import { getSetNames, getShapeNames } from '../templates/registry';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
   getAvailableProperties, getSchemaDefault, EasingNameSchema,
@@ -208,6 +209,7 @@ function buildTopLevelKeywords(): CompletionItem[] {
     images: 'images',
     style: 'style ${1:name}',
     animate: 'animate ${1:3}s',
+    use: 'use [${1:core}]',
   };
   for (const [name, fieldSchema] of Object.entries(shape)) {
     if (skip.has(name)) continue;
@@ -318,16 +320,48 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     return extractNodeIds(modelJson);
   }
 
-  // After node ID + colon: offer geometry keywords (derived from NodeSchema.geometry hint).
+  // After a shape set prefix + dot: offer shapes in that set.
+  // E.g., "box: state." → suggest node, initial, final, region, choice
+  const setDotMatch = lineText.match(/\b(\w+)\.\s*(\w*)$/);
+  if (setDotMatch) {
+    const setName = setDotMatch[1];
+    const shapes = getShapeNames(setName);
+    if (shapes.length > 0) {
+      return shapes.map(s => ({
+        label: s, type: 'keyword' as const, detail: `${setName} shape`,
+      }));
+    }
+  }
+
+  // After `use` keyword: suggest available set names.
+  const useMatch = lineText.match(/\buse\s+\[?\s*\w*$/);
+  if (useMatch) {
+    return getSetNames().map(name => ({
+      label: name, type: 'value' as const, detail: 'Shape set',
+    }));
+  }
+
+  // After node ID + colon: offer geometry keywords (derived from NodeSchema.geometry hint)
+  // plus shape set prefixes for qualified template references.
   // This handles the case where the user is typing a new node and the AST is stale.
   if (lineText.match(/^\s*\w+:\s+\w*$/) || lineText.match(/^\s*\w+:\s*$/)) {
-    return GEOMETRY_KEYWORDS.map(g => {
+    const items: CompletionItem[] = GEOMETRY_KEYWORDS.map(g => {
       const item: CompletionItem = { label: g, type: 'keyword', detail: 'Geometry type' };
       const schemaKey = KEYWORD_TO_SCHEMA[g] ?? g;
       const tmpl = buildSnippetTemplate(schemaKey);
       if (tmpl) item.snippetTemplate = tmpl;
       return item;
     });
+    // Also offer shape set prefixes with retrigger so "state" inserts "state." and re-triggers
+    for (const setName of getSetNames()) {
+      items.push({
+        label: setName,
+        type: 'keyword',
+        detail: 'Shape set',
+        retrigger: true,
+      });
+    }
+    return items;
   }
 
   // Check for a keyword at the end of the line followed by a space.
