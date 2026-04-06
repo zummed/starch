@@ -100,4 +100,16 @@ n1: rect 10x10`;
     expect(scene.name).toBeUndefined();
     expect(scene.description).toBeUndefined();
   });
+
+  it('parses use declaration into search path', () => {
+    const input = `use [core, state]\nb1: rect 10x10`;
+    const scene = parseScene(input);
+    expect(scene.use).toEqual(['core', 'state']);
+  });
+
+  it('defaults use to [core] when absent', () => {
+    const input = `b1: rect 10x10`;
+    const scene = parseScene(input);
+    expect(scene.use).toEqual(['core']);
+  });
 });

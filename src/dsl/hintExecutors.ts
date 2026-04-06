@@ -191,12 +191,16 @@ export function executePositional(
         ctx.next(); // skip unknown
       }
     }
-    if (ctx.is('bracketClose')) ctx.next(); // consume ]
+    let closeTo = openTok.offset + 1;
+    if (ctx.is('bracketClose')) {
+      const closeTok = ctx.next()!;
+      closeTo = closeTok.offset + 1;
+    }
     result[k] = items;
     ctx.emitLeaf({
       schemaPath,
       from: openTok.offset,
-      to: openTok.offset + 1,
+      to: closeTo,
       value: items,
       dslRole: 'value',
     });
