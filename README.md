@@ -4,6 +4,29 @@ Animated diagram library for documenting application internals. Define objects a
 
 > **Note:** This entire project — code, architecture, and documentation — was built agentically using [Claude Code](https://claude.com/claude-code). It is under active development as an experiment in agentic software engineering. The library is at version 0.0.1 and the API may change.
 
+## Features
+
+- **Rich object types** — boxes, circles, labels, tables, lines, paths, text blocks, syntax-highlighted code blocks, and camera viewports
+- **Flex layout engine** — any box becomes a flex container when children group to it, with row/column direction, gap, padding, justify, align, and wrap
+- **Keyframe animation** — time-based keyframes with absolute or relative timing, per-property easing, delay, looping, and chapters (named pause points)
+- **17 easing functions** — linear, easeIn/Out, cubic, back, bounce, elastic, spring, snap, step, cut
+- **Visual effects** — fire-and-forget pulse, flash, shake, and glow effects that decay automatically
+- **Reusable styles** — define style blocks, compose them via inheritance, and override at the object level
+- **Camera control** — zoom, pan, follow objects, fit-to-selection with smooth animated transitions
+- **Path & connection features** — smart edge-snapping, quadratic bends, Catmull-Rom splines, dash patterns, draw-progress animation, named anchors
+- **Color system** — named CSS colors, hex, RGB, HSL with alpha; smooth interpolation with shortest-arc hue blending; `colour` and `color` both accepted
+- **Images** — embed images in any box or circle with contain/cover/fill modes and padding
+- **Templates** — pre-built composable components (arrows, UML state machine nodes) and extensible custom templates
+- **Concise DSL** — human-readable shorthand with indentation-based nesting, bare keyword booleans, inline JSON escapes, comments, and arrow syntax
+- **Interactive editor** — ProseMirror-powered structural editor with syntax highlighting, autocomplete, linting, and click-to-edit popups (color picker, number slider, enum dropdown, anchor editor)
+- **30+ sample diagrams** — categorized examples covering primitives, composition, colors, styles, animation, connections, layouts, and effects
+- **Timeline & playback controls** — visual scrubber with chapter markers, play/pause, speed adjustment
+- **DSL / JSON5 toggle** — switch between compact DSL and JSON5 format with lossless round-tripping
+- **React component & hook** — `<Diagram>` component and `useDiagram` hook with full playback control
+- **Web component** — `<starch-diagram>` custom element with built-in controls, works without React
+- **MkDocs integration** — render diagrams in MkDocs documentation with custom fence blocks
+- **Syntax highlighting for 15+ languages** — JavaScript, TypeScript, Python, JSON, YAML, SQL, Bash, CSS, HTML/XML, Go, Rust, Java, C/C++, Markdown
+
 ## Try It — Interactive Playground
 
 **[Open the Playground](https://zummed.github.io/starch/)** — no install required. Browse samples, edit DSL live, and export diagrams.
@@ -269,6 +292,48 @@ chapters: [
   { time: 3, title: "Handshake", description: "Server responds" },
 ]
 ```
+
+## Editor
+
+The playground includes a structural editor powered by [ProseMirror](https://prosemirror.net/) with features designed for efficient diagram authoring.
+
+### Syntax Highlighting
+
+The DSL editor highlights keywords, dimensions, numbers, strings, node IDs, style references, arrows, colors, booleans, and comments with distinct colors for readability.
+
+### Click-to-Edit Popups
+
+Click on values in the editor to open contextual editing widgets:
+
+- **Dimensions** (e.g. `140x80`) — number slider for width and height
+- **Colors** — HSL color picker with visual gradient, text input, and color name suggestions
+- **Keywords** (e.g. `rect`, `fill`, `stroke`) — appropriate compound editor
+- **Key=value pairs** — specialized popup (number slider, enum dropdown, etc.)
+- **Add property** — browse available properties by category
+
+### Autocomplete
+
+Context-aware completions for:
+
+- Geometry types after `id:`
+- Property keywords after geometry
+- Named colors after `fill`/`stroke`
+- Easing names after `easing=`
+- Style names after `@`
+- Node IDs after `->`
+- Track paths in animation blocks
+
+### Linting
+
+Real-time parse error detection and schema validation with line/column information.
+
+### Workspace
+
+- Multi-tab interface with sample and user-created tabs
+- Tab persistence via localStorage
+- Panel layout (desktop) or tab layout (mobile)
+- 30+ categorized sample diagrams (primitives, composition, colors, styles, animation, connections, layouts, effects)
+- DSL / JSON5 mode toggle with lossless round-tripping
 
 ## API
 
