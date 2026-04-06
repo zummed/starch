@@ -9,7 +9,7 @@ Starch is a text-driven diagram and animation tool. Describe shapes, connections
 ## Features
 
 - **Text-first** — diagrams are plain text, version-controllable, diffable, copy-pasteable
-- **Animated** — keyframe timeline with 17 easing functions, loops, chapters, and effects
+- **Animated** — keyframe timeline with 17 easing functions, loops, and chapters
 - **Shapes** — rects, circles, arrows, paths, tables, text blocks, code blocks with syntax highlighting
 - **Layout** — flex containers with gap, padding, alignment; absolute positioning; slot-based animation
 - **Camera** — zoom, pan, follow objects, fit-to-selection, smooth transitions
@@ -119,17 +119,6 @@ animate 6s loop easing=easeInOut
 - **`autoKey`** (default: true) — properties hold between keyframes
 
 **Easings:** `linear`, `easeIn`, `easeOut`, `easeInOut`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack`, `easeInBack`, `bounce`, `elastic`, `spring`, `snap`, `step`, `cut`
-
-### Effects
-
-Fire-and-forget visual modifiers that decay automatically:
-
-| Effect | What it does | Example |
-|--------|-------------|---------|
-| `pulse` | Scale bump | `pulse: 0.12` |
-| `flash` | Opacity dim | `flash: 0.3` |
-| `shake` | Horizontal oscillation | `shake: 5` |
-| `glow` | Stroke width increase | `glow: 3` |
 
 ### Camera
 

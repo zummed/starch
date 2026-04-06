@@ -56,12 +56,6 @@ function hasBlockOnlyProps(node: any): boolean {
   return !!((node.dash && hasOwn(node, 'dash')) || (node.layout && hasOwn(node, 'layout') && isBlockLayout(node.layout)));
 }
 
-// ─── Effect Key Check ────────────────────────────────────────────
-
-function isEffectKey(path: string): boolean {
-  return !path.includes('.');
-}
-
 // ─── Text Buffer with AST Node Construction ─────────────────────
 
 class AstTextBuilder {
@@ -1395,29 +1389,8 @@ function renderAnimate(animate: any): SectionResult {
 function emitKeyframeChange(b: AstTextBuilder, path: string, val: any, kfIdx: number, changeIdx: number): void {
   const changePrefix = `animate.keyframes.${kfIdx}.changes.${changeIdx}`;
 
-  // Effect: value is a string and path is a bare node ID (no dots)
-  if (typeof val === 'string' && isEffectKey(path)) {
-    b.writeNode(path, 'value', `keyframes.${kfIdx}.changes.${changeIdx}.target`, changePrefix + '.target', path);
-    b.write(' ');
-    b.writeNode(val, 'value', `keyframes.${kfIdx}.changes.${changeIdx}.effect`, changePrefix + '.effect', val);
-    return;
-  }
-
-  // Effect with params: { effect: "flash", amplitude: 2, ... }
-  if (typeof val === 'object' && val !== null && !Array.isArray(val) && 'effect' in val) {
-    b.writeNode(path, 'value', `keyframes.${kfIdx}.changes.${changeIdx}.target`, changePrefix + '.target', path);
-    b.write(' ');
-    b.writeNode(val.effect, 'value', `keyframes.${kfIdx}.changes.${changeIdx}.effect`, changePrefix + '.effect', val.effect);
-    for (const [k, v] of Object.entries(val)) {
-      if (k === 'effect') continue;
-      b.write(` ${k}=`);
-      b.writeNode(formatValueText(v), 'kwarg-value', `keyframes.${kfIdx}.changes.${changeIdx}.${k}`, `${changePrefix}.${k}`, v);
-    }
-    return;
-  }
-
   // Color value
-  if (isColor(val) && !isEffectKey(path)) {
+  if (isColor(val)) {
     b.writeNode(path, 'value', `keyframes.${kfIdx}.changes.${changeIdx}.path`, changePrefix + '.path', path);
     b.write(': ');
     emitColor(b, val, `keyframes.${kfIdx}.changes.${changeIdx}.value`, changePrefix + '.value');

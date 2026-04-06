@@ -635,32 +635,6 @@ describe('astEmitter - animation', () => {
     expect(text).toContain('1.5  box.fill.h: 0 easing=bounce');
   });
 
-  it('renders effect (string value)', () => {
-    const { text } = buildAstFromModel({
-      objects: [],
-      animate: {
-        duration: 3,
-        keyframes: [
-          { time: 1.5, changes: { card: 'pulse' } },
-        ],
-      },
-    }, hints);
-    expect(text).toContain('1.5  card pulse');
-  });
-
-  it('renders effect with params', () => {
-    const { text } = buildAstFromModel({
-      objects: [],
-      animate: {
-        duration: 3,
-        keyframes: [
-          { time: 1.5, changes: { card: { effect: 'flash', amplitude: 2 } } },
-        ],
-      },
-    }, hints);
-    expect(text).toContain('1.5  card flash amplitude=2');
-  });
-
   it('renders multi-change keyframes with continuation', () => {
     const { text } = buildAstFromModel({
       objects: [],
