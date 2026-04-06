@@ -14,7 +14,7 @@ import {
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
-import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
+import { getSetNames, getShapeNames } from '../templates/registry';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
   getAvailableProperties, getSchemaDefault, EasingNameSchema,
@@ -290,6 +290,17 @@ export function completionsAt(
   }
 
   if (node.dslRole === 'section') {
+    // When cursor is on a line with an existing node (mid-line gap between
+    // compounds), find the preceding compound and offer its completions
+    // instead of section-level geometry keywords.
+    if (lineText && !onFreshLine) {
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        const child = node.children[i];
+        if (child.to <= pos && child.dslRole === 'compound') {
+          return nodeContextCompletions(child, pos, modelJson);
+        }
+      }
+    }
     return sectionCompletions(node, modelJson);
   }
 
@@ -327,14 +338,9 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     const setName = setDotMatch[1];
     const shapes = getShapeNames(setName);
     if (shapes.length > 0) {
-      return shapes.map(s => {
-        const item: CompletionItem = {
-          label: s, type: 'keyword' as const, detail: `${setName} shape`,
-        };
-        const tmpl = buildSnippetTemplate(`${setName}.${s}`);
-        if (tmpl) item.snippetTemplate = tmpl;
-        return item;
-      });
+      return shapes.map(s => ({
+        label: s, type: 'keyword' as const, detail: `${setName} shape`,
+      }));
     }
   }
 
@@ -366,18 +372,6 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
         retrigger: true,
       });
     }
-    // Also offer unqualified shape names from all registered sets
-    for (const setName of getSetNames()) {
-      for (const shapeName of getShapeNames(setName)) {
-        const qualifiedName = `${setName}.${shapeName}`;
-        const item: CompletionItem = {
-          label: shapeName, type: 'keyword', detail: `${setName} shape`,
-        };
-        const tmpl = buildSnippetTemplate(qualifiedName);
-        if (tmpl) item.snippetTemplate = tmpl;
-        items.push(item);
-      }
-    }
     return items;
   }
 
@@ -400,22 +394,6 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
         }
       }
       return []; // no positional info available — suppress fallthrough
-    }
-    // Check shape set schemas for post-keyword positional help
-    const shapeSchema = getShapePropsSchema(kw);
-    if (shapeSchema) {
-      const shapeHints = getDsl(shapeSchema);
-      if (shapeHints?.positional?.length) {
-        for (const setName of getSetNames()) {
-          if (getShapeNames(setName).includes(kw)) {
-            const tmpl = buildPositionalOnlySnippet(`${setName}.${kw}`);
-            if (tmpl) {
-              return [{ label: tmpl.label, type: 'keyword', detail: tmpl.detail, snippetTemplate: tmpl.template }];
-            }
-            break;
-          }
-        }
-      }
     }
   }
 
@@ -696,23 +674,15 @@ function getCompletableFields(schemaPath: string): Set<string> | null {
 }
 
 /**
- * Look up an annotated schema by key. Checks static ANNOTATED_SCHEMAS first,
- * then falls back to shape set registry for template shapes.
- */
-function getAnnotatedSchema(key: string): z.ZodType | undefined {
-  return ANNOTATED_SCHEMAS[key] ?? getShapePropsSchema(key);
-}
-
-/**
  * Build a snippet template from DslHints positional definitions.
  */
 function buildSnippetTemplate(schemaPath: string): string | null {
-  const schema = getAnnotatedSchema(schemaPath);
+  const schema = ANNOTATED_SCHEMAS[schemaPath];
   if (!schema) return null;
   const hints = getDsl(schema);
   if (!hints || !hints.positional || hints.positional.length === 0) return null;
 
-  const keyword = hints.keyword ?? (schemaPath.includes('.') ? schemaPath.split('.').pop()! : schemaPath);
+  const keyword = hints.keyword ?? schemaPath;
   let tabIndex = 1;
   const groups: string[] = [];
 
@@ -749,7 +719,7 @@ function buildSnippetTemplate(schemaPath: string): string | null {
  * E.g., for 'transform' → { label: 'X,Y', detail: 'Position', template: '${1:X},${2:Y}' }
  */
 function buildPositionalOnlySnippet(schemaPath: string): { label: string; detail: string; template: string } | null {
-  const schema = getAnnotatedSchema(schemaPath);
+  const schema = ANNOTATED_SCHEMAS[schemaPath];
   if (!schema) return null;
   const hints = getDsl(schema);
   if (!hints?.positional?.length) return null;
