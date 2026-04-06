@@ -1,72 +1,76 @@
-import type { SceneObject, Chapter, AnimConfig, Tracks, StarchEvent, StarchEventHandler, DiagramHandle, EffectInstance, EasingName } from './core/types';
-import { Scene } from './core/Scene';
-import { parseDSL } from './parser/parser';
-import { buildTimeline } from './engine/timeline';
-import { extractEffects } from './engine/effects';
-import { createEvaluator, getActiveChapter } from './engine/evaluator';
-import { computeRenderOrder } from './engine/renderOrder';
-import { findCamera, resolveCamera } from './engine/camera';
-import { createCanvas } from './renderer/svg/dom/renderCanvas';
-import { RenderDispatcher } from './renderer/svg/dom/renderObject';
+/**
+ * Vanilla JS API for rendering and animating starch diagrams.
+ * Framework-agnostic — works in any webpage with a container element.
+ */
+import type { AnimConfig, Chapter, Tracks } from './types/animation';
+import type { Node } from './types/node';
+import type { Color } from './types/properties';
+import type { RenderBackend } from './renderer/backend';
+import type { ViewBox } from './renderer/camera';
+import { parseScene, type ParsedScene } from './parser/parser';
+import { buildTimeline } from './animation/timeline';
+import { evaluateAllTracks } from './animation/evaluator';
+import { applyTrackValues } from './animation/applyTracks';
+import { measureTextNodes } from './text/measurePass';
+import { getTextMeasurer } from './text/measure';
+import { runLayout, registerStrategy } from './layout/registry';
+import { flexStrategy } from './layout/flex';
+import { absoluteStrategy } from './layout/absolute';
+import { computeViewBox, findActiveCamera } from './renderer/camera';
+import { emitFrame } from './renderer/emitter';
+import { SvgRenderBackend } from './renderer/svgBackend';
+import { colorToRgba } from './types/color';
+
+// Register layout strategies (idempotent — Map.set overwrites)
+registerStrategy('flex', flexStrategy);
+registerStrategy('absolute', absoluteStrategy);
+
+export type StarchEventType = 'chapterEnter' | 'chapterExit' | 'ended';
+export interface StarchEvent {
+  type: StarchEventType;
+  chapter?: Chapter;
+  time: number;
+}
+export type StarchEventHandler = (event: StarchEvent) => void;
 
 export interface StarchDiagramOptions {
   dsl?: string;
-  scene?: Scene;
   autoplay?: boolean;
   speed?: number;
-  debug?: boolean;
-  onEvent?: (event: StarchEvent) => void;
-  onChapterEnter?: (event: StarchEvent) => void;
-  onChapterExit?: (event: StarchEvent) => void;
+  onEvent?: StarchEventHandler;
 }
 
-export class StarchDiagram implements DiagramHandle {
+export class StarchDiagram {
   private _container: HTMLElement;
-  private _canvas: ReturnType<typeof createCanvas>;
-  private _dispatcher: RenderDispatcher;
+  private _backend: RenderBackend;
 
-  private _objects: Record<string, SceneObject> = {};
-  private _styles: Record<string, Record<string, unknown>> = {};
-  private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [], chapters: [] };
-  private _tracks: Tracks = {};
-  private _renderOrder: Array<[string, SceneObject]> = [];
-  private _evaluator = createEvaluator();
+  private _scene: ParsedScene = { nodes: [], styles: {}, trackPaths: [] };
+  private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [] };
+  private _tracks: Tracks = new Map();
+  private _animatedSlotNodeIds = new Set<string>();
+  private _viewport = { w: 800, h: 500 };
 
   private _time = 0;
   private _playing = false;
   private _speed = 1;
-  private _debug = false;
   private _lastChapter: Chapter | undefined = undefined;
   private _rafId: number | null = null;
   private _lastFrame = 0;
 
-  private _scene: Scene | undefined;
   private _onEvent: StarchEventHandler | undefined;
-  private _onChapterEnter: StarchEventHandler | undefined;
-  private _onChapterExit: StarchEventHandler | undefined;
   private _listeners = new Map<string, Set<StarchEventHandler>>();
 
   constructor(container: HTMLElement, options?: StarchDiagramOptions) {
     this._container = container;
-    this._canvas = createCanvas();
-    this._dispatcher = new RenderDispatcher(this._canvas.content);
-    this._container.appendChild(this._canvas.svg);
+    this._backend = new SvgRenderBackend();
+    this._backend.mount(this._container);
+    this._onEvent = options?.onEvent;
 
     if (options) {
       this._speed = options.speed ?? 1;
-      this._debug = options.debug ?? false;
-      this._scene = options.scene;
-      this._onEvent = options.onEvent;
-      this._onChapterEnter = options.onChapterEnter;
-      this._onChapterExit = options.onChapterExit;
-      this._dispatcher.setDebug(this._debug);
-
-      if (options.scene) {
-        this._loadScene(options.scene);
-      } else if (options.dsl) {
+      if (options.dsl) {
         this._loadDSL(options.dsl);
       }
-
       if (options.autoplay) {
         this.play();
       }
@@ -79,8 +83,14 @@ export class StarchDiagram implements DiagramHandle {
   get duration(): number { return this._animConfig.duration ?? 5; }
   get playing(): boolean { return this._playing; }
   get speed(): number { return this._speed; }
-  get chapters(): Chapter[] { return this._animConfig.chapters; }
-  get activeChapter(): Chapter | undefined { return getActiveChapter(this._animConfig.chapters, this._time); }
+  get chapters(): Chapter[] { return this._animConfig.chapters ?? []; }
+
+  get activeChapter(): Chapter | undefined {
+    const chapters = this.chapters;
+    if (!chapters.length) return undefined;
+    const sorted = [...chapters].sort((a, b) => b.time - a.time);
+    return sorted.find(ch => ch.time <= this._time);
+  }
 
   // ── Playback control ──
 
@@ -100,9 +110,8 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   seek(time: number): void {
-    this._time = Math.max(0, Math.min(time, this._animConfig.duration ?? 5));
-    this._evaluator.reset();
-    this._lastChapter = getActiveChapter(this._animConfig.chapters, this._time);
+    this._time = Math.max(0, Math.min(time, this.duration));
+    this._lastChapter = this.activeChapter;
     this._render();
   }
 
@@ -111,8 +120,8 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   nextChapter(): void {
-    const sorted = [...this._animConfig.chapters].sort((a, b) => a.time - b.time);
-    const next = sorted.find((ch) => ch.time > this._time + 0.01);
+    const sorted = [...this.chapters].sort((a, b) => a.time - b.time);
+    const next = sorted.find(ch => ch.time > this._time + 0.01);
     if (next) {
       this.seek(next.time);
       this.play();
@@ -120,8 +129,8 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   prevChapter(): void {
-    const sorted = [...this._animConfig.chapters].sort((a, b) => b.time - a.time);
-    const prev = sorted.find((ch) => ch.time < this._time - 0.1);
+    const sorted = [...this.chapters].sort((a, b) => b.time - a.time);
+    const prev = sorted.find(ch => ch.time < this._time - 0.1);
     if (prev) {
       this.seek(prev.time);
       this.play();
@@ -129,7 +138,7 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   goToChapter(id: string): void {
-    const ch = this._animConfig.chapters.find((c) => c.id === id);
+    const ch = this.chapters.find(c => c.name === id);
     if (ch) {
       this.seek(ch.time);
       this.play();
@@ -140,18 +149,6 @@ export class StarchDiagram implements DiagramHandle {
 
   setDSL(dsl: string): void {
     this._loadDSL(dsl);
-    this._render();
-  }
-
-  setScene(scene: Scene): void {
-    this._scene = scene;
-    this._loadScene(scene);
-    this._render();
-  }
-
-  setDebug(debug: boolean): void {
-    this._debug = debug;
-    this._dispatcher.setDebug(debug);
     this._render();
   }
 
@@ -174,51 +171,48 @@ export class StarchDiagram implements DiagramHandle {
 
   destroy(): void {
     this.pause();
-    this._dispatcher.clear();
-    this._canvas.svg.remove();
+    this._backend.destroy();
     this._listeners.clear();
   }
 
   // ── Internal ──
 
-  private _viewport = { width: 800, height: 500 };
-
   private _loadDSL(dsl: string): void {
     try {
-      const result = parseDSL(dsl);
-      this._objects = result.objects;
-      this._styles = result.styles;
-      this._animConfig = result.animConfig;
-      if (result.background) {
-        this._canvas.setBackground(result.background);
-      }
-      if (result.viewport) {
-        this._viewport = result.viewport;
+      const scene = parseScene(dsl, getTextMeasurer());
+      this._scene = scene;
+      this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [] };
+
+      const vp = scene.viewport as { width?: number; height?: number } | undefined;
+      this._viewport = {
+        w: vp?.width ?? 800,
+        h: vp?.height ?? 500,
+      };
+
+      // Apply background
+      if (scene.background) {
+        try {
+          this._backend.setBackground(colorToRgba(scene.background as Color));
+        } catch {
+          this._backend.setBackground('transparent');
+        }
+      } else {
+        this._backend.setBackground('transparent');
       }
     } catch {
-      // Keep previous state on parse error
-      return;
+      return; // keep previous state on parse error
     }
     this._rebuild();
   }
 
-  private _loadScene(scene: Scene): void {
-    this._objects = scene.getObjects();
-    this._styles = scene.getStyles();
-    this._animConfig = scene.getAnimConfig();
-    this._rebuild();
-  }
-
   private _rebuild(): void {
-    this._tracks = buildTimeline(this._animConfig, this._objects, this._styles);
-    const effects = extractEffects(this._animConfig);
-    this._evaluator = createEvaluator(effects, this._styles);
-    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
-    this._renderOrder = computeRenderOrder(this._objects, animatedProps);
+    const result = buildTimeline(this._animConfig, this._scene.nodes);
+    this._tracks = result.tracks;
+    this._animatedSlotNodeIds = result.animatedSlotNodeIds;
   }
 
   private _scheduleFrame(): void {
-    this._rafId = requestAnimationFrame((now) => this._tick(now));
+    this._rafId = requestAnimationFrame(now => this._tick(now));
   }
 
   private _tick(now: number): void {
@@ -227,7 +221,7 @@ export class StarchDiagram implements DiagramHandle {
     const dt = ((now - this._lastFrame) / 1000) * this._speed;
     this._lastFrame = now;
 
-    const dur = this._animConfig.duration ?? 5;
+    const dur = this.duration;
     let next = this._time + dt;
     if (next >= dur) {
       if (this._animConfig.loop ?? true) {
@@ -235,6 +229,7 @@ export class StarchDiagram implements DiagramHandle {
       } else {
         next = dur;
         this._playing = false;
+        this._emit({ type: 'ended', time: dur });
       }
     }
     this._time = next;
@@ -248,32 +243,21 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   private _checkChapters(): void {
-    const active = getActiveChapter(this._animConfig.chapters, this._time);
+    const active = this.activeChapter;
     const prev = this._lastChapter;
 
     if (active && active !== prev) {
       if (prev) {
-        const exitEvent: StarchEvent = { type: 'chapterExit', chapter: prev, time: this._time };
-        this._onChapterExit?.(exitEvent);
-        this._onEvent?.(exitEvent);
-        this._scene?.emit(exitEvent);
-        this._emitToListeners('chapterExit', exitEvent);
+        this._emit({ type: 'chapterExit', chapter: prev, time: this._time });
       }
-      const enterEvent: StarchEvent = { type: 'chapterEnter', chapter: active, time: this._time };
-      this._onChapterEnter?.(enterEvent);
-      this._onEvent?.(enterEvent);
-      this._scene?.emit(enterEvent);
-      this._emitToListeners('chapterEnter', enterEvent);
-
-      if (this._playing && prev !== undefined) {
-        this.pause();
-      }
+      this._emit({ type: 'chapterEnter', chapter: active, time: this._time });
       this._lastChapter = active;
     }
   }
 
-  private _emitToListeners(type: string, event: StarchEvent): void {
-    const handlers = this._listeners.get(type);
+  private _emit(event: StarchEvent): void {
+    this._onEvent?.(event);
+    const handlers = this._listeners.get(event.type);
     if (handlers) {
       for (const handler of handlers) handler(event);
     }
@@ -284,59 +268,63 @@ export class StarchDiagram implements DiagramHandle {
   }
 
   private _render(): void {
-    const animatedProps = this._evaluator(this._objects, this._tracks, this._time);
-    this._dispatcher.update(this._renderOrder, animatedProps, this._objects);
+    const values = evaluateAllTracks(this._tracks, this._time);
+    const animated = applyTrackValues(this._scene.nodes, values);
+    measureTextNodes(animated, getTextMeasurer());
+    runLayout(animated, this._animatedSlotNodeIds);
 
-    // Apply camera viewBox with smooth target blending
-    const cam = findCamera(this._objects, animatedProps);
-    if (cam) {
-      // Find block times for camera blending
-      const camTracks = Object.keys(this._tracks).filter(k => k.startsWith(cam.id + '.'));
-      let blendInfo: Parameters<typeof resolveCamera>[5] = undefined;
-
-      if (camTracks.length > 0) {
-        const allTimes = new Set<number>();
-        for (const k of camTracks) {
-          for (const kf of this._tracks[k]) allTimes.add(kf.time);
-        }
-        const blockTimes = [...allTimes].sort((a, b) => a - b);
-        let prevBlock = 0, nextBlock = blockTimes[blockTimes.length - 1] || 0;
-        for (const bt of blockTimes) {
-          if (bt <= this._time) prevBlock = bt;
-          if (bt > this._time) { nextBlock = bt; break; }
-        }
-        if (this._time > prevBlock && this._time < nextBlock && prevBlock !== nextBlock) {
-          const fromResult = this._evaluator(this._objects, this._tracks, prevBlock);
-          const toResult = this._evaluator(this._objects, this._tracks, nextBlock);
-
-          // Find easing from the camera track keyframe at nextBlock
-          let easing: EasingName = 'easeInOut';
-          for (const k of camTracks) {
-            const kfs = this._tracks[k];
-            for (const kf of kfs) {
-              if (Math.abs(kf.time - nextBlock) < 0.001 && kf.easing !== 'linear') {
-                easing = kf.easing;
-                break;
-              }
-            }
-            if (easing !== 'easeInOut') break;
-          }
-
-          blendInfo = {
-            fromProps: fromResult[cam.id] || {},
-            toProps: toResult[cam.id] || {},
-            fromAllProps: fromResult,
-            toAllProps: toResult,
-            rawT: (this._time - prevBlock) / (nextBlock - prevBlock),
-            easing,
-          };
-        }
-      }
-
-      const vb = resolveCamera(cam.props, animatedProps, this._objects, this._viewport.width, this._viewport.height, blendInfo);
-      this._canvas.setViewBox(vb.x, vb.y, vb.width, vb.height);
+    // Compute viewbox from camera or auto-fit
+    let viewBox: ViewBox | undefined;
+    const cameraNode = findActiveCamera(animated);
+    if (cameraNode) {
+      viewBox = computeViewBox(cameraNode, { x: 0, y: 0, ...this._viewport });
     } else {
-      this._canvas.clearViewBox();
+      viewBox = this._computeAutoFit(animated);
     }
+
+    emitFrame(this._backend, animated, animated, viewBox);
+  }
+
+  private _computeAutoFit(nodes: Node[]): ViewBox | undefined {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    const addBounds = (nodeList: Node[], parentX: number, parentY: number) => {
+      for (const n of nodeList) {
+        if (n.camera) continue;
+        const px = parentX + (n.transform?.x ?? 0);
+        const py = parentY + (n.transform?.y ?? 0);
+        let w = 0, h = 0;
+        if (n.rect) { w = n.rect.w; h = n.rect.h; }
+        else if (n.ellipse) { w = n.ellipse.rx * 2; h = n.ellipse.ry * 2; }
+        else if (n.text && n._measured) { w = n._measured.width; h = n._measured.height; }
+        else if (n.text) { w = (n.text.content?.length ?? 0) * (n.text.size ?? 14) * 0.6; h = (n.text.size ?? 14); }
+        if (n.path?.points?.length) {
+          for (const [ptx, pty] of n.path.points) {
+            minX = Math.min(minX, px + ptx);
+            minY = Math.min(minY, py + pty);
+            maxX = Math.max(maxX, px + ptx);
+            maxY = Math.max(maxY, py + pty);
+          }
+        }
+        if (w > 0 || h > 0) {
+          minX = Math.min(minX, px - w / 2);
+          minY = Math.min(minY, py - h / 2);
+          maxX = Math.max(maxX, px + w / 2);
+          maxY = Math.max(maxY, py + h / 2);
+        }
+        if (n.children.length) addBounds(n.children, px, py);
+      }
+    };
+
+    addBounds(nodes, 0, 0);
+    if (minX === Infinity) return undefined;
+
+    const margin = 30;
+    return {
+      x: minX - margin,
+      y: minY - margin,
+      w: (maxX - minX) + margin * 2,
+      h: (maxY - minY) + margin * 2,
+    };
   }
 }

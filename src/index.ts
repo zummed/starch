@@ -1,29 +1,37 @@
-// Core
-export { Scene } from './core/Scene';
-export type {
-  ObjectType, NamedAnchor, FloatAnchor, AnchorPoint, BaseProps,
-  LayoutDirection, LayoutJustify, LayoutAlign,
-  BoxProps, CircleProps, LabelProps, TableProps, LineProps, PathProps,
-  SceneObject, EasingName, KeyframeBlock, ObjectChanges, Chapter, AnimConfig,
-  TrackKeyframe, Tracks, StarchEventType, StarchEvent, StarchEventHandler, DiagramHandle,
-} from './core/types';
+// ── Main class ──
+export { StarchDiagram } from './StarchDiagram';
+export type { StarchDiagramOptions, StarchEvent, StarchEventHandler, StarchEventType } from './StarchDiagram';
 
-// Engine
-export { createEvaluator, evaluateAnimatedProps, getActiveChapter } from './engine/evaluator';
-export { computeLayout } from './engine/layout';
-export { buildTimeline } from './engine/timeline';
-export { computeRenderOrder } from './engine/renderOrder';
-export { EASINGS, applyEasing } from './engine/easing';
-export { resolveAnchor, scaleAroundAnchor, scaledCenter, anchorWorldPosition } from './engine/anchor';
-export { interpolate, lerpColor } from './engine/interpolate';
+// ── React hook ──
+export { useV2Diagram } from './app/components/V2Diagram';
+export type { V2DiagramProps } from './app/components/V2Diagram';
 
-// Schemas & Colours
-export { parseShape, VALID_TYPES, LabelSchema } from './core/schemas';
-export { resolveColour, deriveFill, resolveColourShortcut } from './core/colours';
+// ── Parsing ──
+export { parseScene } from './parser/parser';
+export type { ParsedScene } from './parser/parser';
 
-// Parser
-export { parseDSL, parseJSON } from './parser/parser';
-export { expandShorthands } from './parser/shorthands';
+// ── Animation ──
+export { buildTimeline } from './animation/timeline';
+export { evaluateAllTracks, evaluateTrack } from './animation/evaluator';
+export { applyTrackValues } from './animation/applyTracks';
 
-// Edge geometry
-export { getObjectBounds, edgePoint, edgePointAtAnchor } from './renderer/EdgeGeometry';
+// ── Rendering ──
+export { SvgRenderBackend } from './renderer/svgBackend';
+export type { RenderBackend, RgbaColor, StrokeStyle, PathSegment } from './renderer/backend';
+export { emitFrame } from './renderer/emitter';
+export { computeViewBox, findActiveCamera } from './renderer/camera';
+export type { ViewBox } from './renderer/camera';
+
+// ── Layout ──
+export { runLayout, registerStrategy } from './layout/registry';
+export type { LayoutStrategy, ChildPlacement } from './layout/registry';
+
+// ── Text ──
+export { getTextMeasurer } from './text/measure';
+export type { TextMeasurer, MeasuredText } from './text/measure';
+export { measureTextNodes } from './text/measurePass';
+
+// ── Types ──
+export type { Node } from './types/node';
+export type { AnimConfig, Chapter, KeyframeBlock, Tracks, TrackKeyframe } from './types/animation';
+export type { Color, Stroke } from './types/properties';

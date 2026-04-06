@@ -1,11 +1,9 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
   plugins: [
-    react(),
-    dts({ include: ['src'], exclude: ['src/main.tsx', 'src/App.tsx', 'src/embed.ts'] }),
+    dts({ include: ['src'], exclude: ['src/app', 'src/embed.ts', 'src/__tests__', 'src/**/__tests__', 'src/samples'] }),
   ],
   build: {
     lib: {
@@ -15,7 +13,13 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: [/^@codemirror\//, /^@lezer\//],
+      external: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        /^prosemirror-/,
+        /^@prosemirror-adapter\//,
+      ],
     },
   },
 });

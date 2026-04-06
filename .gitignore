@@ -1,8 +1,8 @@
 node_modules
 dist
-dist-app
 *.tsbuildinfo
 .vite
 docs/plans/
 .playwright-mcp
 .superpowers
+dist-app/

@@ -1,1178 +1,721 @@
-export interface Sample {
-  id: string;
-  title: string;
+/**
+ * V2 Samples — showcase of the compositional object model.
+ * All samples use DSL format.
+ */
+
+export interface V2Sample {
+  name: string;
   category: string;
   description: string;
   dsl: string;
 }
 
-export const CATEGORIES = [
-  { id: 'shapes', title: 'Shapes' },
-  { id: 'images', title: 'Images' },
-  { id: 'connections', title: 'Connections' },
-  { id: 'layout', title: 'Layout' },
-  { id: 'effects', title: 'Effects' },
-  { id: 'text', title: 'Text' },
-  { id: 'camera', title: 'Camera' },
-  { id: 'styles', title: 'Styles' },
-  { id: 'animation', title: 'Animation' },
+const ALL_EASINGS = [
+  'linear', 'easeIn', 'easeOut', 'easeInOut',
+  'easeInCubic', 'easeOutCubic', 'easeInOutCubic',
+  'easeInQuart', 'easeOutQuart', 'easeInOutQuart',
+  'easeInBack', 'easeOutBack',
+  'bounce', 'elastic', 'spring',
+  'snap', 'step',
 ];
 
-export const SAMPLES: Sample[] = [
-  // ═════════════════════════════════════════════════════════════
-  // SHAPES
-  // ═════════════════════════════════════════════════════════════
+const EASING_COLORS = [
+  'red', 'orangered', 'orange', 'gold', 'yellow',
+  'lawngreen', 'lime', 'springgreen', 'mediumspringgreen',
+  'cyan', 'deepskyblue', 'dodgerblue', 'blue',
+  'slateblue', 'purple', 'magenta', 'deeppink',
+];
 
+function buildEasingSample(): V2Sample {
+  const startX = 120;
+  const endX = 500;
+  const spacing = 22;
+  const startY = 30;
+
+  const objectLines = ALL_EASINGS.flatMap((name, i) => {
+    const y = startY + i * spacing;
+    const color = EASING_COLORS[i];
+    return [
+      `  ${name}: rect 16x16 radius=3 fill ${color} at ${startX},${y}`,
+      `  l_${name}: text "${name}" size=9 align=end fill gray at ${startX - 10},${y}`,
+    ];
+  });
+
+  const resetLines = ALL_EASINGS.map(name => `    ${name}.transform.x: ${startX}`);
+  const moveLines = ALL_EASINGS.map(name => `    ${name}.transform.x: { value: ${endX}, easing: "${name}" }`);
+
+  return {
+    name: 'easing-comparison',
+    category: 'Animation',
+    description: `All ${ALL_EASINGS.length} easing functions compared side by side`,
+    dsl: `objects
+${objectLines.join('\n')}
+
+animate 3s loop
+  1.5
+${moveLines.join('\n')}
+  3
+${resetLines.join('\n')}`,
+  };
+}
+
+export const v2Samples: V2Sample[] = [
+
+  // ─── PRIMITIVES ────────────────────────────────────────────────
   {
-    id: 'boxes',
-    title: 'Boxes',
-    category: 'shapes',
-    description: 'Animate size, radius, colour, and text properties.',
-    dsl: `{
-  objects: [
-    { box: "a", at: [150, 150], colour: "#22d3ee", text: "Resize", radius: 8 },
-    { box: "b", at: [400, 150], colour: "#a78bfa", text: "Morph", radius: 8 },
-    { box: "c", at: [650, 150], colour: "#34d399", text: "Colour" },
-    { box: "d", at: [400, 350], w: 200, colour: "#fbbf24", text: "All at once" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      // a: resize from default to wide
-      { time: 2.0, changes: { a: { w: 220, h: 70 } } },
-      // b: morph radius from box to pill
-      { time: 2.0, changes: { b: { radius: 23 } } },
-      // c: animate fill colour
-      { time: 2.0, changes: { c: { fill: "#1a2e22", stroke: "#f472b6" } } },
-      // d: everything at once
-      { time: 2.0, changes: { d: { w: 300, h: 80, radius: 20, fill: "#2a2410", stroke: "#ef4444" } } },
-    ],
+    name: 'rect',
+    category: 'Primitives',
+    description: 'Rectangle with fill, stroke, and rounded corners',
+    dsl: `\
+box: rect 140x80 radius=8 fill steelblue stroke darkblue width=2 at 200,150`,
   },
-}`,
-  },
-
   {
-    id: 'circles',
-    title: 'Circles',
-    category: 'shapes',
-    description: 'Animate radius, fill, and stroke.',
-    dsl: `{
-  objects: [
-    { circle: "c1", at: [200, 200], r: 30, colour: "#22d3ee" },
-    { circle: "c2", at: [400, 200], r: 40, colour: "#a78bfa" },
-    { circle: "c3", at: [600, 200], r: 25, colour: "#f472b6" },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: {
-        c1: { r: 60 },
-        c2: { fill: "#34d399", stroke: "#34d399" },
-        c3: { r: 50, fill: "#fbbf24", stroke: "#fbbf24" },
-      } },
-    ],
+    name: 'ellipse',
+    category: 'Primitives',
+    description: 'Ellipse with separate radii',
+    dsl: `\
+circle: ellipse 50x50 fill forestgreen stroke darkgreen width=2 at 200,150
+oval: ellipse 70x35 fill darkorange stroke saddlebrown width=2 at 400,150`,
   },
-}`,
-  },
-
   {
-    id: 'labels',
-    title: 'Labels',
-    category: 'shapes',
-    description: 'Text at different sizes, colours, and alignments.',
-    dsl: `{
-  objects: [
-    { label: "h1", at: [400, 80], text: "Heading", size: 24, color: "#e2e5ea", bold: true },
-    { label: "sub", at: [400, 115], text: "Subtitle with lighter colour", size: 14, color: "#6b7280" },
-    { label: "left", at: [100, 200], text: "align: start", size: 12, color: "#22d3ee", align: "start" },
-    { label: "mid", at: [400, 200], text: "align: middle", size: 12, color: "#a78bfa" },
-    { label: "right", at: [700, 200], text: "align: end", size: 12, color: "#34d399", align: "end" },
-    { label: "fade", at: [400, 320], text: "I fade in and grow", size: 18, color: "#fbbf24", opacity: 0 },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { fade: { opacity: 1, size: 28 } } },
-    ],
+    name: 'text',
+    category: 'Primitives',
+    description: 'Text node with size, bold, and alignment',
+    dsl: `\
+title: text "Hello World" size=24 bold fill whitesmoke at 200,100
+subtitle: text "A subtitle in monospace" size=14 mono fill darkgray at 200,140`,
   },
-}`,
-  },
-
   {
-    id: 'tables',
-    title: 'Tables',
-    category: 'shapes',
-    description: 'Data table with animated opacity.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 40], text: "Server Metrics", size: 16, color: "#e2e5ea", bold: true },
-    { table: "metrics", at: [400, 200],
-      cols: ["Metric", "Value", "Status"],
-      rows: [
-        ["CPU", "42%", "OK"],
-        ["Memory", "78%", "Warn"],
-        ["Disk", "91%", "Critical"],
-        ["Network", "12ms", "OK"],
-      ],
-      opacity: 0,
-    },
-  ],
-  animate: {
-    duration: 2, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: { metrics: { opacity: 1 } } },
-    ],
+    name: 'path',
+    category: 'Primitives',
+    description: 'Path from a list of points — open or closed',
+    dsl: `\
+objects
+  triangle:
+    path (0,-40) (40,30) (-40,30) closed
+    fill darkorchid
+    stroke indigo width=2
+    at 150,150
+  zigzag:
+    path (0,0) (30,-30) (60,0) (90,-30) (120,0)
+    stroke goldenrod width=2
+    at 280,150`,
   },
-}`,
-  },
-
-  // ═════════════════════════════════════════════════════════════
-  // IMAGES
-  // ═════════════════════════════════════════════════════════════
-
   {
-    id: 'images-on-shapes',
-    title: 'Images on Shapes',
-    category: 'images',
-    description: 'Display images inside boxes, circles, and labels using an image registry.',
-    dsl: `{
-  images: {
-    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
-    heart: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21C12 21 3 13.5 3 8.5C3 5.4 5.4 3 8.5 3c1.7 0 3.4 1 4.5 2.5C14.1 4 15.8 3 17.5 3 20.6 3 23 5.4 23 8.5 23 13.5 12 21 12 21z' fill='%23f472b6'/%3E%3C/svg%3E",
-    bolt: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='13,2 3,14 12,14 11,22 21,10 12,10' fill='%2322d3ee'/%3E%3C/svg%3E",
-  },
-  objects: [
-    { label: "title", at: [400, 40], text: "Images on Shapes", size: 16, color: "#e2e5ea", bold: true },
-    { box: "b1", at: [200, 160], size: [120, 80], colour: "#2a2d35", image: "star", radius: 12 },
-    { label: "bl", at: [200, 220], text: "Box + image", size: 11, color: "#6b7280" },
-    { circle: "c1", at: [400, 160], r: 45, colour: "#2a2d35", image: "heart" },
-    { label: "cl", at: [400, 220], text: "Circle + image", size: 11, color: "#6b7280" },
-    { label: "l1", at: [600, 160], text: "Bolt label", size: 16, color: "#e2e5ea", image: "bolt" },
-    { label: "ll", at: [600, 220], text: "Label + image", size: 11, color: "#6b7280" },
-    { label: "reg", at: [400, 290], text: "All three reference the top-level images registry by key", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { b1: { pulse: 0.1 }, c1: { pulse: 0.1 } } },
-    ],
-  },
-}`,
+    name: 'dash-patterns',
+    category: 'Primitives',
+    description: 'Dash patterns on paths — solid, dashed, dotted',
+    dsl: `\
+solid: path (0,0) (250,0) stroke silver width=2 at 100,100
+dashed: path (0,0) (250,0) stroke silver width=2 at 100,140
+  dash dashed length=10 gap=5
+dotted: path (0,0) (250,0) stroke silver width=2 at 100,180
+  dash dotted length=2 gap=6
+l1: text "solid" size=11 fill gray at 50,100
+l2: text "dashed" size=11 fill gray at 42,140
+l3: text "dotted" size=11 fill gray at 42,180`,
   },
 
+  // ─── SHAPE SETS ──────────────────────────────────────────────
   {
-    id: 'image-fit',
-    title: 'Image Fit Modes',
-    category: 'images',
-    description: 'Compare contain, cover, and fill modes with imagePadding.',
-    dsl: `{
-  images: {
-    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
-  },
-  objects: [
-    { label: "title", at: [400, 40], text: "imageFit Modes", size: 16, color: "#e2e5ea", bold: true },
-    { box: "contain", at: [150, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "contain", radius: 8 },
-    { label: "lc", at: [150, 240], text: "contain (default)", size: 11, color: "#6b7280" },
-    { box: "cover", at: [400, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "cover", radius: 8 },
-    { label: "lv", at: [400, 240], text: "cover", size: 11, color: "#6b7280" },
-    { box: "fill", at: [650, 170], size: [160, 100], colour: "#2a2d35", image: "star", imageFit: "fill", radius: 8 },
-    { label: "lf", at: [650, 240], text: "fill", size: 11, color: "#6b7280" },
-    { box: "padded", at: [275, 340], size: [160, 100], colour: "#2a2d35", image: "star", imagePadding: 20, radius: 8 },
-    { label: "lp", at: [275, 410], text: "imagePadding: 20", size: 11, color: "#6b7280" },
-    { box: "nopad", at: [525, 340], size: [160, 100], colour: "#2a2d35", image: "star", imagePadding: 0, radius: 8 },
-    { label: "ln", at: [525, 410], text: "imagePadding: 0", size: 11, color: "#6b7280" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: {
-        contain: { w: 100 },
-        cover: { w: 100 },
-        fill: { w: 100 },
-      } },
-    ],
-  },
-}`,
-  },
+    name: 'core-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all core shape set templates',
+    dsl: `\
+name "Core Shapes"
+background #14161c
 
+objects
+  title: text "core" size=20 bold fill slategray at 350,30
+
+  // ─── box row ───────────────────────────────────
+  box_l: text "box" size=10 fill gray at 0,60
+
+  b1: box "Short" color=steelblue
+    at 0,100
+  b2: box "Auto-sized to fit content" color=steelblue
+    at 200,100
+  b3: box "Wraps when text exceeds the max width limit" maxWidth=180 color=steelblue
+    at 420,100
+  b4: box "Line one\\nLine two\\nLine three" color=steelblue
+    at 620,100
+
+  // ─── circle row ────────────────────────────────
+  circ_l: text "circle" size=10 fill gray at 0,180
+
+  c1: circle "Hi" color=mediumseagreen
+    at 0,230
+  c2: circle "Auto-sized" color=mediumseagreen
+    at 160,230
+  c3: circle "Longer label here" color=mediumseagreen
+    at 370,230
+
+  // ─── pill row ──────────────────────────────────
+  pill_l: text "pill" size=10 fill gray at 0,310
+
+  p1: pill "Tag" color=darkorange
+    at 0,340
+  p2: pill "Status badge" color=darkorange
+    at 130,340
+  p3: pill "A much longer pill label" color=darkorange
+    at 350,340
+
+  // ─── card row ──────────────────────────────────
+  card_l: text "card" size=10 fill gray at 0,390
+
+  cd1: card "Simple Card" color=mediumpurple
+    at 0,450
+  cd2: card "With Body" body="Detail text\\nover two lines" color=mediumpurple
+    at 190,450
+  cd3: card "Wide" body="Body wraps at maxWidth" maxWidth=160 color=mediumpurple
+    at 400,450
+
+  // ─── note row ──────────────────────────────────
+  note_l: text "note" size=10 fill gray at 0,550
+
+  n1: note "Remember"
+    at 0,600
+  n2: note "A longer note that will wrap across multiple lines nicely"
+    at 200,600
+  n3: note "Line one\\nLine two"
+    at 450,600
+
+  // ─── group row ─────────────────────────────────
+  grp_l: text "group" size=10 fill gray at 0,700
+
+  g: group "Group" 180x100 color=teal
+    at 0,770
+
+  // ─── arrow / line row ──────────────────────────
+  conn_l: text "arrow / line" size=10 fill gray at 0,850
+
+  a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 0,890
+  a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 200,890
+  a: arrow from=a_src to=a_dst label="arrow" color=steelblue
+
+  l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 320,890
+  l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 520,890
+  l: line from=l_src to=l_dst label="line" color=coral`,
+  },
   {
-    id: 'image-sources',
-    title: 'Image Sources',
-    category: 'images',
-    description: 'Three ways to specify an image: registry key, URL, or inline data URI.',
-    dsl: `{
-  images: {
-    star: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9' fill='%23fbbf24'/%3E%3C/svg%3E",
-  },
-  objects: [
-    { label: "title", at: [400, 40], text: "Image Sources", size: 16, color: "#e2e5ea", bold: true },
-    // Method 1: registry key
-    { box: "reg", at: [150, 170], size: [160, 100], colour: "#2a2d35", image: "star", radius: 8 },
-    { label: "rl1", at: [150, 240], text: "Registry key", size: 12, color: "#22d3ee" },
-    { label: "rl2", at: [150, 260], text: "image: \\"star\\"", size: 10, color: "#6b7280" },
-    // Method 2: direct URL (e.g. /icons/logo.svg or https://...)
-    { box: "url", at: [400, 170], size: [160, 100], colour: "#2a2d35", image: "https://upload.wikimedia.org/wikipedia/commons/4/47/React.svg", radius: 8 },
-    { label: "ul1", at: [400, 240], text: "Direct URL", size: 12, color: "#34d399" },
-    { label: "ul2", at: [400, 260], text: "image: \\"https://...\\"", size: 10, color: "#6b7280" },
-    // Method 3: inline data URI
-    { box: "uri", at: [650, 170], size: [160, 100], colour: "#2a2d35", radius: 8,
-      image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='13,2 3,14 12,14 11,22 21,10 12,10' fill='%2322d3ee'/%3E%3C/svg%3E" },
-    { label: "dl1", at: [650, 240], text: "Inline data URI", size: 12, color: "#a78bfa" },
-    { label: "dl2", at: [650, 260], text: "image: \\"data:image/svg+xml,...\\"", size: 10, color: "#6b7280" },
-    { label: "hint", at: [400, 330], text: "The registry avoids repeating long URIs — define once, reference by key", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { reg: { pulse: 0.1 }, url: { pulse: 0.1 }, uri: { pulse: 0.1 } } },
-    ],
-  },
-}`,
+    name: 'state-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all state shape set templates',
+    dsl: `\
+name "State Shapes"
+background #14161c
+use [core, state]
+
+objects
+  title: text "state" size=20 bold fill slategray at 350,30
+
+  // ─── state.node row ───────────────────────────
+  node_l: text "state.node" size=10 fill gray at 0,60
+
+  sn1: state.node "Idle" color=steelblue
+    at 0,100
+  sn2: state.node "Processing" entry="start" exit="stop" color=mediumseagreen
+    at 180,100
+  sn3: state.node "Active" entry="initTimer\\nloadConfig" exit="saveState\\ncleanup" color=darkorange
+    at 420,100
+  sn4: state.node "Auto-sized long name" color=steelblue
+    at 660,100
+
+  // ─── state.initial / final / choice row ───────
+  misc_l: text "initial / final / choice" size=10 fill gray at 0,200
+
+  si: state.initial color=whitesmoke
+    at 0,240
+  si_l: text "initial" size=9 fill gray at 0,265
+
+  sf: state.final color=whitesmoke
+    at 100,240
+  sf_l: text "final" size=9 fill gray at 100,265
+
+  sc: state.choice color=goldenrod
+    at 200,240
+  sc_l: text "choice" size=9 fill gray at 200,265
+
+  // ─── state.region row ─────────────────────────
+  reg_l: text "state.region" size=10 fill gray at 0,300
+
+  sr: state.region "Region A" 400x120 color=slategray
+    at 0,370`,
   },
 
-  // ═════════════════════════════════════════════════════════════
-  // CONNECTIONS
-  // ═════════════════════════════════════════════════════════════
-
+  // ─── COMPOSITION ───────────────────────────────────────────────
   {
-    id: 'arrows',
-    title: 'Arrows',
-    category: 'connections',
-    description: 'Lines drawing between objects with labels and progress.',
-    dsl: `{
-  objects: [
-    { box: "client", at: [150, 200], colour: "#22d3ee", text: "Client" },
-    { box: "server", at: [400, 200], colour: "#34d399", text: "Server" },
-    { box: "db", at: [650, 200], colour: "#a78bfa", text: "Database" },
-    { line: "l1", from: "client", to: "server", colour: "#fbbf24", label: "request", progress: 0 },
-    { line: "l2", from: "server", to: "db", colour: "#f472b6", label: "query", progress: 0 },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: { l1: { progress: 1 }, client: { pulse: 0.08 }, server: { pulse: 0.08 } } },
-      { time: 2.5, changes: { l2: { progress: 1 }, server: { pulse: 0.08 }, db: { pulse: 0.08 } } },
-    ],
+    name: 'box-composition',
+    category: 'Composition',
+    description: 'A "box" is a parent node with a rect background and a text label as children',
+    dsl: `\
+objects
+  mybox: at 200,150
+    bg: rect 160x70 radius=8 fill midnightblue stroke dodgerblue width=2
+    label: text "Composed Box" size=14 align=middle fill gainsboro`,
   },
-}`,
-  },
-
   {
-    id: 'curved-arrows',
-    title: 'Curved Arrows',
-    category: 'connections',
-    description: 'Animate bend values to curve arrows in real time.',
-    dsl: `{
-  objects: [
-    { box: "a", at: [200, 200], colour: "#22d3ee", text: "A" },
-    { box: "b", at: [600, 200], colour: "#34d399", text: "B" },
-    { line: "straight", from: "a", to: "b", colour: "#6b7280", label: "bend: 0", bend: 0 },
-    { line: "up", from: "a", to: "b", colour: "#a78bfa", label: "bend: -40", bend: 0 },
-    { line: "down", from: "a", to: "b", colour: "#fbbf24", label: "bend: 40", bend: 0 },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: {
-        up: { bend: -60 },
-        down: { bend: 60 },
-      } },
-    ],
+    name: 'line-composition',
+    category: 'Composition',
+    description: 'Two boxes connected by a path — the line and its label are children of a group node',
+    dsl: `\
+objects
+  a: at 100,150
+    a.bg: rect 100x50 radius=6 fill midnightblue stroke dodgerblue width=2
+    a.label: text "Source" size=12 align=middle fill gainsboro
+  b: at 400,150
+    b.bg: rect 100x50 radius=6 fill darkred stroke crimson width=2
+    b.label: text "Target" size=12 align=middle fill gainsboro
+  line: a -> b stroke darkgray width=2
+  lineLabel: text "sends data" size=11 fill darkgray at 250,130`,
   },
-}`,
-  },
-
   {
-    id: 'anchors',
-    title: 'Anchors',
-    category: 'connections',
-    description: 'Arrows connecting at different anchor points on objects.',
-    dsl: `{
-  objects: [
-    { box: "center", at: [400, 220], size: [160, 80], colour: "#22d3ee", text: "Center Box" },
-    { box: "top", at: [400, 60], colour: "#34d399", text: "top" },
-    { box: "bottom", at: [400, 380], colour: "#34d399", text: "bottom" },
-    { box: "left", at: [150, 220], colour: "#a78bfa", text: "left" },
-    { box: "right", at: [650, 220], colour: "#a78bfa", text: "right" },
-    { line: "lt", from: "top", to: "center", colour: "#34d399", toAnchor: "top" },
-    { line: "lb", from: "bottom", to: "center", colour: "#34d399", toAnchor: "bottom" },
-    { line: "ll", from: "left", to: "center", colour: "#a78bfa", toAnchor: "left" },
-    { line: "lr", from: "right", to: "center", colour: "#a78bfa", toAnchor: "right" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: {
-        top: { y: 80 },
-        bottom: { y: 360 },
-        left: { x: 180 },
-        right: { x: 620 },
-      } },
-    ],
-  },
-}`,
+    name: 'nested-children',
+    category: 'Composition',
+    description: 'Deep nesting — every leaf property is animatable via dot-notation',
+    dsl: `\
+objects
+  card: at 200,150
+    bg: rect 160x100 radius=6 fill midnightblue stroke steelblue width=2
+    title: text "Card Title" size=14 bold fill gainsboro at 0,-20
+    badge: ellipse 8x8 fill limegreen at 55,-30
+    body: text "Some description text" size=11 fill darkgray at 0,15
+
+animate 3s loop
+  1.5
+    card.bg.fill: midnightblue
+    card.badge.fill: crimson
+  3
+    card.bg.fill: midnightblue
+    card.badge.fill: limegreen`,
   },
 
+  // ─── COLORS ────────────────────────────────────────────────────
   {
-    id: 'paths',
-    title: 'Paths',
-    category: 'connections',
-    description: 'An object follows a closed smooth path.',
-    dsl: `{
-  objects: [
-    { line: "track", closed: true, visible: false, arrow: false, dashed: true, colour: "#2a2d35",
-      route: [[600,220], [400,340], [200,220], [400,100]], closed: true },
-    { box: "runner", follow: "track", size: [80, 36], colour: "#60a5fa", text: "Follow", radius: 6 },
-    { circle: "dot", follow: "track", r: 12, colour: "#f472b6" },
-  ],
-  animate: {
-    duration: 6, loop: true, easing: "linear",
-    // Per-object shorthand format
-    keyframes: {
-      runner: [[0, "pathProgress", 0], [6, "pathProgress", 1]],
-      dot: [[0, "pathProgress", 0.5], [6, "pathProgress", 1.5]],
-    },
-  },
-}`,
+    name: 'color-animation',
+    category: 'Colors',
+    description: 'Animate whole fill colors — named, hex, rgb, and hsl formats all interpolate smoothly',
+    dsl: `\
+a: rect 80x80 radius=8 fill red at 60,100
+b: rect 80x80 radius=8 fill #3366ff at 170,100
+c: rect 80x80 radius=8 fill rgb 60 200 80 at 280,100
+d: rect 80x80 radius=8 fill hsl 60 80 50 at 390,100
+
+animate 6s loop
+  3 a.fill: blue
+  3 b.fill: #ff6633
+  3 c.fill: rgb 200 60 180
+  3 d.fill: hsl 280 70 55
+
+  6 a.fill: red
+  6 b.fill: #3366ff
+  6 c.fill: rgb 60 200 80
+  6 d.fill: hsl 60 80 50`,
   },
 
+  // ─── STYLES ────────────────────────────────────────────────────
   {
-    id: 'routed-lines',
-    title: 'Routed Lines',
-    category: 'connections',
-    description: 'Lines routed through waypoints — smooth vs straight with rounded corners.',
-    dsl: `{
-  objects: [
-    { box: "a", at: [100, 100], colour: "#22d3ee", text: "Start" },
-    { box: "b", at: [700, 400], colour: "#34d399", text: "End" },
-    { point: "p1", at: [100, 400] },
-    { point: "p2", at: [700, 100] },
+    name: 'named-styles',
+    category: 'Styles',
+    description: 'Define reusable styles — node properties override style defaults',
+    dsl: `\
+style primary
+  fill steelblue
+  stroke darkblue width=2
 
-    // Smooth route (Catmull-Rom spline)
-    { line: "smooth", from: "a", route: ["p1"], to: "b",
-      colour: "#a78bfa", label: "smooth", progress: 0 },
+style danger
+  fill firebrick
+  stroke darkred width=2
 
-    // Straight route with rounded corners
-    { line: "straight", from: "a", route: ["p2"], to: "b",
-      colour: "#fbbf24", label: "radius: 20", smooth: false, radius: 20, progress: 0 },
-  ],
-  animate: {
-    duration: 3, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { smooth: { progress: 1 }, straight: { progress: 1 } } },
-    ],
+a: rect 100x60 radius=6 @primary at 100,150
+b: rect 100x60 radius=6 @danger at 230,150
+c: rect 100x60 radius=6 @primary fill limegreen at 360,150`,
   },
-}`,
-  },
-
   {
-    id: 'coordinate-endpoints',
-    title: 'Mixed Endpoints',
-    category: 'connections',
-    description: 'Lines using object IDs, coordinates, and offsets as endpoints.',
-    dsl: `{
-  objects: [
-    { box: "server", at: [400, 200], colour: "#22d3ee", text: "Server" },
-    { point: "origin", at: [100, 200] },
+    name: 'style-animation',
+    category: 'Styles',
+    description: 'Animate a style — all nodes using it change together',
+    dsl: `\
+style theme
+  fill steelblue
 
-    // From coordinates to object
-    { line: "l1", from: [100, 100], to: "server", colour: "#fbbf24", label: "from [x,y]", progress: 0 },
+a: rect 80x80 radius=8 @theme at 120,140
+b: rect 80x80 radius=8 @theme at 230,140
+c: rect 80x80 radius=8 @theme at 340,140
 
-    // From point with offset to object
-    { line: "l2", from: ["origin", 0, 50], to: "server", colour: "#a78bfa", label: "from point+offset", progress: 0 },
-
-    // From object to coordinates
-    { line: "l3", from: "server", to: [700, 350], colour: "#34d399", label: "to [x,y]", progress: 0 },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: { l1: { progress: 1 } } },
-      { plus: 1.0, changes: { l2: { progress: 1 } } },
-      { plus: 1.0, changes: { l3: { progress: 1 } } },
-    ],
-  },
-}`,
+animate 4s loop
+  2 theme.fill: crimson
+  4 theme.fill: steelblue`,
   },
 
-  // ═════════════════════════════════════════════════════════════
-  // LAYOUT
-  // ═════════════════════════════════════════════════════════════
-
+  // ─── ANIMATION ─────────────────────────────────────────────────
+  buildEasingSample(),
   {
-    id: 'row-layout',
-    title: 'Row Layout',
-    category: 'layout',
-    description: 'Animate gap, padding, and child order in a row container.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 40], text: "Row Container", size: 16, color: "#e2e5ea", bold: true },
-    { box: "row", at: [400, 200], direction: "row", colour: "#2a2d35", radius: 12 },
-    { box: "a", colour: "#22d3ee", text: "A", order: 1, group: "row" },
-    { box: "b", colour: "#fbbf24", text: "B", order: 2, group: "row" },
-    { box: "c", colour: "#34d399", text: "C", order: 3, group: "row" },
-  ],
-  animate: {
-    duration: 5, loop: false, easing: "easeInOut",
-    keyframes: [
-      // Increase gap and padding
-      { time: 1.5, changes: { row: { gap: 30, padding: 20 } } },
-      // Swap order: C moves to front
-      { time: 3.5, changes: { c: { order: 0 }, a: { order: 2 } } },
-    ],
-  },
-}`,
-  },
+    name: 'position-animation',
+    category: 'Animation',
+    description: 'Animate position — a box moves across the canvas',
+    dsl: `\
+mover: rect 50x50 radius=25 fill darkorchid at 100,150
 
+animate 4s loop easing=easeInOut
+  1
+    mover.transform.x: 400
+    mover.transform.y: 100
+  2
+    mover.transform.x: 400
+    mover.transform.y: 250
+  3
+    mover.transform.x: 100
+    mover.transform.y: 250
+  4
+    mover.transform.x: 100
+    mover.transform.y: 150`,
+  },
   {
-    id: 'column-layout',
-    title: 'Column Layout',
-    category: 'layout',
-    description: 'Vertical stacking with animated gap and grow.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 30], text: "Column Container", size: 16, color: "#e2e5ea", bold: true },
-    { box: "col", at: [400, 250], direction: "column", gap: 10, colour: "#2a2d35", radius: 12 },
-    { box: "header", size: [200, 36], colour: "#a78bfa", text: "Header", group: "col" },
-    { box: "body", size: [200, 50], colour: "#60a5fa", text: "Body", group: "col" },
-    { box: "footer", size: [200, 36], colour: "#34d399", text: "Footer", group: "col" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: {
-        col: { gap: 24 },
-        body: { h: 100 },
-      } },
-    ],
-  },
-}`,
+    name: 'opacity-animation',
+    category: 'Animation',
+    description: 'Animate opacity — fade in and out',
+    dsl: `\
+box: rect 100x100 radius=8 fill dodgerblue opacity 0 at 200,140
+
+animate 3s loop
+  1.5 box.opacity: 1
+  3 box.opacity: 0`,
   },
 
+  // ─── CONNECTIONS ───────────────────────────────────────────────
   {
-    id: 'alignment',
-    title: 'Alignment',
-    category: 'layout',
-    description: 'Animate justify between start, center, and end.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 30], text: "Justify Animation", size: 16, color: "#e2e5ea", bold: true },
-    { box: "row", at: [400, 180], w: 500, direction: "row", colour: "#2a2d35", radius: 12, justify: "start" },
-    { box: "x", size: [80, 40], colour: "#22d3ee", text: "X", group: "row" },
-    { box: "y", size: [80, 40], colour: "#fbbf24", text: "Y", group: "row" },
-    { box: "z", size: [80, 40], colour: "#34d399", text: "Z", group: "row" },
-    { label: "state", at: [400, 280], text: "justify: start", size: 14, color: "#6b7280" },
-  ],
-  animate: {
-    duration: 6, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: { row: { justify: "center" }, state: { text: "justify: center" } } },
-      { time: 4.0, changes: { row: { justify: "end" }, state: { text: "justify: end" } } },
-    ],
+    name: 'edge-snapping',
+    category: 'Connections',
+    description: 'Lines snap to object edges, not centers — with gap spacing',
+    dsl: `\
+a: rect 80x50 radius=6 fill darkslateblue stroke dodgerblue width=2 at 100,150
+b: rect 80x50 radius=6 fill forestgreen stroke limegreen width=2 at 380,150
+line: a -> b gap=4 stroke darkgray width=2`,
   },
-}`,
-  },
-
   {
-    id: 'group-animation',
-    title: 'Group Animation',
-    category: 'layout',
-    description: 'Move an item between containers with smooth position blend.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 30], text: "Group Transition", size: 16, color: "#e2e5ea", bold: true },
-    { box: "left", at: [200, 200], direction: "column", padding: 14, colour: "#2a2d35", radius: 12 },
-    { box: "right", at: [600, 200], direction: "column", padding: 14, colour: "#2a2d35", radius: 12 },
-    { box: "a", colour: "#22d3ee", text: "Static A", group: "left" },
-    { box: "mover", colour: "#fbbf24", text: "I move!", group: "left" },
-    { box: "b", colour: "#34d399", text: "Static B", group: "right" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: { mover: { group: "right" } } },
-    ],
+    name: 'arrow',
+    category: 'Connections',
+    description: 'Arrow template — smart connection with arrowhead and label',
+    dsl: `\
+objects
+  a: at 100,150
+    a.bg: rect 100x50 radius=6 fill midnightblue stroke dodgerblue width=2
+    a.label: text "Source" size=12 fill gainsboro
+  b: at 400,150
+    b.bg: rect 100x50 radius=6 fill darkred stroke crimson width=2
+    b.label: text "Target" size=12 fill gainsboro
+  conn: template arrow from=a to=b label="sends data" colour=darkgray`,
   },
-}`,
-  },
-
   {
-    id: 'coordinates',
-    title: 'Coordinate Methods',
-    category: 'layout',
-    description: 'All the ways to position objects: at [x,y], at "id", at ["id", dx, dy], and raw x/y.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 30], text: "Coordinate Methods", size: 16, color: "#e2e5ea", bold: true },
+    name: 'smooth-bend',
+    category: 'Connections',
+    description: 'Smooth quadratic bend — animate the curve amount',
+    dsl: `\
+a: rect 60x40 radius=6 fill darkslateblue stroke dodgerblue width=2 at 120,150
+b: rect 60x40 radius=6 fill firebrick stroke crimson width=2 at 380,150
+line: a -> b bend=0 gap=4 stroke darkgray width=2
 
-    // 1. Absolute coordinates with at: [x, y]
-    { box: "origin", at: [120, 140], colour: "#22d3ee", text: "at: [120, 140]" },
-    { label: "m1", at: [120, 180], text: "Absolute [x, y]", size: 11, color: "#6b7280" },
-
-    // 2. Raw x/y properties
-    { box: "raw", x: 370, y: 140, colour: "#34d399", text: "x: 370, y: 140" },
-    { label: "m2", at: [370, 180], text: "Raw x / y", size: 11, color: "#6b7280" },
-
-    // 3. Position at another object: at: "id"
-    { box: "anchor", at: [600, 140], colour: "#a78bfa", text: "Anchor" },
-    { circle: "snap", at: "anchor", r: 40, colour: "#fbbf24", opacity: 0.4 },
-    { label: "m3", at: [600, 200], text: "at: \\"anchor\\"", size: 11, color: "#6b7280" },
-
-    // 4. Object + offset: at: ["id", dx, dy]
-    { point: "hub", at: [200, 330] },
-    { label: "hubL", at: [200, 330], text: "+", size: 14, color: "#4a4f59" },
-    { box: "offA", at: ["hub", -80, -40], colour: "#f472b6", text: "[-80,-40]", w: 100 },
-    { box: "offB", at: ["hub", 80, -40], colour: "#60a5fa", text: "[+80,-40]", w: 100 },
-    { box: "offC", at: ["hub", 0, 60], colour: "#fb923c", text: "[0,+60]", w: 100 },
-    { label: "m4", at: [200, 420], text: "at: [\\"hub\\", dx, dy]", size: 11, color: "#6b7280" },
-
-    // 5. Lines also use PointRef: from/to accept same formats
-    { box: "src", at: [470, 290], colour: "#22d3ee", text: "Source" },
-    { box: "dst", at: [700, 290], colour: "#34d399", text: "Dest" },
-    { line: "l1", from: "src", to: "dst", colour: "#fbbf24", label: "from \\"id\\"", progress: 0 },
-    { line: "l2", from: [470, 360], to: [700, 360], colour: "#a78bfa", label: "from [x,y]", progress: 0 },
-    { line: "l3", from: ["src", 0, 80], to: ["dst", 0, 80], colour: "#f472b6", label: "[\\"id\\",dx,dy]", progress: 0 },
-    { label: "m5", at: [585, 460], text: "Lines accept the same PointRef formats", size: 11, color: "#6b7280" },
-  ],
-}`,
+animate 4s loop
+  1 line.path.bend: 1.5
+  2 line.path.bend: 0
+  3 line.path.bend: -1.5
+  4 line.path.bend: 0`,
   },
-
   {
-    id: 'at-ref-animation',
-    title: 'Relative Position Tracking',
-    category: 'layout',
-    description: 'Objects positioned with at: "id" follow their target during animation, preserving offsets through nested chains.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 30], text: "Relative Position Tracking", size: 16, color: "#e2e5ea", bold: true },
-    { label: "hint", at: [400, 460], text: "Hub moves the constellation — satellite C also orbits independently", size: 11, color: "#4a4f59" },
-
-    // Hub: the root that everything is relative to
-    { box: "hub", at: [200, 250], colour: "#a78bfa", text: "Hub", w: 80, h: 50, radius: 24 },
-
-    // Satellites positioned relative to hub
-    { box: "satA", at: ["hub", -120, -80], colour: "#22d3ee", text: "A", w: 70 },
-    { box: "satB", at: ["hub", 120, -80], colour: "#34d399", text: "B", w: 70 },
-    { box: "satC", at: ["hub", 0, 100], colour: "#f472b6", text: "C", w: 70 },
-
-    // Nested: labels relative to satellites (chained refs)
-    { label: "lblA", at: ["satA", 0, 35], text: "child of A", size: 10, color: "#6b7280" },
-    { label: "lblB", at: ["satB", 0, 35], text: "child of B", size: 10, color: "#6b7280" },
-    { label: "lblC", at: ["satC", 0, 35], text: "child of C", size: 10, color: "#6b7280" },
-
-    // Lines connecting hub to satellites
-    { line: "lA", from: "hub", to: "satA", colour: "#22d3ee", dashed: true, arrow: false },
-    { line: "lB", from: "hub", to: "satB", colour: "#34d399", dashed: true, arrow: false },
-    { line: "lC", from: "hub", to: "satC", colour: "#f472b6", dashed: true, arrow: false },
-  ],
-  animate: {
-    duration: 6, loop: true, easing: "easeInOut",
-    keyframes: {
-      hub: [
-        [0, "x", 200],
-        [0, "y", 250],
-        [1.5, "x", 550],
-        [1.5, "y", 180],
-        [3.0, "x", 550],
-        [3.0, "y", 320],
-        [4.5, "x", 200],
-        [4.5, "y", 250],
-      ],
-      // C's offset orbits independently while still tracking hub
-      satC: [
-        [0, "x", 0],     [0, "y", 100],
-        [1.5, "x", 100], [1.5, "y", 0],
-        [3.0, "x", 0],   [3.0, "y", -100],
-        [4.5, "x", -100],[4.5, "y", 0],
-        [6.0, "x", 0],   [6.0, "y", 100],
-      ],
-    },
+    name: 'smooth-spline',
+    category: 'Connections',
+    description: 'Smooth Catmull-Rom spline through waypoints',
+    dsl: `\
+a: ellipse 20x20 fill steelblue at 80,150
+b: ellipse 20x20 fill firebrick at 420,150
+line: a -> (180,80) -> (250,220) -> (340,80) -> b smooth gap=4 stroke limegreen width=2`,
   },
-}`,
-  },
-
-  // ═════════════════════════════════════════════════════════════
-  // EFFECTS
-  // ═════════════════════════════════════════════════════════════
-
   {
-    id: 'pulse-effect',
-    title: 'Pulse',
-    category: 'effects',
-    description: 'Temporary scale bumps triggered at keyframe times.',
-    dsl: `{
-  objects: [
-    { box: "small", at: [200, 200], colour: "#22d3ee", text: "Small pulse" },
-    { box: "big", at: [500, 200], colour: "#a78bfa", text: "Big pulse" },
-    { label: "hint", at: [350, 320], text: "pulse: additive scale that decays over 0.4s", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 4, loop: false,
-    keyframes: [
-      { time: 0.5, changes: { small: { pulse: 0.08 } } },
-      { time: 1.0, changes: { big: { pulse: 0.2 } } },
-      { time: 2.0, changes: { small: { pulse: 0.08 }, big: { pulse: 0.2 } } },
-      { time: 3.0, changes: { small: { pulse: 0.15 }, big: { pulse: 0.3 } } },
-    ],
-  },
-}`,
+    name: 'routed-polyline',
+    category: 'Connections',
+    description: 'Polyline routed through waypoints with rounded corners',
+    dsl: `\
+a: rect 60x40 radius=4 fill darkslateblue stroke dodgerblue width=2 at 80,100
+b: rect 60x40 radius=4 fill firebrick stroke crimson width=2 at 420,200
+line: a -> (250,100) -> (250,200) -> b radius=15 gap=4 stroke darkgray width=2`,
   },
 
+  // ─── INHERITANCE ───────────────────────────────────────────────
   {
-    id: 'flash-glow',
-    title: 'Flash & Glow',
-    category: 'effects',
-    description: 'Flash dims briefly, glow increases stroke width.',
-    dsl: `{
-  objects: [
-    { box: "flashBox", at: [250, 180], colour: "#60a5fa", text: "Flash (dims)" },
-    { box: "glowBox", at: [550, 180], colour: "#f472b6", text: "Glow", strokeWidth: 2 },
-    { label: "fDesc", at: [250, 240], text: "flash: 0.6 — dims to 40% briefly", size: 11, color: "#4a4f59" },
-    { label: "gDesc", at: [550, 240], text: "glow: 4 — strokeWidth +4 briefly", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 5, loop: false,
-    keyframes: [
-      { time: 0.8, changes: { flashBox: { flash: 0.6 } } },
-      { time: 1.6, changes: { glowBox: { glow: 4 } } },
-      { time: 2.8, changes: { flashBox: { flash: 0.6 }, glowBox: { glow: 6 } } },
-      { time: 3.8, changes: { flashBox: { flash: 0.8 }, glowBox: { glow: 8 } } },
-    ],
+    name: 'fill-inheritance',
+    category: 'Inheritance',
+    description: 'Children inherit fill from parent — explicit fill overrides',
+    dsl: `\
+objects
+  group: fill steelblue at 200,130
+    inherits: rect 70x70 radius=6
+    overrides: rect 70x70 radius=6 fill red at 90,0`,
   },
-}`,
-  },
-
   {
-    id: 'shake-effect',
-    title: 'Shake',
-    category: 'effects',
-    description: 'Error-state shake with configurable intensity.',
-    dsl: `{
-  objects: [
-    { box: "input", at: [400, 140], w: 240, colour: "#ef4444", text: "Invalid email", radius: 8 },
-    { box: "mild", at: [200, 280], colour: "#fbbf24", text: "Mild (3px)" },
-    { box: "strong", at: [600, 280], colour: "#ef4444", text: "Strong (10px)" },
-  ],
-  animate: {
-    duration: 4, loop: false,
-    keyframes: [
-      { time: 0.5, changes: { input: { shake: 6, flash: 0.4 } } },
-      { time: 1.5, changes: { mild: { shake: 3 } } },
-      { time: 2.0, changes: { strong: { shake: 10, flash: 0.3 } } },
-      { time: 3.0, changes: { input: { shake: 8, flash: 0.5 } } },
-    ],
-  },
-}`,
+    name: 'opacity-inheritance',
+    category: 'Inheritance',
+    description: 'Opacity inherits like fill — child 0.8 overrides parent 0.5, child without opacity inherits 0.5',
+    dsl: `\
+objects
+  parent: opacity 0.5 at 120,130
+    inherits: rect 80x80 radius=8 fill dodgerblue
+    overrides: rect 80x80 radius=8 fill dodgerblue opacity 0.8 at 100,0
+  reference: rect 80x80 radius=8 fill dodgerblue at 370,130
+  l1: text "inherits 0.5" size=10 fill gray at 120,240
+  l2: text "overrides to 0.8" size=10 fill gray at 220,240
+  l3: text "full opacity" size=10 fill gray at 370,240`,
   },
 
+  // ─── LAYOUT ────────────────────────────────────────────────────
   {
-    id: 'combined-effects',
-    title: 'Combined Effects',
-    category: 'effects',
-    description: 'Multiple effects in a single keyframe block.',
-    dsl: `{
-  objects: [
-    { box: "server", at: [200, 200], colour: "#34d399", text: "Server" },
-    { box: "error", at: [600, 200], colour: "#ef4444", text: "Error" },
-    { line: "conn", from: "server", to: "error", colour: "#fbbf24", label: "timeout", progress: 0 },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: {
-        conn: { progress: 1 },
-        server: { pulse: 0.1 },
-      } },
-      { time: 2.0, changes: {
-        error: { pulse: 0.15, shake: 6, glow: 4, flash: 0.3 },
-      } },
-    ],
+    name: 'flex-row',
+    category: 'Layout',
+    description: 'Flex row layout — children positioned automatically with gap',
+    dsl: `\
+objects
+  row: rect 400x80 fill darkslategray stroke dimgray width=1 at 200,150
+    layout flex row gap=10
+    a: rect 80x50 radius=4 fill steelblue
+    b: rect 80x50 radius=4 fill limegreen
+    c: rect 80x50 radius=4 fill crimson`,
   },
-}`,
-  },
-
-  // ═════════════════════════════════════════════════════════════
-  // TEXT
-  // ═════════════════════════════════════════════════════════════
-
   {
-    id: 'textblock',
-    title: 'Text Block',
-    category: 'text',
-    description: 'Multi-line text with per-line fade-in animation.',
-    dsl: `{
-  objects: [
-    { textblock: "intro", at: [400, 200], lines: [
-        "Welcome to Starch",
-        "Animated diagrams for documentation",
-        "Built with SVG and TypeScript",
-      ], size: 16, color: "#e2e5ea", lineHeight: 1.8, align: "middle",
-    },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 0, changes: {
-        "intro.line0": { opacity: 0 },
-        "intro.line1": { opacity: 0 },
-        "intro.line2": { opacity: 0 },
-      } },
-      { time: 1.0, changes: { "intro.line0": { opacity: 1 } } },
-      { time: 2.0, changes: { "intro.line1": { opacity: 1 } } },
-      { time: 3.0, changes: { "intro.line2": { opacity: 1 } } },
-    ],
+    name: 'flex-grow',
+    category: 'Layout',
+    description: 'Flex grow — distributes extra space proportionally',
+    dsl: `\
+objects
+  row: rect 400x60 fill darkslategray at 200,150
+    layout flex row gap=5
+    fixed: rect 60x40 radius=4 fill steelblue
+    grows: rect 60x40 radius=4 fill limegreen
+      layout grow=1
+    fixed2: rect 60x40 radius=4 fill crimson`,
   },
-}`,
-  },
-
   {
-    id: 'codeblock',
-    title: 'Code Block',
-    category: 'text',
-    description: 'Syntax-highlighted code with line animation.',
-    dsl: `{
-  objects: [
-    { code: "snippet", at: [400, 200], syntax: "javascript", lines: [
-        "function greet(name) {",
-        "  return 'Hello, ' + name;",
-        "}",
-        "",
-        "greet('World');",
-      ], color: "#b0b5be",
-    },
-  ],
-  animate: {
-    duration: 6, loop: false, easing: "easeInOut",
-    keyframes: [
-      // Highlight the return line
-      { time: 1.5, changes: { "snippet.line1": { color: "#22d3ee" } } },
-      // Fade out line 4 before swapping text
-      { time: 2.5, changes: {
-        "snippet.line1": { color: "#b0b5be" },
-        "snippet.line4": { opacity: 0 },
-      } },
-      // Swap text and fade back in
-      { time: 3.0, changes: {
-        "snippet.line4": { text: "greet('Starch');", opacity: 1, easing: "cut" },
-      } },
-      // Dim non-essential lines
-      { time: 4.5, changes: {
-        "snippet.line0": { opacity: 0.3 },
-        "snippet.line2": { opacity: 0.3 },
-        "snippet.line3": { opacity: 0.3 },
-        "snippet.line4": { color: "#34d399", bold: true },
-      } },
-    ],
-  },
-}`,
+    name: 'slot-animation',
+    category: 'Layout',
+    description: 'Animate an item between containers using slot — smooth position transition',
+    dsl: `\
+objects
+  left: fill darkslategray stroke steelblue width=1 at 120,150
+    layout flex column gap=8 padding=10
+  right: fill darkslategray stroke indianred width=1 at 350,150
+    layout flex column gap=8 padding=10
+  itemA: rect 120x30 radius=4 fill steelblue
+    layout slot=left
+  itemB: rect 120x30 radius=4 fill limegreen
+    layout slot=right
+  mover: rect 120x30 radius=4 fill goldenrod
+    layout slot=left
+
+animate 4s loop easing=easeInOut
+  2 mover.layout.slot: right
+  4 mover.layout.slot: left`,
   },
 
-  // ═════════════════════════════════════════════════════════════
-  // CAMERA
-  // ═════════════════════════════════════════════════════════════
-
+  // ─── Camera ──────────────────────────────────────────────────────
   {
-    id: 'viewport',
-    title: 'Viewport',
-    category: 'camera',
-    description: 'Set aspect ratio with viewport — toggle "Ratio" in header to preview.',
-    dsl: `{
-  viewport: "16:9",
-  objects: [
-    { camera: "cam", target: [400, 225] },
-    { label: "title", at: [400, 60], text: "16:9 Viewport", size: 18, color: "#e2e5ea", bold: true },
-    { box: "a", at: [150, 225], colour: "#22d3ee", text: "Left" },
-    { box: "b", at: [400, 225], colour: "#a78bfa", text: "Center" },
-    { box: "c", at: [650, 225], colour: "#34d399", text: "Right" },
-    { line: "l1", from: "a", to: "b", colour: "#fbbf24", progress: 0 },
-    { line: "l2", from: "b", to: "c", colour: "#fbbf24", progress: 0 },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: { l1: { progress: 1 }, a: { pulse: 0.1 }, b: { pulse: 0.1 } } },
-      { time: 2.5, changes: { l2: { progress: 1 }, b: { pulse: 0.1 }, c: { pulse: 0.1 } } },
-    ],
-  },
-}`,
-  },
+    name: 'camera-target',
+    category: 'Camera',
+    description: 'Camera targeting coordinates, node IDs, and node+offset',
+    dsl: `\
+objects
+  cam: camera look=(300,200) zoom=1.5
+  a: rect 80x80 radius=8 fill deepskyblue at 100,200
+  b: rect 80x80 radius=8 fill mediumvioletred at 500,200
+  label_a: text "A" size=14 fill gainsboro at 100,200
+  label_b: text "B" size=14 fill gainsboro at 500,200
 
+animate 6s loop easing=easeInOut
+  1.5 cam.camera.look: a
+  3 cam.camera.look: b
+  4.5 cam.camera.look: (b,0,-100)
+  6 cam.camera.look: (300,200)`,
+  },
   {
-    id: 'camera-zoom',
-    title: 'Zoom & Pan',
-    category: 'camera',
-    description: 'Camera zooms into a box then pans to another.',
-    dsl: `{
-  objects: [
-    { camera: "cam", target: [400, 200], zoom: 1 },
-    { box: "a", at: [200, 200], colour: "#22d3ee", text: "Server" },
-    { box: "b", at: [600, 200], colour: "#34d399", text: "Database" },
-    { line: "conn", from: "a", to: "b", colour: "#fbbf24", label: "query", progress: 0 },
-  ],
-  animate: {
-    duration: 6, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.5, changes: { cam: { target: "a", zoom: 2 }, conn: { progress: 0 } } },
-      { time: 3.0, changes: { cam: { zoom: 1.5 }, conn: { progress: 1 } } },
-      { time: 4.5, changes: { cam: { target: "b", zoom: 2 }, b: { pulse: 0.1 } } },
-      { time: 6.0, changes: { cam: { target: [400, 200], zoom: 1 } } },
-    ],
-  },
-}`,
-  },
+    name: 'camera-zoom',
+    category: 'Camera',
+    description: 'Zoom in and out with easing',
+    dsl: `\
+objects
+  cam: camera look=(300,200) zoom=1
+  outer: rect 400x300 radius=12 stroke steelblue width=2 at 300,200
+  inner: rect 120x80 radius=8 fill mediumseagreen at 300,200
+  dot: ellipse 10x10 fill goldenrod at 300,200
 
+animate 4s loop easing=easeInOutCubic
+  2 cam.camera.zoom: 4
+  4 cam.camera.zoom: 1`,
+  },
   {
-    id: 'camera-follow',
-    title: 'Follow Object',
-    category: 'camera',
-    description: 'Camera follows a box as it moves between containers.',
-    dsl: `{
-  objects: [
-    { camera: "cam", target: "mover", zoom: 1.8 },
-    { box: "left", at: [200, 200], direction: "column", padding: 14, colour: "#2a2d35", radius: 12 },
-    { box: "right", at: [600, 200], direction: "column", padding: 14, colour: "#2a2d35", radius: 12 },
-    { box: "stay", colour: "#60a5fa", text: "Static", group: "left" },
-    { box: "mover", colour: "#fbbf24", text: "Moving!", group: "left" },
-    { box: "dest", colour: "#34d399", text: "Waiting", group: "right" },
-  ],
-  animate: {
-    duration: 5, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.5, changes: { mover: { group: "right" } } },
-      { time: 4.0, changes: { cam: { zoom: 1 } } },
-    ],
-  },
-}`,
-  },
+    name: 'camera-look-fit',
+    category: 'Camera',
+    description: 'Look with fit — focus on specific nodes or all nodes',
+    dsl: `\
+objects
+  cam: camera look=all
+  a: rect 60x60 radius=6 fill crimson at 50,100
+  b: rect 60x60 radius=6 fill limegreen at 300,50
+  c: rect 60x60 radius=6 fill royalblue at 550,300
 
+animate 8s loop easing=easeInOut
+  2 cam.camera.look: (a)
+  4 cam.camera.look: (a,b)
+  6 cam.camera.look: (c)
+  8 cam.camera.look: all`,
+  },
   {
-    id: 'camera-fit',
-    title: 'Fit to Objects',
-    category: 'camera',
-    description: 'Camera fits to different groups spread across a large canvas.',
-    dsl: `{
-  objects: [
-    { camera: "cam", fit: "all" },
+    name: 'camera-follow',
+    category: 'Camera',
+    description: 'Camera tracks a moving object',
+    dsl: `\
+objects
+  cam: camera look=mover zoom=2
+  mover: ellipse 15x15 fill goldenrod at 50,200
+  track: rect 600x4 radius=2 fill darkslategray at 300,200
+  post1: rect 4x30 fill dimgray at 100,200
+  post2: rect 4x30 fill dimgray at 300,200
+  post3: rect 4x30 fill dimgray at 500,200
 
-    // Top-left cluster
-    { box: "a1", at: [-200, -100], colour: "#22d3ee", text: "Auth" },
-    { box: "a2", at: [-200, -180], colour: "#22d3ee", text: "Login" },
-    { line: "la", from: "a2", to: "a1", colour: "#22d3ee" },
-
-    // Top-right cluster
-    { box: "b1", at: [1000, -100], colour: "#34d399", text: "API" },
-    { box: "b2", at: [1000, -180], colour: "#34d399", text: "Gateway" },
-    { line: "lb", from: "b2", to: "b1", colour: "#34d399" },
-
-    // Bottom cluster
-    { box: "c1", at: [400, 600], colour: "#a78bfa", text: "Database" },
-    { box: "c2", at: [400, 680], colour: "#a78bfa", text: "Cache" },
-    { line: "lc", from: "c1", to: "c2", colour: "#a78bfa" },
-
-    // Connections between clusters
-    { line: "x1", from: "a1", to: "b1", colour: "#fbbf24", label: "requests", dashed: true },
-    { line: "x2", from: "b1", to: "c1", colour: "#fbbf24", label: "queries", dashed: true },
-  ],
-  animate: {
-    duration: 10, loop: false, easing: "easeInOut",
-    keyframes: [
-      // Smooth zoom into auth cluster
-      { time: 2.0, changes: { cam: { fit: ["a1", "a2"] } } },
-      // Cut to API cluster
-      { time: 4.0, changes: { cam: { fit: ["b1", "b2"], easing: "cut" } } },
-      // Cut to database cluster
-      { time: 6.0, changes: { cam: { fit: ["c1", "c2"], easing: "cut" } } },
-      // Smooth zoom out to see everything
-      { time: 8.0, changes: { cam: { fit: "all" } } },
-    ],
+animate 4s loop easing=easeInOut
+  2 mover.transform.x: 550
+  4 mover.transform.x: 50`,
   },
-}`,
-  },
-
   {
-    id: 'camera-path',
-    title: 'Follow Path',
-    category: 'camera',
-    description: 'Camera follows an object moving along a path.',
-    dsl: `{
-  objects: [
-    { camera: "cam", target: "runner", zoom: 2.5 },
-    { line: "track", closed: true, visible: false, arrow: false, colour: "#2a2d35",
-      route: [[600,200], [400,350], [200,200], [400,100]], closed: true },
-    { box: "runner", follow: "track", size: [80, 36], colour: "#f472b6", text: "Go!", radius: 6 },
-    { box: "a", at: [200, 200], colour: "#22d3ee", text: "A" },
-    { box: "b", at: [600, 200], colour: "#34d399", text: "B" },
-    { box: "c", at: [400, 350], colour: "#a78bfa", text: "C" },
-  ],
-  animate: {
-    duration: 6, loop: true, easing: "linear",
-    keyframes: {
-      runner: [[0, "pathProgress", 0], [6, "pathProgress", 1]],
-    },
-  },
-}`,
-  },
+    name: 'camera-ratio',
+    category: 'Camera',
+    description: 'Animated aspect ratio — zoomed in, panning across objects',
+    dsl: `\
+objects
+  cam: camera look=(100,130) zoom=3 ratio=1.78
+  a: rect 80x80 radius=6 fill cornflowerblue at 100,60
+  b: rect 80x80 radius=6 fill mediumseagreen at 300,60
+  c: rect 80x80 radius=6 fill peru at 500,60
+  d: rect 80x80 radius=6 fill palevioletred at 100,200
+  e: rect 80x80 radius=6 fill mediumpurple at 300,200
+  hint-bg: rect 220x24 radius=4 fill black a=0.7 at 300,200
+  hint: text "Click Viewport button to preview ratio" size=10 align=middle fill whitesmoke at 300,200
+  f: rect 80x80 radius=6 fill gold at 500,200
+  g: rect 80x80 radius=6 fill darkturquoise at 100,340
+  h: rect 80x80 radius=6 fill indianred at 300,340
+  i: rect 80x80 radius=6 fill yellowgreen at 500,340
 
-  // ═════════════════════════════════════════════════════════════
-  // STYLES
-  // ═════════════════════════════════════════════════════════════
-
+animate 8s loop easing=easeInOutCubic
+  2
+    cam.camera.look: (200,130)
+    cam.camera.zoom: 2.5
+    cam.camera.ratio: 2.35
+  4
+    cam.camera.look: (400,200)
+    cam.camera.zoom: 2
+    cam.camera.ratio: 1.78
+  6
+    cam.camera.look: (300,340)
+    cam.camera.zoom: 3
+    cam.camera.ratio: 2.35
+  8
+    cam.camera.look: (100,130)
+    cam.camera.zoom: 3
+    cam.camera.ratio: 1.78`,
+  },
   {
-    id: 'styles',
-    title: 'Reusable Styles',
-    category: 'styles',
-    description: 'Define named styles and compose them across objects.',
-    dsl: `{
-  styles: {
-    card: { colour: "#22d3ee", radius: 12 },
-    muted: { colour: "#6b7280", opacity: 0.6 },
-    wide: { style: "card", w: 220 },
-    alert: { style: "card", colour: "#ef4444" },
-  },
-  objects: [
-    { label: "title", at: [400, 40], text: "Reusable Styles", size: 16, color: "#e2e5ea", bold: true },
+    name: 'camera-rotation',
+    category: 'Camera',
+    description: 'Rotating camera view with easing',
+    dsl: `\
+objects
+  cam: camera look=(300,200) zoom=1.5 rotation=0
+  center: ellipse 20x20 fill gold at 300,200
+  n: rect 30x30 radius=4 fill indianred at 300,100
+  e: rect 30x30 radius=4 fill yellowgreen at 400,200
+  s: rect 30x30 radius=4 fill darkturquoise at 300,300
+  w: rect 30x30 radius=4 fill darkorchid at 200,200
 
-    { box: "a", at: [150, 150], style: "card", text: "Card" },
-    { box: "b", at: [400, 150], style: "wide", text: "Wide Card" },
-    { box: "c", at: [650, 150], style: "alert", text: "Alert" },
-    { box: "d", at: [150, 280], style: "muted", text: "Muted" },
-    { box: "e", at: [400, 280], style: "card", colour: "#34d399", text: "Override" },
-    { box: "f", at: [650, 280], style: "muted", text: "Also Muted" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 2.0, changes: {
-        a: { pulse: 0.1 },
-        b: { pulse: 0.1 },
-        c: { shake: 4 },
-        d: { opacity: 1 },
-        f: { opacity: 1 },
-      } },
-    ],
+animate 6s loop easing=easeInOutCubic
+  3 cam.transform.rotation: 180
+  6 cam.transform.rotation: 360`,
   },
-}`,
-  },
-
   {
-    id: 'animated-styles',
-    title: 'Animated Styles',
-    category: 'styles',
-    description: 'Animate a style to change all objects using it at once — like a live theme switch.',
-    dsl: `{
-  styles: {
-    card: { colour: "#22d3ee", radius: 12, w: 140 },
+    name: 'camera-switch',
+    category: 'Camera',
+    description: 'Switching between multiple cameras (cut transitions)',
+    dsl: `\
+objects
+  cam1: camera look=a zoom=2 active
+  cam2: camera look=b zoom=2
+  a: rect 80x80 radius=8 fill deepskyblue at 100,200
+  b: rect 80x80 radius=8 fill mediumvioletred at 500,200
+  la: text "Cam 1" size=10 fill silver at 100,250
+  lb: text "Cam 2" size=10 fill silver at 500,250
+
+animate 4s loop
+  2
+    cam1.camera.active: false
+    cam2.camera.active: true
+  4
+    cam1.camera.active: true
+    cam2.camera.active: false`,
   },
-  objects: [
-    { label: "title", at: [400, 40], text: "Animated Styles", size: 16, color: "#e2e5ea", bold: true },
-    { label: "hint", at: [400, 420], text: "All cards share a style — animating the style changes them all", size: 11, color: "#4a4f59" },
-
-    { box: "a", at: [150, 150], style: "card", text: "Card A" },
-    { box: "b", at: [400, 150], style: "card", text: "Card B" },
-    { box: "c", at: [650, 150], style: "card", text: "Card C" },
-
-    // This one overrides fill — won't be affected by the style's fill animation
-    { box: "d", at: [400, 300], style: "card", colour: "#34d399", text: "Override" },
-  ],
-  animate: {
-    duration: 4, loop: true, easing: "easeInOut",
-    keyframes: {
-      card: [
-        [0, "fill", "#173040"],
-        [0, "stroke", "#22d3ee"],
-        [2, "fill", "#2a1530"],
-        [2, "stroke", "#f472b6"],
-        [4, "fill", "#173040"],
-        [4, "stroke", "#22d3ee"],
-      ],
-    },
-  },
-}`,
-  },
-
-  // ═════════════════════════════════════════════════════════════
-  // ANIMATION
-  // ═════════════════════════════════════════════════════════════
-
   {
-    id: 'easings',
-    title: 'Easings',
-    category: 'animation',
-    description: 'All easing functions compared side by side.',
-    dsl: `{
-  objects: [
-    { label: "t1", at: [100, 80], text: "linear", size: 11, color: "#4a4f59" },
-    { label: "t2", at: [100, 120], text: "easeInOut", size: 11, color: "#4a4f59" },
-    { label: "t3", at: [100, 160], text: "easeOutCubic", size: 11, color: "#4a4f59" },
-    { label: "t4", at: [100, 200], text: "easeOutBack", size: 11, color: "#4a4f59" },
-    { label: "t5", at: [100, 240], text: "bounce", size: 11, color: "#4a4f59" },
-    { label: "t6", at: [100, 280], text: "elastic", size: 11, color: "#4a4f59" },
-    { label: "t7", at: [100, 320], text: "spring", size: 11, color: "#4a4f59" },
-    { label: "t8", at: [100, 360], text: "snap", size: 11, color: "#4a4f59" },
+    name: 'camera-combined',
+    category: 'Camera',
+    description: 'Cinematic sequence — aggressive zoom, rocking pan, gentle pullback',
+    dsl: `\
+objects
+  cam: camera look=all zoom=1 ratio=1.78 rotation=0
+  a: rect 70x70 radius=6 fill cornflowerblue at 80,80
+  b: rect 70x70 radius=6 fill mediumseagreen at 250,80
+  c: rect 70x70 radius=6 fill peru at 420,80
+  d: rect 70x70 radius=6 fill palevioletred at 80,250
+  e: rect 70x70 radius=6 fill mediumpurple at 250,250
+  f: rect 70x70 radius=6 fill gold at 420,250
+  g: rect 70x70 radius=6 fill darkturquoise at 80,420
+  h: rect 70x70 radius=6 fill indianred at 250,420
+  i: rect 70x70 radius=6 fill yellowgreen at 420,420
 
-    { box: "b1", at: [200, 80], size: [60, 26], colour: "#60a5fa", radius: 4 },
-    { box: "b2", at: [200, 120], size: [60, 26], colour: "#22d3ee", radius: 4 },
-    { box: "b3", at: [200, 160], size: [60, 26], colour: "#34d399", radius: 4 },
-    { box: "b4", at: [200, 200], size: [60, 26], colour: "#a78bfa", radius: 4 },
-    { box: "b5", at: [200, 240], size: [60, 26], colour: "#f472b6", radius: 4 },
-    { box: "b6", at: [200, 280], size: [60, 26], colour: "#fbbf24", radius: 4 },
-    { box: "b7", at: [200, 320], size: [60, 26], colour: "#fb923c", radius: 4 },
-    { box: "b8", at: [200, 360], size: [60, 26], colour: "#ef4444", radius: 4 },
-  ],
-  animate: {
-    duration: 3, loop: false,
-    keyframes: [
-      { time: 3.0, changes: {
-        b1: { x: 650, easing: "linear" },
-        b2: { x: 650, easing: "easeInOut" },
-        b3: { x: 650, easing: "easeOutCubic" },
-        b4: { x: 650, easing: "easeOutBack" },
-        b5: { x: 650, easing: "bounce" },
-        b6: { x: 650, easing: "elastic" },
-        b7: { x: 650, easing: "spring" },
-        b8: { x: 650, easing: "snap" },
-      } },
-    ],
-  },
-}`,
-  },
-
-  {
-    id: 'keyframe-blocks',
-    title: 'Keyframe Blocks',
-    category: 'animation',
-    description: 'Step-by-step data flow using the keyframe-block format.',
-    dsl: `{
-  objects: [
-    { box: "ingest", at: [100, 200], colour: "#60a5fa", text: "Ingest" },
-    { box: "process", at: [350, 200], colour: "#a78bfa", text: "Process" },
-    { box: "store", at: [600, 200], colour: "#34d399", text: "Store" },
-    { line: "l1", from: "ingest", to: "process", colour: "#60a5fa", label: "raw", progress: 0 },
-    { line: "l2", from: "process", to: "store", colour: "#34d399", label: "clean", progress: 0 },
-  ],
-  animate: {
-    duration: 5, loop: false, easing: "easeInOut",
-    // Each block is a moment — all changes at that time grouped together
-    keyframes: [
-      { time: 1.0, changes: {
-        l1: { progress: 1 },
-        ingest: { pulse: 0.1 },
-        process: { pulse: 0.1 },
-      } },
-      { time: 3.0, changes: {
-        l2: { progress: 1 },
-        process: { pulse: 0.1 },
-        store: { pulse: 0.1 },
-      } },
-    ],
-  },
-}`,
-  },
-
-  {
-    id: 'chapters',
-    title: 'Chapters',
-    category: 'animation',
-    description: 'Named time markers that pause playback.',
-    dsl: `{
-  objects: [
-    { box: "client", at: [150, 200], colour: "#60a5fa", text: "Client" },
-    { box: "server", at: [400, 200], colour: "#34d399", text: "Server" },
-    { box: "db", at: [650, 200], colour: "#a78bfa", text: "Database" },
-    { line: "req", from: "client", to: "server", colour: "#fbbf24", label: "SYN", progress: 0 },
-    { line: "ack", from: "server", to: "client", colour: "#34d399", label: "SYN-ACK", progress: 0, bend: 30 },
-    { line: "query", from: "server", to: "db", colour: "#a78bfa", label: "SELECT", progress: 0 },
-  ],
-  animate: {
-    duration: 9, loop: false, easing: "easeInOut",
-    chapters: [
-      { time: 0, title: "Connect", description: "Client sends SYN to server" },
-      { time: 3, title: "Handshake", description: "Server responds with SYN-ACK" },
-      { time: 6, title: "Query", description: "Server queries the database" },
-    ],
-    keyframes: [
-      { time: 1.5, changes: { req: { progress: 1 }, client: { pulse: 0.1 }, server: { pulse: 0.1 } } },
-      { time: 4.5, changes: { ack: { progress: 1 }, server: { pulse: 0.1 }, client: { pulse: 0.1 } } },
-      { time: 7.5, changes: { query: { progress: 1 }, server: { pulse: 0.1 }, db: { pulse: 0.1 } } },
-    ],
-  },
-}`,
-  },
-
-  {
-    id: 'auto-key',
-    title: 'Auto-Key',
-    category: 'animation',
-    description: 'autoKey holds values between blocks — no surprise interpolation.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 40], text: "autoKey: true (default)", size: 14, color: "#e2e5ea", bold: true },
-    { box: "a", at: [200, 150], colour: "#22d3ee", text: "Moves at t=1" },
-    { box: "b", at: [200, 300], colour: "#fbbf24", text: "Moves at t=3" },
-    { label: "hint", at: [400, 400], text: "Both transitions take 1s (between adjacent blocks), not from t=0", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 4, loop: false, easing: "easeInOut",
-    keyframes: [
-      { time: 1.0, changes: { a: { x: 600 } } },
-      { time: 2.0, changes: {} },
-      { time: 3.0, changes: { b: { x: 600 } } },
-    ],
-  },
-}`,
-  },
-
-  {
-    id: 'per-block-autokey',
-    title: 'Per-Block autoKey',
-    category: 'animation',
-    description: 'autoKey: false on a block lets you insert effects mid-transition without disrupting timing.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 40], text: "Per-Block autoKey: false", size: 14, color: "#e2e5ea", bold: true },
-    { box: "a", at: [150, 150], colour: "#22d3ee", text: "A", w: 80, h: 80 },
-    { box: "b", at: [650, 150], colour: "#fbbf24", text: "B", w: 80, h: 80 },
-    { label: "hint", at: [400, 400], text: "A and B swap smoothly over 4s — shake and colour change at the midpoint don't interrupt", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 6, loop: false, easing: "easeInOut",
-    keyframes: [
-      // Mid-swap: shake + colour pop — autoKey: false so the swap isn't disrupted
-      { time: 3, autoKey: false, changes: {
-        a: { shake: 6, fill: "#a78bfa" },
-        b: { shake: 6, fill: "#34d399" },
-      }},
-      // End of swap
-      { time: 5, changes: { a: { x: 650 }, b: { x: 150 } } },
-    ],
-  },
-}`,
-  },
-
-  {
-    id: 'relative-times',
-    title: 'Timing: plus & delay',
-    category: 'animation',
-    description: 'Use "plus" for relative times and "delay" for pauses.',
-    dsl: `{
-  objects: [
-    { label: "title", at: [400, 40], text: "plus & delay", size: 16, color: "#e2e5ea", bold: true },
-    { box: "a", at: [150, 150], colour: "#22d3ee", text: "A" },
-    { box: "b", at: [150, 250], colour: "#34d399", text: "B" },
-    { box: "c", at: [150, 350], colour: "#a78bfa", text: "C" },
-    { label: "hint", at: [400, 430], text: "plus: relative time, delay: wait before this keyframe starts", size: 11, color: "#4a4f59" },
-  ],
-  animate: {
-    duration: 7, loop: false, easing: "easeInOut",
-    keyframes: [
-      // A moves at t=1
-      { time: 1.0, changes: { a: { x: 650, pulse: 0.1 } } },
-      // B waits 1s then moves (hold at t=2, B moves at t=3)
-      { plus: 1.0, delay: 1.0, changes: { b: { x: 650, pulse: 0.1 } } },
-      // C waits 1s then moves (hold at t=4, C moves at t=5)
-      { plus: 1.0, delay: 1.0, changes: { c: { x: 650, pulse: 0.1 } } },
-    ],
-  },
-}`,
+animate 14s loop
+  1.5 easing=easeInCubic
+    cam.camera.look: e
+    cam.camera.zoom: 5
+    cam.transform.rotation: 25
+  3 easing=easeOutCubic
+    cam.camera.look: e
+    cam.camera.zoom: 2.5
+    cam.transform.rotation: 0
+  4.5 easing=easeInOutCubic
+    cam.camera.look: a
+    cam.camera.zoom: 3
+    cam.transform.rotation: -8
+  5.5 easing=easeInOutCubic
+    cam.camera.look: c
+    cam.camera.zoom: 3
+    cam.transform.rotation: 8
+  6.5 easing=easeInOutCubic
+    cam.camera.look: i
+    cam.camera.zoom: 3
+    cam.transform.rotation: -8
+  7.5 easing=easeInOutCubic
+    cam.camera.look: g
+    cam.camera.zoom: 3
+    cam.transform.rotation: 8
+  8.5 easing=easeOutCubic
+    cam.camera.look: e
+    cam.camera.zoom: 2.5
+    cam.transform.rotation: 0
+  14 easing=easeInOutCubic
+    cam.camera.look: all
+    cam.camera.zoom: 1
+    cam.transform.rotation: 0
+    cam.camera.ratio: 1.78`,
   },
 ];
+
+export function getV2SampleCategories(): string[] {
+  return [...new Set(v2Samples.map(s => s.category))];
+}
+
+export function getV2SamplesByCategory(category: string): V2Sample[] {
+  return v2Samples.filter(s => s.category === category);
+}

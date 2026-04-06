@@ -1,0 +1,726 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import { completionsAt, type CompletionItem } from '../../dsl/astCompletions';
+import { buildAstFromModel } from '../../dsl/astEmitter';
+import { walkDocument } from '../../dsl/schemaWalker';
+import { leavesToAst } from '../../dsl/astAdapter';
+import { emptyFormatHints } from '../../dsl/formatHints';
+import { registerBuiltinTemplates } from '../../templates/index';
+
+const hints = emptyFormatHints();
+
+function labels(items: CompletionItem[]): string[] {
+  return items.map(i => i.label);
+}
+
+function scoped(items: CompletionItem[], scope: string): string[] {
+  return items.filter(i => i.scope === scope).map(i => i.label);
+}
+
+function snippets(items: CompletionItem[]): Record<string, string | undefined> {
+  const result: Record<string, string | undefined> = {};
+  for (const i of items) result[i.label] = i.snippetTemplate;
+  return result;
+}
+
+/**
+ * Simulate what the V2Editor adapter does: strip the partial word from lineText.
+ * This mirrors the fix where we pass lineText without the word being typed,
+ * so context detection stays stable as the user types to filter.
+ */
+function completionsWithPrefix(
+  text: string,
+  cursorOffset: number,
+  modelJson?: any,
+): { items: CompletionItem[]; prefix: string } {
+  const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+  const fullLine = text.slice(lineStart, cursorOffset);
+  // Find word at end (simulates CodeMirror's matchBefore(/[\w@]+/))
+  const wordMatch = fullLine.match(/([\w@]+)$/);
+  const prefix = wordMatch ? wordMatch[1] : '';
+  const lineText = wordMatch ? fullLine.slice(0, fullLine.length - prefix.length) : fullLine;
+  const pos = wordMatch ? cursorOffset - prefix.length : cursorOffset;
+
+  const { ast: ctx } = walkDocument(text);
+  const ast = leavesToAst(ctx.astLeaves(), text.length);
+  const items = completionsAt(ast, pos, lineText, modelJson);
+  return { items, prefix };
+}
+
+function filteredLabels(text: string, cursorOffset: number, modelJson?: any): string[] {
+  const { items, prefix } = completionsWithPrefix(text, cursorOffset, modelJson);
+  if (!prefix) return labels(items);
+  const lower = prefix.toLowerCase();
+  return labels(items).filter(l => l.toLowerCase().startsWith(lower));
+}
+
+describe('completionsAt', () => {
+  // ─── Top-Level ────────────────────────────────────────────────
+
+  describe('top-level context', () => {
+    it('returns top-level keywords when AST is null', () => {
+      const l = labels(completionsAt(null, 0));
+      expect(l).toContain('animate');
+      expect(l).toContain('style');
+      expect(l).toContain('background');
+      expect(l).toContain('name');
+    });
+
+    it('returns top-level keywords for document root', () => {
+      const { ast } = buildAstFromModel({ objects: [] }, hints);
+      const l = labels(completionsAt(ast, 0));
+      expect(l).toContain('animate');
+      expect(l).toContain('style');
+    });
+
+    it('typing "a" on fresh line after a node still shows top-level keywords', () => {
+      // Regression: "A ctrl+space at the top level offers animate, but if I
+      // start typing animate it switches to anchor." The partial word "a" on
+      // an unindented fresh line must still be classified as top-level.
+      const text = 'box: rect 100x60 fill red\na';
+      const fl = filteredLabels(text, text.length);
+      expect(fl).toContain('animate');
+      expect(fl).not.toContain('anchor');
+      expect(fl).not.toContain('at');
+    });
+
+    it('completionPlugin-style lineText (including partial word) stays top-level', () => {
+      // completionPlugin.ts passes lineText WITH the partial word included.
+      // The context detection must strip it before classifying fresh-line vs
+      // continuation.
+      const text = 'box: rect 100x60 fill red\na';
+      const pos = text.length;
+      const lineStart = text.lastIndexOf('\n') + 1;
+      const lineText = text.slice(lineStart, pos); // "a" — word included
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const l = labels(completionsAt(ast, pos, lineText));
+      expect(l).toContain('animate');
+      expect(l).not.toContain('anchor');
+      expect(l).not.toContain('at');
+    });
+  });
+
+  // ─── Geometry Keywords ────────────────────────────────────────
+
+  describe('geometry keywords after node ID', () => {
+    it('offers geometry types after "id: "', () => {
+      const l = labels(completionsAt(null, 0, 'box: '));
+      expect(l).toContain('rect');
+      expect(l).toContain('ellipse');
+      expect(l).toContain('text');
+      expect(l).toContain('image');
+      expect(l).toContain('camera');
+    });
+
+    it('offers geometry types after "id:" (no space)', () => {
+      const l = labels(completionsAt(null, 0, 'box:'));
+      expect(l).toContain('rect');
+    });
+
+    it('filters geometry by prefix — "re" matches rect', () => {
+      const fl = filteredLabels('box: re\n', 7);
+      expect(fl).toContain('rect');
+      expect(fl).not.toContain('ellipse');
+    });
+
+    it('filters geometry by prefix — "cam" matches camera', () => {
+      const fl = filteredLabels('box: cam\n', 8);
+      expect(fl).toContain('camera');
+      expect(fl).not.toContain('rect');
+    });
+
+    it('filters geometry by prefix — "el" matches ellipse', () => {
+      const fl = filteredLabels('box: el\n', 7);
+      expect(fl).toContain('ellipse');
+    });
+
+    it('geometry keywords have snippet templates', () => {
+      const items = completionsAt(null, 0, 'box: ');
+      const s = snippets(items);
+      expect(s['rect']).toContain('${1:W}x${2:H}');
+      expect(s['ellipse']).toContain('${1:RX}x${2:RY}');
+      expect(s['text']).toContain('"${1:content}"');
+    });
+  });
+
+  // ─── Color Completions ────────────────────────────────────────
+
+  describe('color completions', () => {
+    it('returns colors after "fill "', () => {
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 fill '));
+      expect(l).toContain('red');
+      expect(l).toContain('blue');
+      expect(l).toContain('cornflowerblue');
+      expect(l).toContain('hsl');
+      expect(l).toContain('rgb');
+    });
+
+    it('returns colors after "stroke "', () => {
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 stroke '));
+      expect(l).toContain('red');
+      expect(l).toContain('hsl');
+    });
+
+    it('filters colors by prefix — "steel" matches steelblue', () => {
+      const fl = filteredLabels('box: rect 100x100 fill steel\n', 28);
+      expect(fl).toContain('steelblue');
+      expect(fl).not.toContain('red');
+    });
+
+    it('hsl/rgb have snippet templates in color list', () => {
+      const items = completionsAt(null, 0, 'fill ');
+      const s = snippets(items);
+      expect(s['hsl']).toContain('${1:H} ${2:S} ${3:L}');
+      expect(s['rgb']).toContain('${1:R} ${2:G} ${3:B}');
+    });
+  });
+
+  // ─── Positional Keywords (no named completions) ───────────────
+
+  describe('positional keyword context', () => {
+    it('"rect " offers WxH snippet, not property names', () => {
+      const items = completionsAt(null, 0, 'box: rect ');
+      const l = labels(items);
+      expect(l).not.toContain('fill');  // not node-level
+      expect(l).not.toContain('w');     // not positional field names
+      // Should offer dimension snippet
+      expect(items.length).toBeLessThanOrEqual(1);
+      if (items.length > 0) {
+        expect(items[0].snippetTemplate).toContain('x');
+      }
+    });
+
+    it('"at " offers X,Y snippet, not node properties', () => {
+      const items = completionsAt(null, 0, 'box: rect 100x100 at ');
+      const l = labels(items);
+      expect(l).not.toContain('fill');
+      expect(l).not.toContain('x');
+      expect(items.length).toBeLessThanOrEqual(1);
+      if (items.length > 0) {
+        expect(items[0].snippetTemplate).toContain('${1:X}');
+      }
+    });
+
+    it('"hsl " offers H S L snippet', () => {
+      const items = completionsAt(null, 0, 'fill hsl ');
+      expect(items.length).toBeLessThanOrEqual(1);
+      if (items.length > 0) {
+        expect(items[0].snippetTemplate).toContain('${1:H}');
+      }
+    });
+
+    it('"rgb " offers R G B snippet', () => {
+      const items = completionsAt(null, 0, 'fill rgb ');
+      expect(items.length).toBeLessThanOrEqual(1);
+      if (items.length > 0) {
+        expect(items[0].snippetTemplate).toContain('${1:R}');
+      }
+    });
+
+    it('"ellipse " offers dimension snippet', () => {
+      const items = completionsAt(null, 0, 'box: ellipse ');
+      expect(items.length).toBeLessThanOrEqual(1);
+    });
+  });
+
+  // ─── Kwarg Value Completions ──────────────────────────────────
+
+  describe('kwarg value completions (after =)', () => {
+    it('returns easing values after "easing="', () => {
+      const l = labels(completionsAt(null, 0, '  0 easing='));
+      expect(l).toContain('linear');
+      expect(l).toContain('easeIn');
+      expect(l).toContain('easeOut');
+    });
+
+    it('returns node IDs after "look="', () => {
+      const model = { objects: [{ id: 'target' }, { id: 'cam' }] };
+      const l = labels(completionsAt(null, 0, 'cam: camera look=', model));
+      expect(l).toContain('target');
+      expect(l).toContain('cam');
+    });
+
+    it('returns style names after "@"', () => {
+      const model = { styles: { primary: { fill: 'blue' }, dark: { fill: 'black' } } };
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 @', model));
+      expect(l).toContain('primary');
+      expect(l).toContain('dark');
+    });
+
+    it('returns node IDs after "->"', () => {
+      const model = { objects: [{ id: 'a' }, { id: 'b' }] };
+      const l = labels(completionsAt(null, 0, 'a -> ', model));
+      expect(l).toContain('a');
+      expect(l).toContain('b');
+    });
+  });
+
+  // ─── Two-Tier Scoped Completions ──────────────────────────────
+
+  describe('two-tier scoped completions', () => {
+    it('after "stroke red ": width in stroke scope, properties in node scope', () => {
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
+      const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
+      expect(scoped(items, 'stroke')).toContain('width');
+      expect(scoped(items, 'node')).toContain('fill');
+      expect(scoped(items, 'node')).toContain('at');
+    });
+
+    it('after "rect 140x80 ": radius in rect scope, properties in node scope', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
+      expect(scoped(items, 'rect')).toContain('radius');
+      expect(scoped(items, 'node')).toContain('fill');
+      expect(scoped(items, 'node')).toContain('stroke');
+    });
+
+    it('after "fill red ": no scope tags (color is a leaf type)', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
+      const scopedItems = items.filter(i => i.scope !== undefined);
+      expect(scopedItems).toHaveLength(0);
+    });
+
+    it('after "rect 140x80 radius=8 ": rect scope empty, node scope only', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 radius=8 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 radius=8 '.length);
+      const items = completionsAt(ast, 26, 'box: rect 140x80 radius=8 ');
+      expect(scoped(items, 'rect')).toHaveLength(0);
+      // Node properties should still be available
+      const l = labels(items);
+      expect(l).toContain('fill');
+    });
+
+    it('after "stroke red width=2 ": stroke scope empty, node scope only', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 stroke red width=2 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 stroke red width=2 '.length);
+      const items = completionsAt(ast, 37, 'box: rect 100x100 stroke red width=2 ');
+      expect(scoped(items, 'stroke')).toHaveLength(0);
+    });
+  });
+
+  // ─── Positional Fields Excluded from Completions ──────────────
+
+  describe('positional fields excluded', () => {
+    it('rect completions do NOT include w or h (positional, not kwargs)', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
+      const rectItems = scoped(items, 'rect');
+      expect(rectItems).not.toContain('w');
+      expect(rectItems).not.toContain('h');
+      expect(rectItems).toContain('radius');
+    });
+
+    it('stroke completions do NOT include color (positional)', () => {
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
+      const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
+      const strokeItems = scoped(items, 'stroke');
+      expect(strokeItems).not.toContain('color');
+      expect(strokeItems).toContain('width');
+    });
+
+    it('transform completions do NOT include x or y (positional)', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 at 50,75 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 at 50,75 '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 at 50,75 ');
+      const atItems = scoped(items, 'transform');
+      expect(atItems).not.toContain('x');
+      expect(atItems).not.toContain('y');
+      // Should have transform kwargs
+      expect(atItems).toContain('rotation');
+      expect(atItems).toContain('scale');
+    });
+  });
+
+  // ─── Snippet Templates ────────────────────────────────────────
+
+  describe('snippet templates', () => {
+    it('fill has a color snippet template', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const fill = items.find(i => i.label === 'fill');
+      expect(fill?.snippetTemplate).toBe('fill ${1:color}');
+    });
+
+    it('stroke has a color snippet template', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const stroke = items.find(i => i.label === 'stroke');
+      expect(stroke?.snippetTemplate).toContain('${1:color}');
+    });
+
+    it('at has a position snippet template', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const at = items.find(i => i.label === 'at');
+      expect(at?.snippetTemplate).toContain('${1:X},${2:Y}');
+    });
+
+    it('kwarg completions have value snippets', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
+      const radius = items.find(i => i.label === 'radius');
+      expect(radius?.snippetTemplate).toMatch(/radius=\$\{1:\d+\}/);
+    });
+
+    it('layout has a type snippet template', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const layout = items.find(i => i.label === 'layout');
+      expect(layout?.snippetTemplate).toContain('${1:type}');
+    });
+  });
+
+  // ─── Prefix Filtering Stability ───────────────────────────────
+  // Simulates the V2Editor adapter behavior: lineText stripped of partial word.
+  // Ensures the same result set is returned regardless of what's been typed so far,
+  // so CodeMirror can filter the list as the user types.
+
+  describe('prefix filtering stability', () => {
+    it('typing "fi" after "rect 100x100 " still shows fill', () => {
+      // User typed "box: rect 100x100 fi" — adapter strips "fi", lineText = "box: rect 100x100 "
+      const fl = filteredLabels('box: rect 100x100 fi\n', 20);
+      expect(fl).toContain('fill');
+    });
+
+    it('typing "st" after "rect 100x100 " still shows stroke', () => {
+      const fl = filteredLabels('box: rect 100x100 st\n', 20);
+      expect(fl).toContain('stroke');
+    });
+
+    it('typing "ra" after "rect 100x100 " still shows radius', () => {
+      const fl = filteredLabels('box: rect 100x100 ra\n', 20);
+      expect(fl).toContain('radius');
+    });
+
+    it('typing "re" on fresh node line still shows rect', () => {
+      const fl = filteredLabels('box: re\n', 7);
+      expect(fl).toContain('rect');
+    });
+
+    it('typing "cam" on fresh node line still shows camera', () => {
+      const fl = filteredLabels('box: cam\n', 8);
+      expect(fl).toContain('camera');
+    });
+
+    it('typing "wid" after "stroke red " shows width', () => {
+      // cursor at end of "wid" on line 1, before the \n (position 32)
+      const fl = filteredLabels('box: rect 100x100 stroke red wid\n', 32);
+      expect(fl).toContain('width');
+    });
+
+    it('typing "rot" after "at 50,75 " shows rotation', () => {
+      // cursor at end of "rot" on line 1, before the \n (position 30)
+      const fl = filteredLabels('box: rect 100x100 at 50,75 rot\n', 30);
+      expect(fl).toContain('rotation');
+    });
+  });
+
+  // ─── Node Property Completions ────────────────────────────────
+
+  describe('node property completions', () => {
+    it('does not offer geometry keywords when geometry already present', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const l = labels(items);
+      expect(l).not.toContain('rect');
+      expect(l).not.toContain('ellipse');
+    });
+
+    it('does not offer properties already present on the node', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
+      const l = labels(items);
+      expect(l).not.toContain('fill');  // already present
+      expect(l).toContain('stroke');    // not yet present
+    });
+
+    it('offers @style references when styles exist in model', () => {
+      const model = { styles: { primary: {} }, objects: [{ id: 'box', rect: { w: 100, h: 100 } }] };
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ', model);
+      const l = labels(items);
+      expect(l).toContain('@primary');
+    });
+  });
+
+  // ─── Animate Header Context ───────────────────────────────────
+
+  describe('animate header context', () => {
+    it('offers loop, autoKey, easing= after "animate 10s "', () => {
+      const text = 'animate 10s ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, text, undefined, text);
+      const l = labels(items);
+      expect(l).toContain('loop');
+      expect(l).toContain('autoKey');
+      expect(l).toContain('easing=');
+    });
+
+    it('omits loop when already present in header', () => {
+      const text = 'animate 10s loop ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, text, undefined, text);
+      const l = labels(items);
+      expect(l).not.toContain('loop');
+      expect(l).toContain('autoKey');
+    });
+  });
+
+  // ─── Animate Keyframe-start Context ──────────────────────────
+
+  describe('animate keyframe-start context', () => {
+    it('offers timestamp snippet and chapter keyword on fresh indented line', () => {
+      const text = 'animate 5s loop\n  ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  ', undefined, text);
+      const l = labels(items);
+      expect(l).toContain('chapter');
+      expect(l).toContain('time');
+    });
+
+    it('offers keyframe-start completions on a blank line between keyframes', () => {
+      // Blank line (no whitespace) BETWEEN existing keyframes in an
+      // unindented animate block. Cursor is on the blank line at column 0.
+      const text = 'animate 5s\n  1 box.fill: red\n\n  2 box.fill: blue';
+      // Position of the blank line (line 2, col 0): after 'red\n' newline
+      const pos = text.indexOf('red') + 'red\n'.length;
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, pos, '', undefined, text);
+      const l = labels(items);
+      // Should route to keyframe-start handler, not fall through.
+      expect(l).toContain('chapter');
+      expect(l).toContain('time');
+    });
+  });
+
+  describe('animate path context', () => {
+    const sceneModel = {
+      objects: [
+        {
+          id: 'card',
+          children: [
+            {
+              id: 'bg',
+              rect: { w: 100, h: 50 },
+              fill: 'blue',
+              stroke: { color: 'red', width: 2 },
+            },
+          ],
+        },
+      ],
+      animate: {
+        duration: 5,
+        keyframes: [{ time: 1, changes: { 'card.bg.fill': 'green' } }],
+      },
+    };
+
+    it('offers scene nodes on inline-change after timestamp', () => {
+      const text = 'animate 5s\n  1 ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 ', sceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('card');
+    });
+
+    it('offers children and props after "card." on inline change', () => {
+      const text = 'animate 5s\n  1 card.';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 card.', sceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('bg');
+      expect(l).toContain('opacity');
+    });
+
+    it('offers tiered completions after "card.bg." on block change', () => {
+      const text = 'animate 5s\n  1\n    card.bg.';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '    card.bg.', sceneModel, text);
+      // fill is animated — must appear before stroke (set) and opacity (available)
+      const fillIdx = items.findIndex(i => i.label === 'fill');
+      const opacityIdx = items.findIndex(i => i.label === 'opacity');
+      expect(fillIdx).toBeGreaterThanOrEqual(0);
+      expect(fillIdx).toBeLessThan(opacityIdx);
+    });
+  });
+
+  // ─── Animate Value Context ────────────────────────────────────
+
+  describe('animate value context', () => {
+    const valueSceneModel = {
+      objects: [
+        {
+          id: 'box',
+          rect: { w: 100, h: 50 },
+          fill: 'midnightblue',
+          opacity: 0.5,
+        },
+      ],
+      animate: { duration: 3, keyframes: [] },
+    };
+
+    it('offers colors after "box.fill: " on inline change', () => {
+      const text = 'animate 3s\n  1 box.fill: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
+      const l = labels(items);
+      expect(l).toContain('red');
+      expect(l).toContain('hsl');
+    });
+
+    it('ranks current value first for colors', () => {
+      const text = 'animate 3s\n  1 box.fill: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
+      expect(items[0].label).toBe('midnightblue');
+    });
+
+    it('offers only current-value for a number property', () => {
+      const text = 'animate 3s\n  1 box.opacity: ';
+      const { ast: ctx } = walkDocument(text);
+      const ast = leavesToAst(ctx.astLeaves(), text.length);
+      const items = completionsAt(ast, text.length, '  1 box.opacity: ', valueSceneModel, text);
+      expect(items.length).toBeGreaterThanOrEqual(1);
+      expect(items[0].label).toBe('0.5');
+    });
+  });
+
+  // ─── Derived from Schema (no hardcoded strings) ───────────────
+
+  // ─── Shape Set Completions ────────────────────────────────────
+
+  describe('shape set completions', () => {
+    // Ensure shape sets are registered before these tests run
+    beforeAll(() => {
+      registerBuiltinTemplates();
+    });
+
+    it('shape set prefixes appear in geometry keyword completions after "id:"', () => {
+      const items = completionsAt(null, 0, 'box: ');
+      const l = labels(items);
+      expect(l).toContain('rect');     // geometry keyword still present
+      expect(l).toContain('core');     // shape set prefix
+      expect(l).toContain('state');    // shape set prefix
+    });
+
+    it('shape set prefixes have retrigger=true', () => {
+      const items = completionsAt(null, 0, 'box: ');
+      const coreItem = items.find(i => i.label === 'core');
+      const stateItem = items.find(i => i.label === 'state');
+      expect(coreItem?.retrigger).toBe(true);
+      expect(stateItem?.retrigger).toBe(true);
+    });
+
+    it('shape names appear after a set prefix + dot', () => {
+      const items = completionsAt(null, 0, 'box: state.');
+      const l = labels(items);
+      expect(l).toContain('node');
+      expect(l).toContain('initial');
+      expect(l).toContain('final');
+      expect(l).toContain('region');
+      expect(l).toContain('choice');
+    });
+
+    it('core shape names appear after "core."', () => {
+      const items = completionsAt(null, 0, 'box: core.');
+      const l = labels(items);
+      expect(l).toContain('box');
+      expect(l).toContain('circle');
+      expect(l).toContain('arrow');
+    });
+
+    it('set names appear after "use" keyword', () => {
+      const items = completionsAt(null, 0, 'use ');
+      const l = labels(items);
+      expect(l).toContain('core');
+      expect(l).toContain('state');
+    });
+
+    it('set names appear after "use [" bracket syntax', () => {
+      const items = completionsAt(null, 0, 'use [');
+      const l = labels(items);
+      expect(l).toContain('core');
+      expect(l).toContain('state');
+    });
+
+    it('"use" appears in top-level keyword completions', () => {
+      const l = labels(completionsAt(null, 0));
+      expect(l).toContain('use');
+    });
+
+    it('"use" has a snippet template', () => {
+      const items = completionsAt(null, 0);
+      const useItem = items.find(i => i.label === 'use');
+      expect(useItem?.snippetTemplate).toBe('use [${1:core}]');
+    });
+
+    it('unknown set prefix + dot returns empty (falls through)', () => {
+      const items = completionsAt(null, 0, 'box: unknown.');
+      // Should not return shape completions for an unknown set
+      const l = labels(items);
+      expect(l).not.toContain('node');
+      expect(l).not.toContain('box');
+    });
+  });
+
+  describe('schema-derived (single source of truth)', () => {
+    it('geometry list comes from NodeSchema hints, not hardcoded', () => {
+      // If a new geometry is added to NodeSchema.geometry hint,
+      // it should appear without changing completions code
+      const items = completionsAt(null, 0, 'box: ');
+      const l = labels(items);
+      // All geometry types from NodeSchema should be present
+      expect(l).toContain('rect');
+      expect(l).toContain('ellipse');
+      expect(l).toContain('text');
+      expect(l).toContain('image');
+      expect(l).toContain('camera');
+      expect(l).toContain('path');
+    });
+
+    it('node properties come from NodeSchema hints', () => {
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
+      const l = labels(items);
+      // These are derived from inlineProps/blockProps/kwargs/flags
+      expect(l).toContain('fill');
+      expect(l).toContain('stroke');
+      expect(l).toContain('at');
+      expect(l).toContain('dash');
+      expect(l).toContain('layout');
+    });
+
+    it('color-positional detection is schema-driven', () => {
+      // fill and stroke should trigger color completions
+      // because their schema type resolves to 'color'
+      const fillItems = completionsAt(null, 0, 'fill ');
+      expect(labels(fillItems)).toContain('red');
+
+      const strokeItems = completionsAt(null, 0, 'stroke ');
+      expect(labels(strokeItems)).toContain('red');
+    });
+  });
+});
