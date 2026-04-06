@@ -403,6 +403,20 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
+    // Brackets
+    if (ch === '[') {
+      const sl = line; const sc = col; const so = pos;
+      advance();
+      emit('bracketOpen', '[', sl, sc, so);
+      continue;
+    }
+    if (ch === ']') {
+      const sl = line; const sc = col; const so = pos;
+      advance();
+      emit('bracketClose', ']', sl, sc, so);
+      continue;
+    }
+
     // Comma
     if (ch === ',') {
       const sl = line; const sc = col; const so = pos;

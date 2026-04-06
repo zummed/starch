@@ -16,6 +16,7 @@ export interface ParsedScene {
   background?: string;
   viewport?: string | { width: number; height: number };
   images?: Record<string, string>;
+  use?: string[];
   trackPaths: string[];
 }
 
@@ -88,7 +89,8 @@ export function parseScene(input: string): ParsedScene {
   const animate = raw.animate as AnimConfig | undefined;
 
   // Expand templates, then migrate old stroke format in objects
-  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode));
+  const searchPath = (raw.use as string[] | undefined) ?? ['core'];
+  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath);
 
   // Convert styles to first-class nodes
   const styleNodes = stylesToNodes(styles);
@@ -111,6 +113,7 @@ export function parseScene(input: string): ParsedScene {
     background,
     viewport,
     images,
+    use: searchPath,
     trackPaths,
   };
 }

@@ -168,6 +168,41 @@ export function executePositional(
     return result;
   }
 
+  // bracketList: [id, id, ...] — array of identifier strings
+  if (format === 'bracketList') {
+    const [k] = hint.keys;
+    const items: string[] = [];
+    if (!ctx.is('bracketOpen')) return null;
+    const openTok = ctx.next()!; // consume [
+    while (!ctx.atEnd() && !ctx.is('bracketClose')) {
+      if (ctx.is('identifier')) {
+        const itemTok = ctx.next()!;
+        items.push(itemTok.value);
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.${k}`,
+          from: itemTok.offset,
+          to: itemTok.offset + itemTok.value.length,
+          value: itemTok.value,
+          dslRole: 'value',
+        });
+      } else if (ctx.is('comma')) {
+        ctx.next(); // consume comma
+      } else {
+        ctx.next(); // skip unknown
+      }
+    }
+    if (ctx.is('bracketClose')) ctx.next(); // consume ]
+    result[k] = items;
+    ctx.emitLeaf({
+      schemaPath,
+      from: openTok.offset,
+      to: openTok.offset + 1,
+      value: items,
+      dslRole: 'value',
+    });
+    return result;
+  }
+
   // Default: single value (identifier/number/hexColor/string)
   const tok = ctx.peek();
   if (!tok) return null;

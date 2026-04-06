@@ -14,6 +14,8 @@ export type TokenType =
   | 'parenClose'     // )
   | 'braceOpen'      // { (JSON escape hatch start)
   | 'braceClose'     // }
+  | 'bracketOpen'    // [
+  | 'bracketClose'   // ]
   | 'comma'          // ,
   | 'newline'        // significant newline (blank lines collapsed)
   | 'indent'         // indentation increase (2 spaces)

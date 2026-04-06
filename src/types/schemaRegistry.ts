@@ -329,6 +329,15 @@ const imagesField = dsl(
   },
 );
 
+const useField = dsl(
+  z.array(z.string()).describe('Shape set search path for unqualified template names'),
+  {
+    topLevel: true,
+    keyword: 'use',
+    positional: [{ keys: ['_value'], format: 'bracketList' }],
+  },
+);
+
 export const DocumentSchema = z.object({
   name: nameField.optional(),
   description: descriptionField.optional(),
@@ -338,6 +347,7 @@ export const DocumentSchema = z.object({
   background: backgroundField.optional(),
   viewport: viewportField.optional(),
   images: imagesField.optional(),
+  use: useField.optional(),
 });
 
 /**

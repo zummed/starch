@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { z } from 'zod';
 import {
   registerTemplate, getTemplate, expandTemplates, expandTemplate,
@@ -6,6 +6,7 @@ import {
   type ShapeSet, type ShapeDefinition,
 } from '../../templates/registry';
 import { createNode } from '../../types/node';
+import { registerBuiltinTemplates } from '../../templates/index';
 
 describe('template registry', () => {
   it('registers and retrieves a template', () => {
@@ -133,5 +134,37 @@ describe('shape sets', () => {
   it('fully-qualified name works regardless of search path', () => {
     const fn = resolveTemplateName('test.widget', []);
     expect(fn).toBeDefined();
+  });
+});
+
+describe('expandTemplates with search path', () => {
+  beforeAll(() => {
+    registerBuiltinTemplates();
+  });
+
+  it('resolves unqualified names through search path', () => {
+    const nodes = expandTemplates(
+      [{ template: 'box', id: 'b1', props: { w: 100 } }],
+      ['core'],
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('b1');
+  });
+
+  it('resolves fully-qualified names regardless of search path', () => {
+    const nodes = expandTemplates(
+      [{ template: 'core.box', id: 'b2', props: { w: 100 } }],
+      [],
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('b2');
+  });
+
+  it('defaults search path to [core] when not provided', () => {
+    const nodes = expandTemplates(
+      [{ template: 'box', id: 'b3', props: { w: 100 } }],
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('b3');
   });
 });
