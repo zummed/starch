@@ -29,8 +29,8 @@ export function cardTemplate(id: string, props: Record<string, unknown>): Node {
   const dividerY = 32;
   const bodyY = dividerY + 16;
 
-  let fill: HslColor | undefined;
-  let stroke: HslColor | undefined;
+  let stroke: HslColor = { h: 0, s: 0, l: 50 };
+  let fill: HslColor = { h: 0, s: 0, l: 15 };
 
   if (props.colour || props.color) {
     const raw = (props.colour ?? props.color) as unknown;
@@ -42,8 +42,8 @@ export function cardTemplate(id: string, props: Record<string, unknown>): Node {
     createNode({
       id: `${id}.bg`,
       rect: { w, h, radius: 6 },
-      ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { color: stroke, width: 2 } } : {}),
+      fill,
+      stroke: { color: stroke, width: 2 },
     }),
     createNode({
       id: `${id}.header`,

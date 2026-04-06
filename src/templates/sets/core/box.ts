@@ -36,9 +36,9 @@ export function boxTemplate(id: string, props: Record<string, unknown>): Node {
   const text = props.text as string | undefined;
   const textSize = (props.textSize as number) ?? 14;
 
-  // Color handling
-  let fill: HslColor | undefined;
-  let stroke: HslColor | undefined;
+  // Color handling — neutral gray default
+  let stroke: HslColor = { h: 0, s: 0, l: 50 };
+  let fill: HslColor = { h: 0, s: 0, l: 15 };
 
   if (props.colour || props.color) {
     const raw = (props.colour ?? props.color) as unknown;
@@ -57,8 +57,8 @@ export function boxTemplate(id: string, props: Record<string, unknown>): Node {
     createNode({
       id: `${id}.bg`,
       rect: { w, h, radius },
-      ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
+      fill,
+      stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 },
     }),
   ];
 

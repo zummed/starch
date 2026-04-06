@@ -23,8 +23,8 @@ export function circleTemplate(id: string, props: Record<string, unknown>): Node
   const text = props.text as string | undefined;
   const textSize = (props.textSize as number) ?? 14;
 
-  let fill: HslColor | undefined;
-  let stroke: HslColor | undefined;
+  let stroke: HslColor = { h: 0, s: 0, l: 50 };
+  let fill: HslColor = { h: 0, s: 0, l: 15 };
 
   if (props.colour || props.color) {
     const raw = (props.colour ?? props.color) as unknown;
@@ -38,8 +38,8 @@ export function circleTemplate(id: string, props: Record<string, unknown>): Node
     createNode({
       id: `${id}.shape`,
       ellipse: { rx: r, ry: r },
-      ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 } } : {}),
+      fill,
+      stroke: { color: stroke, width: (props.strokeWidth as number) ?? 2 },
     }),
   ];
 

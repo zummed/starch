@@ -24,8 +24,8 @@ export function pillTemplate(id: string, props: Record<string, unknown>): Node {
   const radius = Math.min(w, h) / 2;
   const text = props.text as string | undefined;
 
-  let fill: HslColor | undefined;
-  let stroke: HslColor | undefined;
+  let stroke: HslColor = { h: 0, s: 0, l: 50 };
+  let fill: HslColor = { h: 0, s: 0, l: 15 };
 
   if (props.colour || props.color) {
     const raw = (props.colour ?? props.color) as unknown;
@@ -37,8 +37,8 @@ export function pillTemplate(id: string, props: Record<string, unknown>): Node {
     createNode({
       id: `${id}.bg`,
       rect: { w, h, radius },
-      ...(fill ? { fill } : {}),
-      ...(stroke ? { stroke: { color: stroke, width: 2 } } : {}),
+      fill,
+      stroke: { color: stroke, width: 2 },
     }),
   ];
 
