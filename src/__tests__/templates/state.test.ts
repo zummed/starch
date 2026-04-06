@@ -84,9 +84,8 @@ describe('state.region', () => {
     const nodes = expandTemplates([
       { template: 'state.region', id: 'r1', props: { label: 'Region A' } },
     ]);
-    const bg = nodes[0].children.find(c => c.id === 'r1.bg');
-    expect(bg?.rect).toBeDefined();
-    expect(bg?.dash).toBeDefined();
+    expect(nodes[0].rect).toBeDefined();
+    expect(nodes[0].dash).toBeDefined();
     const title = nodes[0].children.find(c => c.id === 'r1.title');
     expect(title?.text?.content).toBe('Region A');
   });

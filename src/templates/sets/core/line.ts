@@ -32,7 +32,7 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
   const progress = props.drawProgress as number | undefined;
   const label = props.label as string | undefined;
   const labelSize = (props.labelSize as number) ?? 11;
-  const arrow = (props.arrow as boolean) ?? true;
+  const arrow = (props.arrow as boolean) ?? false;
   const dashed = (props.dashed as boolean) ?? false;
 
   let stroke: HslColor = { h: 0, s: 0, l: 60 };
@@ -62,9 +62,9 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
   if (arrow) {
     children.push(createNode({
       id: `${id}.arrowEnd`,
-      path: { points: [[-8, -4], [0, 0], [-8, 4]], closed: false },
+      path: { points: [[0, -4], [8, 0], [0, 4]], closed: true },
       fill: stroke,
-      stroke: { color: stroke, width: 1 },
+      transform: { pathFollow: `${id}.route`, pathProgress: 1.0 },
     }));
   }
 

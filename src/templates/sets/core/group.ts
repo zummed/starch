@@ -39,15 +39,7 @@ export function groupTemplate(id: string, props: Record<string, unknown>): Node 
     fill = { h: stroke.h, s: Math.round(stroke.s * 0.5), l: Math.round(stroke.l * 0.3), a: 0.3 };
   }
 
-  const children: Node[] = [
-    createNode({
-      id: `${id}.bg`,
-      rect: { w, h, radius: 6 },
-      fill,
-      stroke: { color: stroke, width: 2 },
-      dash: { pattern: 'dashed' },
-    }),
-  ];
+  const children: Node[] = [];
 
   if (label !== undefined) {
     children.push(
@@ -55,13 +47,18 @@ export function groupTemplate(id: string, props: Record<string, unknown>): Node 
         id: `${id}.title`,
         text: { content: label, size: 11, align: 'start', bold: true },
         fill: { h: 0, s: 0, l: 80 },
-        transform: { x: 10, y: 10 },
+        transform: { x: -w / 2 + 10, y: -h / 2 + 10 },
+        depth: -1,
       }),
     );
   }
 
   return createNode({
     id,
+    rect: { w, h, radius: 6 },
+    fill,
+    stroke: { color: stroke, width: 2 },
+    dash: { pattern: 'dashed' },
     children,
     layout: { type: 'flex', direction, gap, padding: 30 },
     ...(props.transform ? { transform: props.transform as any } : {}),

@@ -187,10 +187,17 @@ export function expandTemplates(
     if (nodeDef.template && typeof nodeDef.template === 'string') {
       const fn = resolveTemplateName(nodeDef.template, searchPath);
       if (fn) {
-        result.push(fn(
+        const node = fn(
           nodeDef.id as string,
           (nodeDef.props as Record<string, unknown>) ?? {},
-        ));
+        );
+        // Merge node-level properties (transform, fill, stroke, etc.)
+        // that were parsed alongside the template invocation.
+        for (const key of Object.keys(nodeDef)) {
+          if (key === 'id' || key === 'template' || key === 'props') continue;
+          (node as any)[key] = nodeDef[key];
+        }
+        result.push(node);
         continue;
       }
     }

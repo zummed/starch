@@ -750,7 +750,8 @@ export function executeNodeBody(
       const props = parseTemplateProps(ctx, templateName, schemaPath);
       if (Object.keys(props).length > 0) result.props = props;
     }
-    return result;
+    // Fall through to inline parsing loop so node-level properties
+    // like 'at' (transform), opacity, fill, etc. are still parsed.
   }
 
   // ── Implicit template syntax ──────────────────────────────────
@@ -800,7 +801,7 @@ export function executeNodeBody(
       });
       const props = parseTemplateProps(ctx, implicitTemplateName, schemaPath);
       if (Object.keys(props).length > 0) result.props = props;
-      return result;
+      // Fall through to inline parsing loop for node-level properties.
     }
   }
 
@@ -975,7 +976,7 @@ export function executeNodeBody(
       // A child node is an identifier (possibly dotted) followed by a colon.
       if (ctx.is('identifier')) {
         const firstTok = ctx.peek()!;
-        const isBlockProp = isBlockPropertyToken(ctx, blockProps, geometry);
+        const isBlockProp = isBlockPropertyToken(ctx, blockProps, geometry, schema, inlineProps);
 
         if (isBlockProp) {
           // Parse block property via the same inline prop logic
@@ -1073,13 +1074,20 @@ function isBlockPropertyToken(
   ctx: WalkContext,
   blockProps: string[],
   geometry: string[],
+  schema?: z.ZodType,
+  inlineProps?: string[],
 ): boolean {
   const tok = ctx.peek();
   if (!tok || tok.type !== 'identifier') return false;
 
   const name = tok.value;
-  const isKnownBlockProp = blockProps.includes(name) || geometry.includes(name);
-  if (!isKnownBlockProp) return false;
+  let isKnown = blockProps.includes(name) || geometry.includes(name);
+  // Also check if the token matches a keyword of any inline/block prop field
+  // (e.g. 'at' is the keyword for the 'transform' field)
+  if (!isKnown && schema && inlineProps) {
+    isKnown = findInlinePropField(schema, [...inlineProps, ...blockProps], name) !== null;
+  }
+  if (!isKnown) return false;
 
   // If the next real token after (possibly dotted) identifier(s) is a colon, it's a child
   // Check immediate next token:

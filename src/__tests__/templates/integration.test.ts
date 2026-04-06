@@ -4,8 +4,9 @@ import { parseScene } from '../../parser/parser';
 describe('shape sets end-to-end', () => {
   it('parses DSL with core shapes using default search path', () => {
     const scene = parseScene(`
-      header: box w=200 h=40 text="Title" color=steelblue
-      status: pill text="Active" color=green
+objects
+  header: box w=200 h=40 text="Title" color=steelblue
+  status: pill text="Active" color=green
     `);
     expect(scene.nodes.find(n => n.id === 'header')).toBeDefined();
     expect(scene.nodes.find(n => n.id === 'status')).toBeDefined();

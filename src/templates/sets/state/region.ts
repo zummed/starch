@@ -38,19 +38,17 @@ export function stateRegionTemplate(id: string, props: Record<string, unknown>):
 
   return createNode({
     id,
+    rect: { w, h, radius: 8 },
+    fill,
+    stroke: { color: stroke, width: 1 },
+    dash: { pattern: 'dashed', length: 6, gap: 4 },
     children: [
-      createNode({
-        id: `${id}.bg`,
-        rect: { w, h, radius: 8 },
-        fill,
-        stroke: { color: stroke, width: 1 },
-        dash: { pattern: 'dashed', length: 6, gap: 4 },
-      }),
       createNode({
         id: `${id}.title`,
         text: { content: label, size: 11, bold: true, align: 'start' },
         fill: { h: 0, s: 0, l: 70 },
-        transform: { x: 10, y: 14 },
+        transform: { x: -w / 2 + 10, y: -h / 2 + 14 },
+        depth: -1,
       }),
     ],
     layout: { type: 'flex', direction, gap, padding: 30 },

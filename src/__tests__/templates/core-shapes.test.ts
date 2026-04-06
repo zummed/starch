@@ -67,9 +67,8 @@ describe('core.group', () => {
       { template: 'core.group', id: 'g1', props: { label: 'Group A' } },
     ]);
     const node = nodes[0];
-    const bg = node.children.find(c => c.id === 'g1.bg');
-    expect(bg?.rect).toBeDefined();
-    expect(bg?.dash).toBeDefined();
+    expect(node.rect).toBeDefined();
+    expect(node.dash).toBeDefined();
     expect(node.children.find(c => c.id === 'g1.title')?.text?.content).toBe('Group A');
     expect(node.layout).toBeDefined();
   });

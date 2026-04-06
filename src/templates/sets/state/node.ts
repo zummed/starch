@@ -15,6 +15,7 @@ export const stateNodeProps = dsl(z.object({
 }), {
   positional: [
     { keys: ['name'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
   ],
   kwargs: ['entry', 'exit', 'w', 'h', 'color'],
 });
@@ -47,23 +48,23 @@ export function stateNodeTemplate(id: string, props: Record<string, unknown>): N
       id: `${id}.name`,
       text: { content: name, size: 14, bold: true, align: 'middle' },
       fill: { h: 0, s: 0, l: 90 },
-      transform: { x: w / 2, y: entry || exit ? 18 : h / 2 },
+      transform: { x: 0, y: entry || exit ? -h / 2 + 18 : 0 },
     }),
   ];
 
   if (entry || exit) {
     children.push(createNode({
       id: `${id}.divider`,
-      path: { points: [[8, 30], [w - 8, 30]], closed: false },
+      path: { points: [[-w / 2 + 8, -h / 2 + 30], [w / 2 - 8, -h / 2 + 30]], closed: false },
       stroke: { color: stroke, width: 1 },
     }));
-    let actionY = 40;
+    let actionY = -h / 2 + 40;
     if (entry) {
       children.push(createNode({
         id: `${id}.entry`,
         text: { content: `entry / ${entry}`, size: 10, align: 'start' },
         fill: { h: 0, s: 0, l: 70 },
-        transform: { x: 12, y: actionY },
+        transform: { x: -w / 2 + 12, y: actionY },
       }));
       actionY += 14;
     }
@@ -72,7 +73,7 @@ export function stateNodeTemplate(id: string, props: Record<string, unknown>): N
         id: `${id}.exit`,
         text: { content: `exit / ${exit}`, size: 10, align: 'start' },
         fill: { h: 0, s: 0, l: 70 },
-        transform: { x: 12, y: actionY },
+        transform: { x: -w / 2 + 12, y: actionY },
       }));
     }
   }

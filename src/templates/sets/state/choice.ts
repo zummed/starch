@@ -24,7 +24,7 @@ export function stateChoiceTemplate(id: string, props: Record<string, unknown>):
     children: [
       createNode({
         id: `${id}.diamond`,
-        path: { points: [[size, 0], [size * 2, size], [size, size * 2], [0, size]], closed: true },
+        path: { points: [[0, -size], [size, 0], [0, size], [-size, 0]], closed: true },
         fill,
         stroke: { color: stroke, width: 2 },
       }),

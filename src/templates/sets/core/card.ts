@@ -25,8 +25,8 @@ export function cardTemplate(id: string, props: Record<string, unknown>): Node {
   const title = (props.title as string) ?? '';
   const body = props.body as string | undefined;
 
-  const headerY = 20;
-  const dividerY = 32;
+  const headerY = -h / 2 + 16;
+  const dividerY = -h / 2 + 32;
   const bodyY = dividerY + 16;
 
   let stroke: HslColor = { h: 0, s: 0, l: 50 };
@@ -49,14 +49,14 @@ export function cardTemplate(id: string, props: Record<string, unknown>): Node {
       id: `${id}.header`,
       text: { content: title, size: 14, align: 'middle', bold: true },
       fill: { h: 0, s: 0, l: 90 },
-      transform: { x: w / 2, y: headerY },
+      transform: { x: 0, y: headerY },
     }),
     createNode({
       id: `${id}.divider`,
       path: {
         points: [
-          [0, dividerY],
-          [w, dividerY],
+          [-w / 2, dividerY],
+          [w / 2, dividerY],
         ],
       },
       ...(stroke ? { stroke: { color: stroke, width: 1 } } : { stroke: { color: { h: 0, s: 0, l: 50 }, width: 1 } }),
@@ -69,7 +69,7 @@ export function cardTemplate(id: string, props: Record<string, unknown>): Node {
         id: `${id}.body`,
         text: { content: body, size: 11, align: 'start' },
         fill: { h: 0, s: 0, l: 80 },
-        transform: { x: 10, y: bodyY },
+        transform: { x: -w / 2 + 10, y: bodyY },
       }),
     );
   }

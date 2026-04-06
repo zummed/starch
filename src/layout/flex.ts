@@ -36,7 +36,10 @@ function getHintStr(node: Node, key: string, fallback: string): string {
 }
 
 export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]): ChildPlacement[] => {
-  if (children.length === 0) return [];
+  // Exclude structural children (depth < 0) from layout flow —
+  // they keep their manual transforms and are not flex items.
+  const layoutChildren = children.filter(c => (c.depth ?? 0) >= 0);
+  if (layoutChildren.length === 0) return [];
 
   const layout = container.layout!;
   const isRow = (layout.direction ?? 'column') === 'row';
@@ -46,7 +49,7 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   const padding = layout.padding ?? 0;
 
   // Sort children by order hint
-  const sorted = [...children].sort((a, b) => {
+  const sorted = [...layoutChildren].sort((a, b) => {
     const oa = getHint(a, 'order', 0);
     const ob = getHint(b, 'order', 0);
     return oa - ob;

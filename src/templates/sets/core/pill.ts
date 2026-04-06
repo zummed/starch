@@ -48,7 +48,6 @@ export function pillTemplate(id: string, props: Record<string, unknown>): Node {
         id: `${id}.label`,
         text: { content: text, size: 12, align: 'middle' },
         fill: { h: 0, s: 0, l: 90 },
-        transform: { x: w / 2, y: h / 2 },
       }),
     );
   }

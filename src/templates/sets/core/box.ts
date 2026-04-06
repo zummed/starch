@@ -69,7 +69,6 @@ export function boxTemplate(id: string, props: Record<string, unknown>): Node {
       fill: props.textColor
         ? (typeof props.textColor === 'string' ? parseColor(props.textColor) : props.textColor as HslColor)
         : { h: 0, s: 0, l: 90 },
-      transform: { x: w / 2, y: h / 2 },
     }));
   }
 

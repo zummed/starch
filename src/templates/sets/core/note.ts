@@ -47,9 +47,9 @@ export function noteTemplate(id: string, props: Record<string, unknown>): Node {
       id: `${id}.fold`,
       path: {
         points: [
-          [w - foldSize, 0],
-          [w, foldSize],
-          [w - foldSize, foldSize],
+          [w / 2 - foldSize, -h / 2],
+          [w / 2, -h / 2 + foldSize],
+          [w / 2 - foldSize, -h / 2 + foldSize],
         ],
         closed: true,
       },
@@ -63,7 +63,7 @@ export function noteTemplate(id: string, props: Record<string, unknown>): Node {
         id: `${id}.label`,
         text: { content: text, size: 12, align: 'start' },
         fill: { h: 0, s: 0, l: 10 },
-        transform: { x: 8, y: 10 },
+        transform: { x: -w / 2 + 8, y: -h / 2 + 10 },
       }),
     );
   }

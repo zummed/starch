@@ -627,11 +627,11 @@ objects
   n: note "Remember"
     at 280,260
 
-  gl: text "group" size=10 fill gray at 80,370
+  gl: text "group" size=10 fill gray at 80,360
   g: group "Group" 180x100 color=teal
     at 80,420
 
-  al: text "arrow" size=10 fill gray at 340,370
+  al: text "arrow" size=10 fill gray at 340,360
   a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,410
   a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,410
   a: arrow from=a_src to=a_dst label="arrow" color=steelblue
@@ -673,7 +673,7 @@ objects
   ch: state.choice color=goldenrod
     at 380,230
 
-  rl: text "state.region" size=10 fill gray at 100,290
+  rl: text "state.region" size=10 fill gray at 100,260
   r: state.region "Region A" 400x120 color=slategray
     at 100,330`,
   },
