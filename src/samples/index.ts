@@ -608,38 +608,38 @@ objects
   title: text "core" size=20 bold fill slategray at 300,30
 
   bl: text "box" size=10 fill gray at 80,80
-  b: at 80,120
-    template box w=120 h=60 text="Box" color=steelblue
+  b: box w=120 h=60 text="Box" color=steelblue
+    at 80,120
 
   cl: text "circle" size=10 fill gray at 240,80
-  c: at 240,120
-    template circle r=30 text="Circle" color=mediumseagreen
+  c: circle r=30 text="Circle" color=mediumseagreen
+    at 240,120
 
   pl: text "pill" size=10 fill gray at 400,80
-  p: at 400,120
-    template pill text="Status" color=darkorange
+  p: pill text="Status" color=darkorange
+    at 400,120
 
   cdl: text "card" size=10 fill gray at 80,200
-  cd: at 80,260
-    template card title="Card" body="Body text" color=mediumpurple
+  cd: card title="Card" body="Body text" color=mediumpurple
+    at 80,260
 
   nl: text "note" size=10 fill gray at 280,200
-  n: at 280,260
-    template note text="Remember"
+  n: note text="Remember"
+    at 280,260
 
   gl: text "group" size=10 fill gray at 80,370
-  g: at 80,420
-    template group label="Group" w=180 h=100 color=teal
+  g: group label="Group" w=180 h=100 color=teal
+    at 80,420
 
   al: text "arrow" size=10 fill gray at 340,370
   a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,410
   a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,410
-  a: template arrow from=a_src to=a_dst label="arrow" color=steelblue
+  a: arrow from=a_src to=a_dst label="arrow" color=steelblue
 
   ll: text "line" size=10 fill gray at 340,460
   l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,500
   l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,500
-  l: template line from=l_src to=l_dst color=coral`,
+  l: line from=l_src to=l_dst color=coral`,
   },
   {
     name: 'state-shapes',
@@ -654,28 +654,28 @@ objects
   title: text "state" size=20 bold fill slategray at 300,30
 
   nl: text "state.node" size=10 fill gray at 100,70
-  n: at 100,110
-    template state.node name="Idle" color=steelblue
+  n: state.node name="Idle" color=steelblue
+    at 100,110
 
   n2l: text "state.node (with actions)" size=10 fill gray at 340,70
-  n2: at 340,110
-    template state.node name="Active" entry="startTimer" exit="cleanup" color=mediumseagreen w=160 h=70
+  n2: state.node name="Active" entry="startTimer" exit="cleanup" color=mediumseagreen w=160 h=70
+    at 340,110
 
   il: text "state.initial" size=10 fill gray at 100,200
-  i: at 100,230
-    template state.initial color=whitesmoke
+  i: state.initial color=whitesmoke
+    at 100,230
 
   fl: text "state.final" size=10 fill gray at 240,200
-  f: at 240,230
-    template state.final color=whitesmoke
+  f: state.final color=whitesmoke
+    at 240,230
 
   chl: text "state.choice" size=10 fill gray at 380,200
-  ch: at 380,230
-    template state.choice color=goldenrod
+  ch: state.choice color=goldenrod
+    at 380,230
 
   rl: text "state.region" size=10 fill gray at 100,290
-  r: at 100,330
-    template state.region label="Region A" w=400 h=120 color=slategray`,
+  r: state.region label="Region A" w=400 h=120 color=slategray
+    at 100,330`,
   },
 ];
 

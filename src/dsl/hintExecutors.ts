@@ -3,6 +3,7 @@ import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
 import type { z } from 'zod';
 import { HslColorSchema, RgbColorSchema } from '../types/properties';
+import { getSetNames, getShapeNames } from '../templates/registry';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -687,6 +688,86 @@ export function executeNodeBody(
       if (Object.keys(props).length > 0) result.props = props;
     }
     return result;
+  }
+
+  // ── Implicit template syntax ──────────────────────────────────
+  // Allows `mybox: core.box text="Hello"` or `mybox: box text="Hello"`
+  // without the explicit `template` keyword.
+  if (!result.path && ctx.is('identifier')) {
+    const tok = ctx.peek()!;
+    let implicitTemplateName: string | undefined;
+    const setNames = getSetNames();
+
+    // Check for dotted name: `core.box`, `state.node`
+    if (setNames.includes(tok.value) && ctx.peek(1)?.type === ('dot' as any)) {
+      const setName = tok.value;
+      const shapeNames = getShapeNames(setName);
+      const shapeTok = ctx.peek(2);
+      if (shapeTok?.type === 'identifier' && shapeNames.includes(shapeTok.value)) {
+        implicitTemplateName = `${setName}.${shapeTok.value}`;
+      }
+    }
+    // Check for unqualified name that matches a shape in any set
+    if (!implicitTemplateName && !geometry.includes(tok.value)) {
+      for (const setName of setNames) {
+        if (getShapeNames(setName).includes(tok.value)) {
+          implicitTemplateName = tok.value;
+          break;
+        }
+      }
+    }
+
+    if (implicitTemplateName) {
+      // Consume the template name tokens
+      let nameFrom = tok.offset;
+      let nameTo = tok.offset + tok.value.length;
+      ctx.next(); // consume first identifier
+      if (implicitTemplateName.includes('.')) {
+        ctx.next(); // consume dot
+        const partTok = ctx.next()!; // consume shape name
+        nameTo = partTok.offset + partTok.value.length;
+      }
+      result.template = implicitTemplateName;
+      ctx.emitLeaf({
+        schemaPath: `${schemaPath}.template`,
+        from: nameFrom,
+        to: nameTo,
+        value: implicitTemplateName,
+        dslRole: 'value',
+      });
+      // Parse key=val props (same as explicit template syntax)
+      const props: Record<string, unknown> = {};
+      while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
+        const keyTok = ctx.next()!;
+        ctx.next(); // consume =
+        const valTok = ctx.peek();
+        if (!valTok) break;
+        let val: unknown;
+        if (valTok.type === 'number') val = parseFloat(valTok.value);
+        else if (valTok.type === 'string') val = valTok.value;
+        else if (valTok.type === 'identifier') val = valTok.value;
+        else if (valTok.type === 'hexColor') val = valTok.value;
+        else break;
+        ctx.next();
+        props[keyTok.value] = val;
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.tplprops:${implicitTemplateName}.${keyTok.value}`,
+          from: keyTok.offset,
+          to: keyTok.offset + keyTok.value.length,
+          value: keyTok.value,
+          dslRole: 'kwarg-key',
+        });
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.tplprops:${implicitTemplateName}.${keyTok.value}`,
+          from: valTok.offset,
+          to: valTok.offset + valTok.value.length,
+          value: val,
+          dslRole: 'kwarg-value',
+        });
+      }
+      if (Object.keys(props).length > 0) result.props = props;
+      return result;
+    }
   }
 
   // ── Inline parsing loop ────────────────────────────────────────
