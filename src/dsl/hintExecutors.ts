@@ -3,7 +3,7 @@ import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
 import type { z } from 'zod';
 import { HslColorSchema, RgbColorSchema } from '../types/properties';
-import { getSetNames, getShapeNames } from '../templates/registry';
+import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -129,6 +129,8 @@ export function executePositional(
 
     const parseWaypoint = (): unknown | null => {
       if (ctx.is('identifier')) {
+        // If the identifier is followed by '=', it is a kwarg, not a waypoint.
+        if (ctx.peek(1)?.type === 'equals') return null;
         return ctx.next()!.value;
       }
       if (ctx.is('parenOpen')) {
@@ -552,6 +554,98 @@ export function executeInstance(
 }
 
 /**
+ * Parse template props: first positionals (from DslHints on the shape's
+ * props schema), then flags, then key=val kwargs. Returns the merged props object.
+ *
+ * For arrow-format positionals, the route array is split into
+ * from (first), to (last), and route (intermediates).
+ */
+function parseTemplateProps(
+  ctx: WalkContext,
+  templateName: string,
+  schemaPath: string,
+): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+
+  // Look up DslHints from the shape's props schema
+  const propsSchema = getShapePropsSchema(templateName);
+  const hints = propsSchema ? getDsl(propsSchema) : undefined;
+
+  // Parse positionals if the schema declares them
+  if (hints?.positional) {
+    for (const posHint of hints.positional) {
+      const posResult = executePositional(ctx, posHint, `${schemaPath}.tplprops:${templateName}`);
+      if (posResult) {
+        Object.assign(props, posResult);
+      } else {
+        break; // Stop at first non-matching positional
+      }
+    }
+    // Post-process arrow format: split route into from/to/intermediates
+    if (props.route && Array.isArray(props.route)) {
+      const route = props.route as unknown[];
+      props.from = route[0];
+      props.to = route[route.length - 1];
+      if (route.length > 2) {
+        props.route = route.slice(1, -1);
+      } else {
+        delete props.route;
+      }
+    }
+  }
+
+  // Parse flags if declared
+  if (hints?.flags) {
+    while (!ctx.atEnd() && ctx.is('identifier')) {
+      const flagTok = ctx.peek()!;
+      if (!hints.flags.includes(flagTok.value)) break;
+      if (ctx.peek(1)?.type === 'equals') break; // it's a kwarg, not a flag
+      ctx.next();
+      props[flagTok.value] = true;
+      ctx.emitLeaf({
+        schemaPath: `${schemaPath}.tplprops:${templateName}.${flagTok.value}`,
+        from: flagTok.offset,
+        to: flagTok.offset + flagTok.value.length,
+        value: true,
+        dslRole: 'flag',
+      });
+    }
+  }
+
+  // Parse key=val kwargs (existing pattern, works for all shapes)
+  while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
+    const keyTok = ctx.next()!;
+    ctx.next(); // consume =
+    const valTok = ctx.peek();
+    if (!valTok) break;
+    let val: unknown;
+    if (valTok.type === 'number') val = parseFloat(valTok.value);
+    else if (valTok.type === 'string') val = valTok.value;
+    else if (valTok.type === 'identifier') val = valTok.value;
+    else if (valTok.type === 'hexColor') val = valTok.value;
+    else break;
+    ctx.next();
+    props[keyTok.value] = val;
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+      from: keyTok.offset,
+      to: keyTok.offset + keyTok.value.length,
+      value: keyTok.value,
+      dslRole: 'kwarg-key',
+    });
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+      from: valTok.offset,
+      to: valTok.offset + valTok.value.length,
+      value: val,
+      dslRole: 'kwarg-value',
+    });
+  }
+
+  return props;
+}
+
+/**
  * Parse the body of a node: geometry keyword + its args, followed by
  * inline properties. Uses the schema's hints (geometry, inlineProps) to
  * determine what to look for.
@@ -653,38 +747,7 @@ export function executeNodeBody(
         value: templateName,
         dslRole: 'value',
       });
-      // Parse key=val props, emitting AST leaves for each kwarg
-      const props: Record<string, unknown> = {};
-      while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
-        const keyTok = ctx.next()!;
-        ctx.next(); // consume =
-        const valTok = ctx.peek();
-        if (!valTok) break;
-        let val: unknown;
-        if (valTok.type === 'number') val = parseFloat(valTok.value);
-        else if (valTok.type === 'string') val = valTok.value;
-        else if (valTok.type === 'identifier') val = valTok.value;
-        else if (valTok.type === 'hexColor') val = valTok.value;
-        else break;
-        ctx.next();
-        props[keyTok.value] = val;
-        // Emit kwarg-key leaf
-        ctx.emitLeaf({
-          schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
-          from: keyTok.offset,
-          to: keyTok.offset + keyTok.value.length,
-          value: keyTok.value,
-          dslRole: 'kwarg-key',
-        });
-        // Emit kwarg-value leaf
-        ctx.emitLeaf({
-          schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
-          from: valTok.offset,
-          to: valTok.offset + valTok.value.length,
-          value: val,
-          dslRole: 'kwarg-value',
-        });
-      }
+      const props = parseTemplateProps(ctx, templateName, schemaPath);
       if (Object.keys(props).length > 0) result.props = props;
     }
     return result;
@@ -735,36 +798,7 @@ export function executeNodeBody(
         value: implicitTemplateName,
         dslRole: 'value',
       });
-      // Parse key=val props (same as explicit template syntax)
-      const props: Record<string, unknown> = {};
-      while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
-        const keyTok = ctx.next()!;
-        ctx.next(); // consume =
-        const valTok = ctx.peek();
-        if (!valTok) break;
-        let val: unknown;
-        if (valTok.type === 'number') val = parseFloat(valTok.value);
-        else if (valTok.type === 'string') val = valTok.value;
-        else if (valTok.type === 'identifier') val = valTok.value;
-        else if (valTok.type === 'hexColor') val = valTok.value;
-        else break;
-        ctx.next();
-        props[keyTok.value] = val;
-        ctx.emitLeaf({
-          schemaPath: `${schemaPath}.tplprops:${implicitTemplateName}.${keyTok.value}`,
-          from: keyTok.offset,
-          to: keyTok.offset + keyTok.value.length,
-          value: keyTok.value,
-          dslRole: 'kwarg-key',
-        });
-        ctx.emitLeaf({
-          schemaPath: `${schemaPath}.tplprops:${implicitTemplateName}.${keyTok.value}`,
-          from: valTok.offset,
-          to: valTok.offset + valTok.value.length,
-          value: val,
-          dslRole: 'kwarg-value',
-        });
-      }
+      const props = parseTemplateProps(ctx, implicitTemplateName, schemaPath);
       if (Object.keys(props).length > 0) result.props = props;
       return result;
     }
