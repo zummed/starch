@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { z } from 'zod';
 import {
   registerTemplate, getTemplate, expandTemplates, expandTemplate,
-  registerSet, getSet, listSets, resolveTemplateName,
+  registerSet, getSet, listSets, resolveTemplateName, getShapePropsSchema,
   type ShapeSet, type ShapeDefinition,
 } from '../../templates/registry';
 import { createNode } from '../../types/node';
@@ -134,6 +134,31 @@ describe('shape sets', () => {
   it('fully-qualified name works regardless of search path', () => {
     const fn = resolveTemplateName('test.widget', []);
     expect(fn).toBeDefined();
+  });
+});
+
+describe('getShapePropsSchema', () => {
+  beforeAll(() => {
+    registerBuiltinTemplates();
+  });
+
+  it('returns props schema for fully-qualified name', () => {
+    const schema = getShapePropsSchema('core.box');
+    expect(schema).toBeDefined();
+  });
+
+  it('returns props schema for unqualified name via search path', () => {
+    const schema = getShapePropsSchema('box', ['core']);
+    expect(schema).toBeDefined();
+  });
+
+  it('returns props schema for unqualified name via fallback to all sets', () => {
+    const schema = getShapePropsSchema('box');
+    expect(schema).toBeDefined();
+  });
+
+  it('returns undefined for unknown shape', () => {
+    expect(getShapePropsSchema('nonexistent')).toBeUndefined();
   });
 });
 

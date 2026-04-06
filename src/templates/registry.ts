@@ -61,6 +61,28 @@ export function getShapeDefinition(setName: string, shapeName: string): ShapeDef
   return shapeSets.get(setName)?.shapes.get(shapeName);
 }
 
+export function getShapePropsSchema(
+  name: string,
+  searchPath: string[] = [],
+): z.ZodObject<any> | undefined {
+  // Fully-qualified name (contains dot)
+  if (name.includes('.')) {
+    const [setName, shapeName] = name.split('.', 2);
+    return shapeSets.get(setName)?.shapes.get(shapeName)?.props;
+  }
+  // Unqualified — walk search path
+  for (const setName of searchPath) {
+    const props = shapeSets.get(setName)?.shapes.get(name)?.props;
+    if (props) return props;
+  }
+  // Fall back to checking all sets
+  for (const set of shapeSets.values()) {
+    const props = set.shapes.get(name)?.props;
+    if (props) return props;
+  }
+  return undefined;
+}
+
 export function resolveTemplateName(
   name: string,
   searchPath: string[],
