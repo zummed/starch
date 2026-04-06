@@ -3,8 +3,9 @@ import type { Node, PointRef } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const lineProps = z.object({
+export const lineProps = dsl(z.object({
   from: z.string().describe('Start point'),
   to: z.string().describe('End point'),
   label: z.string().describe('Label text').optional(),
@@ -14,6 +15,12 @@ export const lineProps = z.object({
   bend: z.number().describe('Bend amount').optional(),
   dashed: z.boolean().describe('Dashed line').optional(),
   color: z.string().describe('Color').optional(),
+}), {
+  positional: [
+    { keys: ['route'], format: 'arrow' },
+  ],
+  kwargs: ['label', 'labelSize', 'bend', 'color'],
+  flags: ['arrow', 'smooth', 'dashed'],
 });
 
 export function lineTemplate(id: string, props: Record<string, unknown>): Node {

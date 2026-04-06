@@ -4,8 +4,9 @@ import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 import type { AnchorPoint } from '../../../types/anchor';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const arrowProps = z.object({
+export const arrowProps = dsl(z.object({
   from: z.string().describe('Start point (node ID or x,y)'),
   to: z.string().describe('End point (node ID or x,y)'),
   label: z.string().describe('Label text').optional(),
@@ -17,6 +18,12 @@ export const arrowProps = z.object({
   dashed: z.boolean().describe('Dashed line').optional(),
   gap: z.number().describe('Gap from node edge').optional(),
   color: z.string().describe('Color').optional(),
+}), {
+  positional: [
+    { keys: ['route'], format: 'arrow' },
+  ],
+  kwargs: ['label', 'labelSize', 'bend', 'gap', 'color'],
+  flags: ['arrow', 'arrowStart', 'smooth', 'dashed'],
 });
 
 const ARROW_SIZE = 8;
