@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
+import { TabFileManager } from './components/TabFileManager';
 import { TabLayout } from './components/TabLayout';
 import { Timeline } from './components/Timeline';
 import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
@@ -19,10 +20,11 @@ interface EditorTab {
   label: string;
   dsl: string;
   closable: boolean;
+  visible?: boolean;
 }
 
 interface StoredTabs {
-  tabs: { id: string; label: string; dsl: string }[];
+  tabs: { id: string; label: string; dsl: string; visible?: boolean }[];
   activeTabId: string;
   nextTabId: number;
 }
@@ -44,6 +46,7 @@ function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: numbe
       id: t.id,
       label: t.label,
       dsl: t.dsl,
+      ...(t.visible === false ? { visible: false } : {}),
     }));
     const data: StoredTabs = { tabs: userTabs, activeTabId, nextTabId };
     localStorage.setItem(TABS_KEY, JSON.stringify(data));
@@ -90,10 +93,11 @@ export default function App() {
       label: t.label,
       dsl: t.dsl,
       closable: true,
+      visible: t.visible !== false,
     }));
     return [sampleTab, ...restored];
   });
-  const [activeTabId, setActiveTabId] = useState(() => {
+  const [activeTabId, _setActiveTabId] = useState(() => {
     const stored = storedTabs.current;
     if (stored?.activeTabId) {
       const exists = stored.activeTabId === 'sample' || stored.tabs.some(t => t.id === stored.activeTabId);
@@ -101,8 +105,14 @@ export default function App() {
     }
     return 'sample';
   });
+  const activeTabIdRef = useRef(activeTabId);
+  const setActiveTabId = useCallback((id: string) => {
+    activeTabIdRef.current = id;
+    _setActiveTabId(id);
+  }, []);
   const [showEditor, setShowEditor] = useState(layoutMode === 'panel' ? initialPrefs.current.showEditor : true);
   const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
+  const [showFileManager, setShowFileManager] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [previewRatio, setPreviewRatio] = useState(false);
   const [fixedCamera, setFixedCamera] = useState(false);
@@ -132,9 +142,11 @@ export default function App() {
     if (text) {
       setActiveDsl(text);
       // Persist edits back to the tab so switching away and back restores them
-      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl: text } : t));
+      // Use ref to avoid stale closure when loadDsl triggers onModelChange synchronously
+      const tabId = activeTabIdRef.current;
+      setTabs(prev => prev.map(t => t.id === tabId ? { ...t, dsl: text } : t));
     }
-  }, [activeTabId]);
+  }, []);
 
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
   useEffect(() => {
@@ -202,14 +214,15 @@ export default function App() {
   }, [diagram.name, activeTab.closable, activeTab.label, activeTabId]);
 
   const handleSampleClick = useCallback((sample: V2Sample) => {
+    // Set ref FIRST so any model change triggered by loadDsl writes to 'sample', not the old tab
+    setActiveTabId('sample');
     // Update the tab's stored DSL
     setTabs(prev => prev.map(t => t.id === 'sample' ? { ...t, dsl: sample.dsl } : t));
     // Load into editor
     editorRef.current?.loadDsl(sample.dsl);
-    setActiveTabId('sample');
     setActiveSampleId(sample.name);
     requestAnimationFrame(() => diagram.seek(diagram.duration));
-  }, [diagram]);
+  }, [diagram, setActiveTabId]);
 
   const addTab = useCallback(() => {
     const id = 'tab-' + (nextTabIdRef.current++);
@@ -219,6 +232,7 @@ export default function App() {
       label: 'Untitled',
       dsl: defaultDsl,
       closable: true,
+      visible: true,
     }]);
     setActiveTabId(id);
   }, []);
@@ -226,16 +240,16 @@ export default function App() {
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {
       const remaining = prev.filter(t => t.id !== id);
-      if (activeTabId === id) setActiveTabId(remaining[remaining.length - 1]?.id || 'sample');
+      if (activeTabIdRef.current === id) setActiveTabId(remaining[remaining.length - 1]?.id || 'sample');
       return remaining;
     });
-  }, [activeTabId]);
+  }, [setActiveTabId]);
 
   const saveTabToFile = useCallback(() => {
-    const tab = tabs.find(t => t.id === activeTabId);
+    const tabId = activeTabIdRef.current;
+    const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
-    const raw = diagram.name;
-    const name = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/[^\w\s-]/g, '_') : 'untitled';
+    const name = tab.label.trim() ? tab.label.trim().replace(/[^\w\s-]/g, '_') : 'untitled';
     const text = editorRef.current?.getDsl() ?? tab.dsl;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -244,7 +258,7 @@ export default function App() {
     a.download = name + '.starch';
     a.click();
     URL.revokeObjectURL(url);
-  }, [tabs, activeTabId, diagram.name]);
+  }, [tabs]);
 
   const loadFileToTab = useCallback(() => {
     const input = document.createElement('input');
@@ -256,14 +270,34 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
+          const tabId = activeTabIdRef.current;
           editorRef.current?.loadDsl(reader.result);
-          setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, dsl: reader.result as string } : t));
+          setTabs(prev => prev.map(t => t.id === tabId ? { ...t, dsl: reader.result as string } : t));
         }
       };
       reader.readAsText(file);
     };
     input.click();
-  }, [activeTabId]);
+  }, []);
+
+  const handleToggleVisible = useCallback((id: string) => {
+    setTabs(prev => prev.map(t => t.id === id ? { ...t, visible: t.visible === false ? true : false } : t));
+  }, []);
+
+  const handleDuplicateTab = useCallback((id: string) => {
+    setTabs(prev => {
+      const source = prev.find(t => t.id === id);
+      if (!source) return prev;
+      const newId = 'tab-' + (nextTabIdRef.current++);
+      const newTab: EditorTab = {
+        id: newId,
+        label: source.label + ' (copy)',
+        dsl: source.dsl,
+        closable: true,
+      };
+      return [...prev, newTab];
+    });
+  }, []);
 
   const toggleLayoutMode = useCallback(() => {
     const next: LayoutMode = layoutMode === 'panel' ? 'tab' : 'panel';
@@ -372,7 +406,7 @@ export default function App() {
         display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1d24',
         flexShrink: 0, background: '#0a0c10', overflow: 'hidden',
       }}>
-        {tabs.map(tab => (
+        {tabs.filter(t => !t.closable || t.visible !== false).map(tab => (
           <div
             key={tab.id}
             onClick={() => setActiveTabId(tab.id)}
@@ -388,6 +422,17 @@ export default function App() {
           </div>
         ))}
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
+        <div style={{ flex: 1 }} />
+        <div
+          onClick={() => setShowFileManager(!showFileManager)}
+          style={{
+            padding: '6px 10px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
+            color: showFileManager ? '#a78bfa' : '#4a4f59',
+            userSelect: 'none',
+          }}
+        >
+          ☰
+        </div>
       </div>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
@@ -418,9 +463,6 @@ export default function App() {
           </>
         )}
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 9, color: '#4a4f59', marginRight: activeTab.closable ? 6 : 0 }}>
-          DSL
-        </span>
         {activeTab.closable && (
           <button
             onClick={() => closeTab(activeTabId)}
@@ -537,6 +579,16 @@ export default function App() {
           canvasContent={canvasContent}
           timelineContent={timelineContent}
           editorContent={editorContent}
+          fileManagerContent={
+            <TabFileManager
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSelectTab={setActiveTabId}
+              onToggleVisible={handleToggleVisible}
+              onDuplicateTab={handleDuplicateTab}
+              onDeleteTab={closeTab}
+            />
+          }
           onSampleSelect={handleSampleClick}
           activeSampleId={activeSampleId}
         />
@@ -546,9 +598,9 @@ export default function App() {
           style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, userSelect: isDragging ? 'none' : 'auto' }}
           onMouseMove={(e) => {
             if (!dragging.current || !bodyRef.current) return;
-            const browserWidth = showBrowser ? 240 : 0;
+            const panelsWidth = (showBrowser ? 240 : 0) + (showFileManager ? 240 : 0);
             const bodyLeft = bodyRef.current.getBoundingClientRect().left;
-            setEditorWidth(Math.max(e.clientX - bodyLeft - browserWidth, 200));
+            setEditorWidth(Math.max(e.clientX - bodyLeft - panelsWidth, 200));
           }}
           onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
           onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
@@ -563,6 +615,23 @@ export default function App() {
             <V2SampleBrowser
               activeSampleId={activeSampleId}
               onSelect={handleSampleClick}
+            />
+          </div>
+
+          {/* File manager — slide in/out */}
+          <div style={{
+            width: showFileManager ? 240 : 0,
+            height: '100%',
+            flexShrink: 0, overflow: 'hidden',
+            transition: 'width 0.2s ease',
+          }}>
+            <TabFileManager
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSelectTab={setActiveTabId}
+              onToggleVisible={handleToggleVisible}
+              onDuplicateTab={handleDuplicateTab}
+              onDeleteTab={closeTab}
             />
           </div>
 

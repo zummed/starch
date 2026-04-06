@@ -8,6 +8,7 @@ interface TabLayoutProps {
   canvasContent: React.ReactNode;
   timelineContent: React.ReactNode;
   editorContent: React.ReactNode;
+  fileManagerContent?: React.ReactNode;
   onSampleSelect: (sample: V2Sample) => void;
   activeSampleId: string | null;
 }
@@ -90,12 +91,18 @@ function InlineSampleBrowser({ onSelect, activeSampleId }: { onSelect: (s: V2Sam
   );
 }
 
-export function TabLayout({ canvasContent, timelineContent, editorContent, onSampleSelect, activeSampleId }: TabLayoutProps) {
-  const [activeTab, setActiveTab] = useState<'canvas' | 'editor'>('canvas');
+export function TabLayout({ canvasContent, timelineContent, editorContent, fileManagerContent, onSampleSelect, activeSampleId }: TabLayoutProps) {
+  const [activeTab, setActiveTab] = useState<'canvas' | 'editor' | 'files'>('canvas');
+
+  const bottomTabs: { id: 'canvas' | 'editor' | 'files'; label: string; icon: string }[] = [
+    { id: 'canvas', label: 'Canvas', icon: '◇' },
+    { id: 'editor', label: 'Editor', icon: '⟨/⟩' },
+    ...(fileManagerContent ? [{ id: 'files' as const, label: 'Files', icon: '☰' }] : []),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Both tabs are always mounted — CSS hides the inactive one.
+      {/* All tabs are always mounted — CSS hides the inactive ones.
            This preserves ProseMirror editor state across tab switches. */}
       <div style={{ flex: 1, overflow: 'hidden', display: activeTab === 'canvas' ? 'flex' : 'none', flexDirection: 'column' }}>
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
@@ -109,16 +116,20 @@ export function TabLayout({ canvasContent, timelineContent, editorContent, onSam
           {editorContent}
         </div>
       </div>
+      {fileManagerContent && (
+        <div style={{ flex: 1, overflow: 'hidden', display: activeTab === 'files' ? 'flex' : 'none', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {fileManagerContent}
+          </div>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div style={{
         height: 48, flexShrink: 0, display: 'flex',
         borderTop: '1px solid #1a1d24', background: '#0a0c10',
       }}>
-        {[
-          { id: 'canvas' as const, label: 'Canvas', icon: '◇' },
-          { id: 'editor' as const, label: 'Editor', icon: '⟨/⟩' },
-        ].map(tab => (
+        {bottomTabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
