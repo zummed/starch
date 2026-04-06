@@ -3,15 +3,22 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const boxProps = z.object({
+export const boxProps = dsl(z.object({
+  text: z.string().describe('Label text').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
   radius: z.number().min(0).describe('Corner radius').optional(),
-  text: z.string().describe('Label text').optional(),
   textSize: z.number().min(1).describe('Font size').optional(),
   color: z.string().describe('Color (sets stroke + faded fill)').optional(),
   textColor: z.string().describe('Text color').optional(),
+}), {
+  positional: [
+    { keys: ['text'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
+  ],
+  kwargs: ['radius', 'textSize', 'color', 'textColor'],
 });
 
 function deriveFillFromStroke(stroke: HslColor): HslColor {

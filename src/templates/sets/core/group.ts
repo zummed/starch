@@ -3,14 +3,21 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const groupProps = z.object({
+export const groupProps = dsl(z.object({
   label: z.string().describe('Group label').optional(),
-  color: z.string().describe('Color').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
+  color: z.string().describe('Color').optional(),
   direction: z.enum(['row', 'column']).describe('Flex layout direction').optional(),
   gap: z.number().min(0).describe('Gap between children').optional(),
+}), {
+  positional: [
+    { keys: ['label'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
+  ],
+  kwargs: ['color', 'direction', 'gap'],
 });
 
 const DEFAULT_STROKE: HslColor = { h: 0, s: 0, l: 50 };

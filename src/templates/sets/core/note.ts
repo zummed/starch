@@ -3,12 +3,19 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const noteProps = z.object({
+export const noteProps = dsl(z.object({
   text: z.string().describe('Note text').optional(),
-  color: z.string().describe('Color (stroke color; fill derived from it)').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
+  color: z.string().describe('Color (stroke; fill derived)').optional(),
+}), {
+  positional: [
+    { keys: ['text'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
+  ],
+  kwargs: ['color'],
 });
 
 const DEFAULT_STROKE: HslColor = { h: 50, s: 60, l: 25 };

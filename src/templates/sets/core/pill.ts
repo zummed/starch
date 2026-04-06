@@ -3,12 +3,19 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const pillProps = z.object({
+export const pillProps = dsl(z.object({
   text: z.string().describe('Label text').optional(),
-  color: z.string().describe('Color (sets stroke + faded fill)').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
+  color: z.string().describe('Color (sets stroke + faded fill)').optional(),
+}), {
+  positional: [
+    { keys: ['text'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
+  ],
+  kwargs: ['color'],
 });
 
 export function pillTemplate(id: string, props: Record<string, unknown>): Node {

@@ -3,13 +3,20 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const cardProps = z.object({
+export const cardProps = dsl(z.object({
   title: z.string().describe('Card title'),
   body: z.string().describe('Body text').optional(),
-  color: z.string().describe('Color (sets stroke + faded fill)').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
+  color: z.string().describe('Color (sets stroke + faded fill)').optional(),
+}), {
+  positional: [
+    { keys: ['title'], format: 'quoted' },
+    { keys: ['w', 'h'], format: 'dimension' },
+  ],
+  kwargs: ['body', 'color'],
 });
 
 export function cardTemplate(id: string, props: Record<string, unknown>): Node {
