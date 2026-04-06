@@ -1,12 +1,21 @@
+/**
+ * Self-contained embed entry point.
+ * Registers <starch-diagram> custom element for use in any webpage.
+ *
+ * Usage:
+ *   <script src="starch-embed.iife.js"></script>
+ *   <starch-diagram autoplay>
+ *     box "hello" at 100 100
+ *   </starch-diagram>
+ */
 import { StarchDiagram } from './StarchDiagram';
-import type { StarchEvent } from './core/types';
+import type { StarchEvent } from './StarchDiagram';
 
 class StarchDiagramElement extends HTMLElement {
-  static observedAttributes = ['src', 'autoplay', 'speed', 'debug', 'background'];
+  static observedAttributes = ['src', 'autoplay', 'speed'];
 
   private _diagram: StarchDiagram | null = null;
   private _container: HTMLElement | null = null;
-  private _controls: HTMLElement | null = null;
   private _playBtn: HTMLElement | null = null;
 
   connectedCallback() {
@@ -47,7 +56,7 @@ class StarchDiagramElement extends HTMLElement {
 
       const restartBtn = document.createElement('button');
       restartBtn.className = 'starch-btn';
-      restartBtn.innerHTML = '&#8634;'; // ↺
+      restartBtn.innerHTML = '&#8634;';
       restartBtn.title = 'Restart';
       restartBtn.addEventListener('click', () => {
         this._diagram?.seek(0);
@@ -57,14 +66,13 @@ class StarchDiagramElement extends HTMLElement {
 
       const playBtn = document.createElement('button');
       playBtn.className = 'starch-btn';
-      playBtn.innerHTML = '&#9654;'; // ▶
+      playBtn.innerHTML = '&#9654;';
       playBtn.title = 'Play';
       playBtn.addEventListener('click', () => {
         if (!this._diagram) return;
         if (this._diagram.playing) {
           this._diagram.pause();
         } else {
-          // Restart from beginning if at end
           if (this._diagram.time >= this._diagram.duration - 0.01) {
             this._diagram.seek(0);
           }
@@ -77,7 +85,6 @@ class StarchDiagramElement extends HTMLElement {
       controls.appendChild(restartBtn);
       controls.appendChild(playBtn);
       shadow.appendChild(controls);
-      this._controls = controls;
     }
 
     const container = this._container || shadow.querySelector('div');
@@ -87,8 +94,7 @@ class StarchDiagramElement extends HTMLElement {
     if (src) {
       this._fetchAndMount(src, container as HTMLElement);
     } else {
-      // Defer reading textContent: connectedCallback fires when the opening
-      // tag is parsed, before the HTML parser has added child text nodes.
+      // Defer: connectedCallback fires before child text nodes are parsed
       requestAnimationFrame(() => {
         const dsl = this.textContent?.trim() || '';
         this._mount(container as HTMLElement, dsl);
@@ -106,24 +112,22 @@ class StarchDiagramElement extends HTMLElement {
 
     if (name === 'src' && newValue && newValue !== oldValue) {
       fetch(newValue)
-        .then((r) => r.text())
-        .then((dsl) => this._diagram?.setDSL(dsl))
-        .catch((err) => console.error('[starch-diagram] Failed to fetch src:', err));
+        .then(r => r.text())
+        .then(dsl => this._diagram?.setDSL(dsl))
+        .catch(err => console.error('[starch-diagram] Failed to fetch src:', err));
       return;
     }
 
     if (name === 'speed') {
       this._diagram.setSpeed(parseFloat(newValue || '1') || 1);
-    } else if (name === 'debug') {
-      this._diagram.setDebug(newValue !== null);
     }
   }
 
   private _fetchAndMount(src: string, container: HTMLElement) {
     fetch(src)
-      .then((r) => r.text())
-      .then((dsl) => this._mount(container, dsl))
-      .catch((err) => console.error('[starch-diagram] Failed to fetch src:', err));
+      .then(r => r.text())
+      .then(dsl => this._mount(container, dsl))
+      .catch(err => console.error('[starch-diagram] Failed to fetch src:', err));
   }
 
   private _mount(container: HTMLElement, dsl: string) {
@@ -136,7 +140,6 @@ class StarchDiagramElement extends HTMLElement {
       dsl,
       autoplay: this.hasAttribute('autoplay'),
       speed: parseFloat(this.getAttribute('speed') || '1') || 1,
-      debug: this.hasAttribute('debug'),
       onEvent: (event: StarchEvent) => {
         this.dispatchEvent(new CustomEvent(`starch:${event.type.toLowerCase()}`, { detail: event, bubbles: true }));
         this.dispatchEvent(new CustomEvent('starch:event', { detail: event, bubbles: true }));
@@ -144,7 +147,6 @@ class StarchDiagramElement extends HTMLElement {
       },
     });
 
-    // Update button state when animation ends
     this._updatePlayBtn();
   }
 
@@ -162,8 +164,6 @@ class StarchDiagramElement extends HTMLElement {
   nextChapter() { this._diagram?.nextChapter(); }
   prevChapter() { this._diagram?.prevChapter(); }
   goToChapter(id: string) { this._diagram?.goToChapter(id); }
-
-  // ── Read-only state getters ──
 
   get time() { return this._diagram?.time ?? 0; }
   get duration() { return this._diagram?.duration ?? 0; }

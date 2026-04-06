@@ -1,266 +1,120 @@
-import JSON5 from 'json5';
-import type {
-  SceneObject,
-  AnimConfig,
-  ObjectType,
-  EasingName,
-} from '../core/types';
-import { parseShape, VALID_TYPES } from '../core/schemas';
-import { expandShorthands } from './shorthands';
+import type { Node } from '../types/node';
+import { createNode } from '../types/node';
+import type { AnimConfig } from '../types/animation';
+import { expandTemplates } from '../templates/registry';
+import type { TextMeasurer } from '../text/measure';
+import { validateTree } from '../tree/validate';
+import { generateTrackPaths } from '../tree/walker';
+import { registerBuiltinTemplates } from '../templates/index';
+import { walkDocument } from '../dsl/schemaWalker';
 
-export interface Viewport {
-  width: number;
-  height: number;
-}
-
-export interface ParseResult {
+export interface ParsedScene {
   name?: string;
   description?: string;
+  nodes: Node[];
+  styles: Record<string, any>;
+  animate?: AnimConfig;
   background?: string;
-  viewport?: Viewport;
-  objects: Record<string, SceneObject>;
-  animConfig: AnimConfig;
-  styles: Record<string, Record<string, unknown>>;
-}
-
-interface RawObject {
-  type: string;
-  id: string;
-  [key: string]: unknown;
-}
-
-interface RawKeyframeBlock {
-  time: number;
-  easing?: string;
-  autoKey?: boolean;
-  changes?: Record<string, Record<string, unknown>>;
-  // Also allow flat format for convenience: any other keys are treated as target IDs
-  [key: string]: unknown;
-}
-
-interface RawChapter {
-  time: number;
-  id?: string;
-  title: string;
-  description?: string;
-}
-
-interface RawDiagram {
-  name?: string;
-  description?: string;
-  background?: string;
-  viewport?: unknown;
-  styles?: Record<string, Record<string, unknown>>;
-  objects?: RawObject[];
-  animate?: {
-    duration?: number;
-    loop?: boolean;
-    easing?: string;
-    keyframes?: RawKeyframeBlock[];
-    chapters?: RawChapter[];
-  };
-}
-
-let _definitionCounter = 0;
-
-function parseObject(
-  raw: RawObject,
-  objects: Record<string, SceneObject>,
-): void {
-  const { type, id, ...rest } = raw;
-
-  if (!type || !id) {
-    throw new Error(`Object missing required "type" or "id" field`);
-  }
-  if (!VALID_TYPES.has(type)) {
-    throw new Error(`Unknown object type: "${type}". Valid types: ${[...VALID_TYPES].join(', ')}`);
-  }
-  if (objects[id]) {
-    throw new Error(`Duplicate object ID: "${id}"`);
-  }
-
-  const inputKeys = new Set(Object.keys(rest));
-  const parsed = parseShape(type as ObjectType, rest);
-
-  objects[id] = {
-    type: type as ObjectType,
-    id,
-    props: parsed as never,
-    _inputKeys: inputKeys,
-    _definitionOrder: _definitionCounter++,
-  };
-}
-
-function parseKeyframeBlock(raw: RawKeyframeBlock): { time: number; easing?: EasingName; autoKey?: boolean; changes: Record<string, Record<string, unknown>> } {
-  const { time, easing, autoKey, changes: rawChanges, ...rest } = raw;
-
-  // If `changes` is provided, use it directly
-  // Otherwise, remaining keys are target IDs (flat format)
-  const changes: Record<string, Record<string, unknown>> = {};
-
-  if (rawChanges && typeof rawChanges === 'object') {
-    for (const [targetId, props] of Object.entries(rawChanges)) {
-      changes[targetId] = props;
-    }
-  }
-
-  // Flat format: any key that isn't time/easing/changes is a target ID
-  for (const [key, value] of Object.entries(rest)) {
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      changes[key] = value as Record<string, unknown>;
-    }
-  }
-
-  return {
-    time,
-    easing: easing as EasingName | undefined,
-    ...(autoKey !== undefined && { autoKey }),
-    changes,
-  };
+  viewport?: string | { width: number; height: number };
+  images?: Record<string, string>;
+  use?: string[];
+  trackPaths: string[];
 }
 
 /**
- * Shared helper to build AnimConfig from raw animate block.
- * Used by both parseDSL and parseJSON to avoid duplication.
+ * Convert style definitions into real nodes with _isStyle: true.
+ * These nodes sit at the top level of the tree and are walked by the
+ * tree walker like any other node, generating animatable track paths.
  */
-
-const RATIO_PRESETS: Record<string, [number, number]> = {
-  '16:9': [800, 450],
-  '4:3': [800, 600],
-  '1:1': [600, 600],
-  '21:9': [840, 360],
-};
-
-function parseViewport(raw: unknown): Viewport | undefined {
-  if (!raw) return undefined;
-  if (typeof raw === 'string') {
-    const preset = RATIO_PRESETS[raw];
-    if (preset) return { width: preset[0], height: preset[1] };
-    // Try "W:H" ratio format (any numbers, not just presets)
-    const ratioMatch = (raw as string).match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
-    if (ratioMatch) {
-      const rw = parseFloat(ratioMatch[1]);
-      const rh = parseFloat(ratioMatch[2]);
-      // Scale so the larger dimension is ~800
-      const scale = 800 / Math.max(rw, rh);
-      return { width: Math.round(rw * scale), height: Math.round(rh * scale) };
-    }
-    // Try "WxH" format
-    const match = (raw as string).match(/^(\d+)\s*[x×]\s*(\d+)$/);
-    if (match) return { width: parseInt(match[1]), height: parseInt(match[2]) };
-    return undefined;
+function stylesToNodes(styles: Record<string, any>): Node[] {
+  const nodes: Node[] = [];
+  for (const [name, def] of Object.entries(styles)) {
+    const { style: _parentStyle, ...props } = def;
+    const node = createNode({ id: name, ...props });
+    node._isStyle = true;
+    nodes.push(node);
   }
-  if (typeof raw === 'object' && raw !== null) {
-    const obj = raw as Record<string, unknown>;
-    const w = obj.width as number;
-    const h = obj.height as number;
-    if (w && h) return { width: w, height: h };
-    // Support ratio property: { ratio: "16:9" } or { ratio: 1.78 }
-    if (obj.ratio) {
-      if (typeof obj.ratio === 'string' && RATIO_PRESETS[obj.ratio]) {
-        const [pw, ph] = RATIO_PRESETS[obj.ratio];
-        return { width: pw, height: ph };
-      }
-      if (typeof obj.ratio === 'number') {
-        return { width: Math.round(500 * (obj.ratio as number)), height: 500 };
-      }
-    }
-  }
-  return undefined;
+  return nodes;
 }
 
-function buildAnimConfigFromRaw(rawAnimate?: RawDiagram['animate']): AnimConfig {
-  const animConfig: AnimConfig = {
-    duration: rawAnimate?.duration ?? 5,
-    loop: rawAnimate?.loop ?? true,
-    easing: (rawAnimate?.easing as EasingName) || undefined,
-    keyframes: [],
-    chapters: [],
-  };
 
-  if (rawAnimate?.keyframes) {
-    for (const kf of rawAnimate.keyframes) {
-      const parsed = parseKeyframeBlock(kf);
-      animConfig.keyframes.push({
-        time: parsed.time,
-        easing: parsed.easing,
-        ...(parsed.autoKey !== undefined && { autoKey: parsed.autoKey }),
-        changes: parsed.changes as Record<string, { easing?: EasingName; [k: string]: unknown }>,
-      });
-    }
+/**
+ * Migrate old flat stroke format { h, s, l, width } to new { color: { h, s, l }, width }.
+ */
+function migrateStroke(stroke: any): any {
+  if (stroke && typeof stroke === 'object' && 'h' in stroke && 's' in stroke && 'l' in stroke) {
+    const { h, s, l, a, width, ...rest } = stroke;
+    const color: any = { h, s, l };
+    if (a !== undefined) color.a = a;
+    return { color, ...(width !== undefined ? { width } : {}), ...rest };
   }
-
-  if (rawAnimate?.chapters) {
-    for (const ch of rawAnimate.chapters) {
-      animConfig.chapters.push({
-        id: ch.id || ch.title.toLowerCase().replace(/\s+/g, '-'),
-        time: ch.time,
-        title: ch.title,
-        description: ch.description,
-      });
-    }
-  }
-
-  return animConfig;
+  return stroke;
 }
 
 /**
- * Parse a JSON5 diagram string (or pre-parsed object) into a ParseResult.
+ * Recursively migrate old stroke formats in a node tree (JSON path only).
  */
-export function parseDSL(src: string): ParseResult {
-  let raw: RawDiagram;
-
-  try {
-    raw = expandShorthands(JSON5.parse(src)) as RawDiagram;
-  } catch (e) {
-    throw new Error(`JSON5 parse error: ${(e as Error).message}`);
+function migrateNode(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(migrateNode);
+  const result = { ...obj };
+  if (result.stroke) {
+    result.stroke = migrateStroke(result.stroke);
   }
-
-  _definitionCounter = 0;
-  const objects: Record<string, SceneObject> = {};
-
-  if (raw.objects && Array.isArray(raw.objects)) {
-    for (const rawObj of raw.objects) {
-      parseObject(rawObj, objects);
-    }
+  if (result.children) {
+    result.children = result.children.map(migrateNode);
   }
-
-  const animConfig = buildAnimConfigFromRaw(raw.animate);
-
-  return {
-    name: raw.name as string | undefined,
-    description: raw.description as string | undefined,
-    background: raw.background as string | undefined,
-    viewport: parseViewport(raw.viewport),
-    objects,
-    animConfig,
-    styles: (raw.styles as Record<string, Record<string, unknown>>) ?? {},
-  };
+  return result;
 }
 
-/**
- * Parse a pre-built object (not a string) into a ParseResult.
- */
-export function parseJSON(input: RawDiagram): ParseResult {
-  const raw = expandShorthands(input) as RawDiagram;
-  _definitionCounter = 0;
-  const objects: Record<string, SceneObject> = {};
+export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
+  registerBuiltinTemplates();
 
-  if (raw.objects && Array.isArray(raw.objects)) {
-    for (const rawObj of raw.objects) {
-      parseObject(rawObj, objects);
+  const trimmed = input.trim();
+  const raw = walkDocument(trimmed).model;
+
+  const name = typeof raw.name === 'string' ? raw.name : undefined;
+  const description = typeof raw.description === 'string' ? raw.description : undefined;
+  const background = raw.background as string | undefined;
+  const viewport = raw.viewport;
+  const images = raw.images as Record<string, string> | undefined;
+
+  // Migrate old stroke format in styles and animate
+  const styles = raw.styles ?? {};
+  for (const key of Object.keys(styles)) {
+    if (styles[key]?.stroke) {
+      styles[key] = { ...styles[key], stroke: migrateStroke(styles[key].stroke) };
     }
   }
 
-  const animConfig = buildAnimConfigFromRaw(raw.animate);
+  const animate = raw.animate as AnimConfig | undefined;
+
+  // Expand templates, then migrate old stroke format in objects
+  const searchPath = (raw.use as string[] | undefined) ?? ['core'];
+  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath, measure);
+
+  // Convert styles to first-class nodes
+  const styleNodes = stylesToNodes(styles);
+
+  // Combine: style nodes first, then object nodes
+  const allNodes = [...styleNodes, ...expanded];
+
+  // Validate (style nodes share namespace with object nodes)
+  validateTree(allNodes);
+
+  // Generate track paths (walks all nodes including style nodes)
+  const trackPaths = generateTrackPaths(allNodes);
 
   return {
-    name: raw.name as string | undefined,
-    description: raw.description as string | undefined,
-    background: raw.background as string | undefined,
-    viewport: parseViewport(raw.viewport),
-    objects,
-    animConfig,
-    styles: (raw.styles as Record<string, Record<string, unknown>>) ?? {},
+    name,
+    description,
+    nodes: allNodes,
+    styles,
+    animate,
+    background,
+    viewport,
+    images,
+    use: searchPath,
+    trackPaths,
   };
 }
