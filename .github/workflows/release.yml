@@ -29,5 +29,5 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Build library and embed
+        run: npm run build && npm run build:embed

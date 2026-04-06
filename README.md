@@ -1,321 +1,220 @@
 # starch
 
-Animated diagram library for documenting application internals. Define objects and keyframe animations with a concise DSL or programmatic API, and render interactive SVG diagrams in React apps or any webpage.
+Write text. Get animated diagrams.
 
-> **Note:** This entire project — code, architecture, and documentation — was built agentically using [Claude Code](https://claude.com/claude-code). It is under active development as an experiment in agentic software engineering. The library is at version 0.0.1 and the API may change.
+Starch is a text-driven diagram and animation tool. Describe shapes, connections, and keyframe animations in a concise DSL — starch renders them as interactive SVGs with playback controls, camera moves, and chapter navigation.
 
-## Try It — Interactive Playground
+**[Try the Playground](https://zummed.github.io/starch/)** — edit DSL live in your browser, no install required.
 
-**[Open the Playground](https://zummed.github.io/starch/)** — no install required. Browse samples, edit DSL live, and export diagrams.
+## Features
 
-To run the playground locally:
+- **Text-first** — diagrams are plain text, version-controllable, diffable, copy-pasteable
+- **Animated** — keyframe timeline with 17 easing functions, loops, chapters, and effects
+- **Shapes** — rects, circles, arrows, paths, tables, text blocks, code blocks with syntax highlighting
+- **Layout** — flex containers with gap, padding, alignment; absolute positioning; slot-based animation
+- **Camera** — zoom, pan, follow objects, fit-to-selection, smooth transitions
+- **Composable** — shape templates, reusable styles, nested children, inheritance
+- **Embeddable** — drop a single `<script>` tag into any page, or `npm install` for React/JS
 
-```bash
-git clone https://github.com/zummed/starch.git
-cd starch
-npm install
-npm run dev
-```
+## Quick Start
 
-## Install
-
-```bash
-npm install @bitsnbobs/starch
-```
-
-Requires React 18 or 19 as a peer dependency.
-
-## Usage
-
-### React
-
-```tsx
-import { Diagram } from '@bitsnbobs/starch';
-
-const dsl = `{
-  objects: [
-    { box: "server", at: [200, 100], colour: "#34d399", text: "Server" },
-    { box: "client", at: [200, 250], colour: "#22d3ee", text: "Client" },
-    { line: "req", from: "client", to: "server", colour: "#fbbf24", label: "request", progress: 0 },
-  ],
-  animate: {
-    duration: 3,
-    keyframes: [
-      { time: 1.5, changes: {
-        req: { progress: 1, easing: "easeInOut" },
-        client: { pulse: 0.1 },
-        server: { pulse: 0.1 },
-      }},
-    ]
-  }
-}`;
-
-function App() {
-  return <Diagram dsl={dsl} autoplay />;
-}
-```
-
-### Any Webpage (No React Required)
+### Any Webpage
 
 ```html
 <script src="https://unpkg.com/@bitsnbobs/starch/dist/starch-embed.iife.js"></script>
 
 <starch-diagram autoplay>
-{
-  objects: [
-    { box: "server", at: [200, 100], colour: "#34d399", text: "Server" },
-    { box: "client", at: [200, 250], colour: "#22d3ee", text: "Client" },
-    { line: "req", from: "client", to: "server", colour: "#fbbf24", label: "request", progress: 0 },
-  ],
-  animate: {
-    duration: 3,
-    keyframes: [
-      { time: 1.5, changes: {
-        req: { progress: 1, easing: "easeInOut" },
-        client: { pulse: 0.1 },
-        server: { pulse: 0.1 },
-      }},
-    ]
-  }
-}
+server: rect 140x46 radius=8 fill #34d399 at 200,100
+  text "Server" size=14
+client: rect 140x46 radius=8 fill #22d3ee at 200,250
+  text "Client" size=14
+req: arrow client server stroke #fbbf24 label "request"
+  draw 0
+
+animate 3s loop
+  1.5
+    req.draw: { value: 1, easing: "easeInOut" }
 </starch-diagram>
 ```
 
-The web component includes subtle play/pause and restart controls on hover.
+### npm
 
-## DSL
-
-Diagrams are defined in a JSON5-based format. Both `colour` and `color` spellings are accepted throughout.
-
-### Top-Level Properties
+```bash
+npm install @bitsnbobs/starch
+```
 
 ```js
-{
-  name: "My Diagram",
-  description: "Optional description",
-  background: "#0e1117",       // or "transparent"
-  viewport: "16:9",            // aspect ratio — "4:3", "1:1", "800x450", { width, height }
-  styles: { ... },             // reusable style definitions
-  images: { ... },             // image URL registry
-  objects: [ ... ],
-  animate: { ... },
+import { StarchDiagram } from '@bitsnbobs/starch';
+
+const diagram = new StarchDiagram(document.getElementById('my-diagram'), {
+  dsl: `
+    server: rect 140x46 fill steelblue at 200,100
+      text "Server"
+    client: rect 140x46 fill dodgerblue at 200,250
+      text "Client"
+  `,
+  autoplay: true,
+});
+```
+
+### React
+
+```tsx
+import { useV2Diagram } from '@bitsnbobs/starch';
+
+function App() {
+  const diagram = useV2Diagram({ dsl: '...', autoplay: true });
+  return <div ref={diagram.containerRef} style={{ width: '100%', height: 400 }} />;
 }
 ```
 
-### Object Types
+---
 
-- **box** — rectangle with text, rounded corners, images (default 140x46)
-- **circle** — circle with radius
-- **label** — standalone text
-- **table** — rows and columns
-- **line** — connects two objects with label, bend, dashing
-- **path** — arbitrary point sequence with spline curves
-- **textblock** — multi-line text with per-line animation
-- **code** — syntax-highlighted code block (shorthand for textblock with monospace)
-- **camera** — viewport control (zoom, pan, follow, fit)
+## DSL Reference
 
-### Layout Containers
+Diagrams are plain text using an indentation-based syntax. Both `colour` and `color` are accepted throughout.
 
-Any box becomes a **flex container** when children group to it. Default direction is column.
+### Shapes
 
-```js
-{ box: "container", at: [400, 200], colour: "#2a2d35", radius: 12 },
-{ box: "child1", colour: "#22d3ee", text: "One", group: "container" },
-{ box: "child2", colour: "#34d399", text: "Two", group: "container" },
+```
+server: rect 140x46 radius=8 fill steelblue at 200,100
+  text "Server" size=14 bold
+db: ellipse 50x50 fill darkorange at 400,200
+req: arrow server db stroke gold label "query"
+  draw 0
 ```
 
-Container properties: `direction` (row/column, default column), `gap` (default 12), `padding` (default 12), `paddingTop`/`Right`/`Bottom`/`Left`, `justify`, `align`, `wrap`.
+**Built-in types:** `rect`, `ellipse`, `text`, `arrow`, `line`, `path`, `pill`, `card`, `group`, `note`, `table`, `textblock`, `codeblock`
 
-Child properties: `group`, `order`, `grow`, `shrink`, `alignSelf`.
+**Shape sets:** `state.node`, `state.initial`, `state.final`, `state.choice`, `state.region`
 
-### Reusable Styles
+### Layout
 
-```js
-{
-  styles: {
-    card: { colour: "#22d3ee", radius: 12 },
-    alert: { style: "card", colour: "#ef4444" },  // composes card
-  },
-  objects: [
-    { box: "a", style: "card", text: "Card" },
-    { box: "b", style: "alert", text: "Alert" },
-    { box: "c", style: "card", colour: "#34d399", text: "Override" },  // object props win
-  ],
-}
+Any rect becomes a flex container when children nest under it:
+
 ```
+container: rect 300x200 fill #2a2d35 radius=12 at 300,200
+  layout direction=row gap=12 padding=16
+  child1: rect 80x40 fill #22d3ee
+  child2: rect 80x40 fill #34d399
+```
+
+Properties: `direction`, `gap`, `padding`, `justify`, `align`, `wrap`
 
 ### Animation
 
-Keyframes use a time-first block format where simultaneous changes are grouped:
-
-```js
-animate: {
-  duration: 6, loop: false, easing: "easeInOut",
-  keyframes: [
-    { time: 1.0, changes: {
-      arrow: { progress: 1, easing: "easeInOut" },
-      source: { pulse: 0.1 },
-      target: { pulse: 0.1 },
-    }},
-    { plus: 1.0, delay: 0.5, changes: {  // 1s after previous, 0.5s pause before
-      arrow2: { progress: 1 },
-    }},
-  ]
-}
+```
+animate 6s loop easing=easeInOut
+  1
+    req.draw: 1
+    server.opacity: 1
+  +1 delay=0.5
+    resp.draw: 1
+  3
+    cam.camera.zoom: 2
 ```
 
-- **`plus: N`** — time relative to previous keyframe
-- **`delay: N`** — pause before this keyframe starts
-- **`autoKey: true`** (default) — properties hold at block boundaries
+- **Absolute time** (`1`, `3`) or **relative** (`+1` = 1s after previous)
+- **`delay`** — pause before the keyframe
+- **`autoKey`** (default: true) — properties hold between keyframes
 
-Supported easings: `linear`, `easeIn`, `easeOut`, `easeInOut`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack`, `easeInBack`, `bounce`, `elastic`, `spring`, `snap`, `step`, `cut`.
-
-Per-object shorthand for simple cases:
-
-```js
-keyframes: {
-  runner: [[0, "pathProgress", 0], [8, "pathProgress", 1, "linear"]],
-}
-```
+**Easings:** `linear`, `easeIn`, `easeOut`, `easeInOut`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack`, `easeInBack`, `bounce`, `elastic`, `spring`, `snap`, `step`, `cut`
 
 ### Effects
 
-Additive, fire-and-forget visual modifiers that decay automatically:
+Fire-and-forget visual modifiers that decay automatically:
 
 | Effect | What it does | Example |
 |--------|-------------|---------|
-| `pulse` | Temporary scale bump | `{ pulse: 0.12 }` |
-| `flash` | Brief opacity dim | `{ flash: 0.3 }` |
-| `shake` | Rapid left-right oscillation | `{ shake: 5 }` |
-| `glow` | Temporary strokeWidth increase | `{ glow: 3 }` |
-
-### Text Blocks & Code
-
-```js
-// Multi-line text
-{ textblock: "para", at: [400, 200], lines: [
-    "First line",
-    { text: "Highlighted", color: "#22d3ee", bold: true },
-    "Third line",
-  ],
-}
-
-// Syntax-highlighted code
-{ code: "snippet", at: [400, 200], syntax: "javascript", lines: [
-    "function greet() {",
-    "  return 'Hello';",
-    "}",
-  ],
-}
-```
-
-Per-line animation via dot notation:
-```js
-{ time: 2.0, changes: {
-  "snippet.line1": { color: "#22d3ee", opacity: 0.5 },
-  "snippet.line2": { text: "  return 'World';" },
-}}
-```
-
-Bundled syntax languages: JavaScript, TypeScript, Python, JSON, YAML, SQL, Bash, CSS, HTML/XML, Go, Rust, Java, C/C++, Markdown.
+| `pulse` | Scale bump | `pulse: 0.12` |
+| `flash` | Opacity dim | `flash: 0.3` |
+| `shake` | Horizontal oscillation | `shake: 5` |
+| `glow` | Stroke width increase | `glow: 3` |
 
 ### Camera
 
-```js
-{ camera: "cam", target: [400, 250], zoom: 1 },
+```
+cam: camera target=server zoom=1 ratio=16:9
 
-// Animate in keyframes
-{ time: 2.0, changes: { cam: { target: "boxId", zoom: 2 } } },
-{ time: 4.0, changes: { cam: { fit: "all" } } },
-{ time: 5.0, changes: { cam: { fit: ["a", "b"], easing: "cut" } } },
+animate 4s
+  2 cam.camera.target: db
+     cam.camera.zoom: 2
+  4 cam.camera.fit: all
 ```
 
-- **`target`**: `[x,y]` coordinates or object ID (follows the object)
-- **`zoom`**: zoom level (2 = 2x closer)
-- **`fit`**: `"all"` or `["id1", "id2"]` — auto-zoom to fit objects
-- All properties animate smoothly with easing. Use `easing: "cut"` for instant jumps.
+- **`target`** — `[x,y]` or object ID (follows it)
+- **`zoom`** — magnification level
+- **`fit`** — `all` or list of IDs to auto-frame
+- **`ratio`** — aspect ratio constraint
 
-### Images
+### Styles
 
-```js
-{
-  images: { logo: "/icons/logo.svg" },
-  objects: [
-    { box: "a", image: "logo" },
-    { box: "b", image: "https://example.com/icon.svg" },
-    { circle: "c", image: "data:image/svg+xml;base64,..." },
-  ],
-}
+```
+styles
+  card: fill #22d3ee radius=12
+  alert: style card fill #ef4444
+
+objects
+  a: card "OK"
+  b: alert "Error"
 ```
 
-Properties: `image`, `imageFit` (contain/cover/fill), `imagePadding`.
-
-### Text Alignment in Boxes
-
-```js
-{ box: "a", text: "Top Left", textAlign: "start", textVAlign: "top" }
-```
-
-- `textAlign`: `"start"`, `"middle"` (default), `"end"`
-- `textVAlign`: `"top"`, `"middle"` (default), `"bottom"`
+Styles compose via `style` references. Object properties override style properties.
 
 ### Chapters
 
-Named time markers that pause playback:
+Named time markers that pause playback for step-through presentations:
 
-```js
-chapters: [
-  { time: 0, title: "Start", description: "Client initiates connection" },
-  { time: 3, title: "Handshake", description: "Server responds" },
-]
 ```
+animate 10s
+  chapters
+    chapter "Start" at 0
+    chapter "Handshake" at 3
+    chapter "Complete" at 7
+```
+
+---
 
 ## API
 
-### `<Diagram>` Component
+### `StarchDiagram` (vanilla JS)
 
-```tsx
-<Diagram
-  dsl={string}        // DSL string
-  scene={Scene}       // or a programmatic Scene instance
-  autoplay={boolean}
-  speed={number}
-  debug={boolean}
-  onEvent={(e) => {}} // chapter enter/exit, animation end/loop
-/>
+```js
+const diagram = new StarchDiagram(container, { dsl, autoplay: true, speed: 1 });
+
+diagram.play(); diagram.pause(); diagram.seek(2.5);
+diagram.setSpeed(2); diagram.setDSL(newDsl);
+diagram.nextChapter(); diagram.prevChapter(); diagram.goToChapter('name');
+diagram.on('chapterEnter', handler);
+diagram.destroy();
+
+diagram.time; diagram.duration; diagram.playing;
+diagram.chapters; diagram.activeChapter;
 ```
 
-### `useDiagram` Hook
+### `useV2Diagram` (React hook)
 
 ```tsx
-const diagram = useDiagram({ dsl, autoplay: true });
-
-diagram.time, diagram.duration, diagram.playing, diagram.speed
-diagram.chapters, diagram.activeChapter
-diagram.name, diagram.background, diagram.viewport, diagram.cameraViewBox
-diagram.objects, diagram.animatedProps, diagram.renderOrder
-
-diagram.play(), diagram.pause(), diagram.seek(time)
-diagram.nextChapter(), diagram.prevChapter(), diagram.goToChapter(id)
+const d = useV2Diagram({ dsl, autoplay: true, speed: 1 });
+// Returns: containerRef, time, duration, playing, speed,
+//   chapters, keyframeTimes, name, background, viewport, cameraRatio,
+//   play(), pause(), seek(), setPlaying(), setSpeed(), computeFitAll()
 ```
 
-### `<starch-diagram>` Custom Element
+### `<starch-diagram>` (web component)
 
 ```html
-<starch-diagram autoplay>...DSL here...</starch-diagram>
-<starch-diagram src="/diagrams/my-diagram.starch" autoplay></starch-diagram>
+<starch-diagram autoplay speed="1.5">...DSL...</starch-diagram>
+<starch-diagram src="/diagrams/arch.starch" autoplay></starch-diagram>
 ```
-
-Includes play/pause and restart controls on hover. JavaScript API:
 
 ```js
 const el = document.querySelector('starch-diagram');
 el.play(); el.pause(); el.seek(2.5); el.goToChapter('step-2');
-el.time; el.duration; el.playing; el.chapters;
 el.addEventListener('starch:chapterenter', (e) => { ... });
 ```
 
-## MkDocs Integration
+### MkDocs Integration
 
 ```yaml
 # mkdocs.yml
@@ -331,16 +230,17 @@ extra_javascript:
   - js/starch-init.js
 ```
 
-Copy `docs/mkdocs-snippet.js` to `docs/js/starch-init.js`.
+---
 
 ## Development
 
 ```bash
-npm run dev          # Start dev server with playground
-npm run build        # Build React library
-npm run build:embed  # Build standalone embed
-npm run build:all    # Build both
-npx vitest run       # Run tests
+npm run dev          # Playground dev server
+npm run build        # ES module library + types
+npm run build:embed  # Standalone embed (IIFE)
+npm run build:app    # Playground for GitHub Pages
+npm run build:all    # All three
+npm test             # Run tests
 ```
 
 ## License
