@@ -213,16 +213,32 @@ export class SvgRenderBackend implements RenderBackend {
     this._currentGroup().appendChild(el);
   }
 
-  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean): void {
+  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean, lines?: Array<{ text: string; width: number }>, lineHeight?: number): void {
     const el = svgEl('text', {
       'text-anchor': align,
-      'dominant-baseline': 'central',
       'font-size': size,
     });
     if (bold) el.setAttribute('font-weight', 'bold');
-    if (mono) el.setAttribute('font-family', 'monospace');
+    el.setAttribute('font-family', mono ? 'monospace' : 'sans-serif');
     el.setAttribute('fill', rgbaToCSS(fill));
-    el.textContent = content;
+
+    if (lines && lines.length > 1) {
+      const lh = lineHeight ?? size * 1.4;
+      const totalHeight = lines.length * lh;
+      const startY = -totalHeight / 2 + lh / 2;
+      for (let i = 0; i < lines.length; i++) {
+        const tspan = document.createElementNS(SVG_NS, 'tspan');
+        tspan.setAttribute('x', '0');
+        tspan.setAttribute('dy', i === 0 ? String(startY) : String(lh));
+        tspan.setAttribute('dominant-baseline', 'central');
+        tspan.textContent = lines[i].text;
+        el.appendChild(tspan);
+      }
+    } else {
+      el.setAttribute('dominant-baseline', 'central');
+      el.textContent = content;
+    }
+
     this._applyOpacity(el);
     this._currentGroup().appendChild(el);
   }

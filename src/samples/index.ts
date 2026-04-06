@@ -116,6 +116,133 @@ l2: text "dashed" size=11 fill gray at 42,140
 l3: text "dotted" size=11 fill gray at 42,180`,
   },
 
+  // ─── SHAPE SETS ──────────────────────────────────────────────
+  {
+    name: 'core-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all core shape set templates',
+    dsl: `\
+name "Core Shapes"
+background #14161c
+
+objects
+  title: text "core" size=20 bold fill slategray at 350,30
+
+  // ─── box row ───────────────────────────────────
+  box_l: text "box" size=10 fill gray at 0,60
+
+  b1: box "Short" color=steelblue
+    at 0,100
+  b2: box "Auto-sized to fit content" color=steelblue
+    at 200,100
+  b3: box "Wraps when text exceeds the max width limit" maxWidth=180 color=steelblue
+    at 420,100
+  b4: box "Line one\\nLine two\\nLine three" color=steelblue
+    at 620,100
+
+  // ─── circle row ────────────────────────────────
+  circ_l: text "circle" size=10 fill gray at 0,180
+
+  c1: circle "Hi" color=mediumseagreen
+    at 0,230
+  c2: circle "Auto-sized" color=mediumseagreen
+    at 160,230
+  c3: circle "Longer label here" color=mediumseagreen
+    at 370,230
+
+  // ─── pill row ──────────────────────────────────
+  pill_l: text "pill" size=10 fill gray at 0,310
+
+  p1: pill "Tag" color=darkorange
+    at 0,340
+  p2: pill "Status badge" color=darkorange
+    at 130,340
+  p3: pill "A much longer pill label" color=darkorange
+    at 350,340
+
+  // ─── card row ──────────────────────────────────
+  card_l: text "card" size=10 fill gray at 0,390
+
+  cd1: card "Simple Card" color=mediumpurple
+    at 0,450
+  cd2: card "With Body" body="Detail text\\nover two lines" color=mediumpurple
+    at 190,450
+  cd3: card "Wide" body="Body wraps at maxWidth" maxWidth=160 color=mediumpurple
+    at 400,450
+
+  // ─── note row ──────────────────────────────────
+  note_l: text "note" size=10 fill gray at 0,550
+
+  n1: note "Remember"
+    at 0,600
+  n2: note "A longer note that will wrap across multiple lines nicely"
+    at 200,600
+  n3: note "Line one\\nLine two"
+    at 450,600
+
+  // ─── group row ─────────────────────────────────
+  grp_l: text "group" size=10 fill gray at 0,700
+
+  g: group "Group" 180x100 color=teal
+    at 0,770
+
+  // ─── arrow / line row ──────────────────────────
+  conn_l: text "arrow / line" size=10 fill gray at 0,850
+
+  a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 0,890
+  a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 200,890
+  a: arrow from=a_src to=a_dst label="arrow" color=steelblue
+
+  l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 320,890
+  l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 520,890
+  l: line from=l_src to=l_dst label="line" color=coral`,
+  },
+  {
+    name: 'state-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all state shape set templates',
+    dsl: `\
+name "State Shapes"
+background #14161c
+use [core, state]
+
+objects
+  title: text "state" size=20 bold fill slategray at 350,30
+
+  // ─── state.node row ───────────────────────────
+  node_l: text "state.node" size=10 fill gray at 0,60
+
+  sn1: state.node "Idle" color=steelblue
+    at 0,100
+  sn2: state.node "Processing" entry="start" exit="stop" color=mediumseagreen
+    at 180,100
+  sn3: state.node "Active" entry="initTimer\\nloadConfig" exit="saveState\\ncleanup" color=darkorange
+    at 420,100
+  sn4: state.node "Auto-sized long name" color=steelblue
+    at 660,100
+
+  // ─── state.initial / final / choice row ───────
+  misc_l: text "initial / final / choice" size=10 fill gray at 0,200
+
+  si: state.initial color=whitesmoke
+    at 0,240
+  si_l: text "initial" size=9 fill gray at 0,265
+
+  sf: state.final color=whitesmoke
+    at 100,240
+  sf_l: text "final" size=9 fill gray at 100,265
+
+  sc: state.choice color=goldenrod
+    at 200,240
+  sc_l: text "choice" size=9 fill gray at 200,265
+
+  // ─── state.region row ─────────────────────────
+  reg_l: text "state.region" size=10 fill gray at 0,300
+
+  sr: state.region "Region A" 400x120 color=slategray
+    at 0,370`,
+  },
+
   // ─── COMPOSITION ───────────────────────────────────────────────
   {
     name: 'box-composition',
@@ -184,18 +311,6 @@ animate 6s loop
   6 b.fill: #3366ff
   6 c.fill: rgb 60 200 80
   6 d.fill: hsl 60 80 50`,
-  },
-  {
-    name: 'hue-shortest-arc',
-    category: 'Colors',
-    description: 'Hue interpolation takes the shortest arc — 350 to 10 goes through 0, not 180',
-    dsl: `\
-box: rect 100x80 radius=8 fill crimson at 200,150
-label: text "350 → 10 (short arc)" size=11 fill darkgray at 200,210
-
-animate 3s loop
-  1.5 box.fill: orangered
-  3 box.fill: crimson`,
   },
 
   // ─── STYLES ────────────────────────────────────────────────────
@@ -594,88 +709,6 @@ animate 14s loop
     cam.camera.zoom: 1
     cam.transform.rotation: 0
     cam.camera.ratio: 1.78`,
-  },
-  // ─── SHAPE SETS ──────────────────────────────────────────────
-  {
-    name: 'core-shapes',
-    category: 'Shape Sets',
-    description: 'Reference grid of all core shape set templates',
-    dsl: `\
-name "Core Shapes"
-background #14161c
-
-objects
-  title: text "core" size=20 bold fill slategray at 300,30
-
-  bl: text "box" size=10 fill gray at 80,80
-  b: box "Box" 120x60 color=steelblue
-    at 80,120
-
-  cl: text "circle" size=10 fill gray at 240,80
-  c: circle "Circle" 30 color=mediumseagreen
-    at 240,120
-
-  pl: text "pill" size=10 fill gray at 400,80
-  p: pill "Status" color=darkorange
-    at 400,120
-
-  cdl: text "card" size=10 fill gray at 80,200
-  cd: card "Card" 180x100 color=mediumpurple
-    at 80,260
-
-  nl: text "note" size=10 fill gray at 280,200
-  n: note "Remember"
-    at 280,260
-
-  gl: text "group" size=10 fill gray at 80,360
-  g: group "Group" 180x100 color=teal
-    at 80,420
-
-  al: text "arrow" size=10 fill gray at 340,360
-  a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,410
-  a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,410
-  a: arrow from=a_src to=a_dst label="arrow" color=steelblue
-
-  ll: text "line" size=10 fill gray at 340,460
-  l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,500
-  l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,500
-  l: line from=l_src to=l_dst color=coral`,
-  },
-  {
-    name: 'state-shapes',
-    category: 'Shape Sets',
-    description: 'Reference grid of all state shape set templates',
-    dsl: `\
-name "State Shapes"
-background #14161c
-use [core, state]
-
-objects
-  title: text "state" size=20 bold fill slategray at 300,30
-
-  nl: text "state.node" size=10 fill gray at 100,70
-  n: state.node "Idle" color=steelblue
-    at 100,110
-
-  n2l: text "state.node (with actions)" size=10 fill gray at 340,70
-  n2: state.node "Active" 160x70 entry="startTimer" exit="cleanup" color=mediumseagreen
-    at 340,110
-
-  il: text "state.initial" size=10 fill gray at 100,200
-  i: state.initial color=whitesmoke
-    at 100,230
-
-  fl: text "state.final" size=10 fill gray at 240,200
-  f: state.final color=whitesmoke
-    at 240,230
-
-  chl: text "state.choice" size=10 fill gray at 380,200
-  ch: state.choice color=goldenrod
-    at 380,230
-
-  rl: text "state.region" size=10 fill gray at 100,260
-  r: state.region "Region A" 400x120 color=slategray
-    at 100,330`,
   },
 ];
 

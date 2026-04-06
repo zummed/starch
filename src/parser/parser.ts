@@ -2,6 +2,7 @@ import type { Node } from '../types/node';
 import { createNode } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { expandTemplates } from '../templates/registry';
+import type { TextMeasurer } from '../text/measure';
 import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
@@ -66,7 +67,7 @@ function migrateNode(obj: any): any {
   return result;
 }
 
-export function parseScene(input: string): ParsedScene {
+export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
   registerBuiltinTemplates();
 
   const trimmed = input.trim();
@@ -90,7 +91,7 @@ export function parseScene(input: string): ParsedScene {
 
   // Expand templates, then migrate old stroke format in objects
   const searchPath = (raw.use as string[] | undefined) ?? ['core'];
-  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath);
+  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath, measure);
 
   // Convert styles to first-class nodes
   const styleNodes = stylesToNodes(styles);

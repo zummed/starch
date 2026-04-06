@@ -4,6 +4,7 @@ import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 import { dsl } from '../../../dsl/dslMeta';
+import type { TextMeasurer } from '../../../text/measure';
 
 export const circleProps = dsl(z.object({
   text: z.string().describe('Label text').optional(),
@@ -18,10 +19,19 @@ export const circleProps = dsl(z.object({
   kwargs: ['textSize', 'color'],
 });
 
-export function circleTemplate(id: string, props: Record<string, unknown>): Node {
-  const r = (props.r as number) ?? 30;
+export function circleTemplate(id: string, props: Record<string, unknown>, measure?: TextMeasurer): Node {
   const text = props.text as string | undefined;
   const textSize = (props.textSize as number) ?? 14;
+
+  let r = props.r as number | undefined;
+  let measured: { width: number; height: number; lines: Array<{ text: string; width: number }> } | undefined;
+  if (text && measure && r === undefined) {
+    measured = measure.measure(text, { size: textSize });
+    // Inscribe text bounding box in circle: r = diagonal/2
+    const diag = Math.sqrt(measured.width * measured.width + measured.height * measured.height);
+    r = Math.ceil(diag / 2 + 8);
+  }
+  r = r ?? 30;
 
   let stroke: HslColor = { h: 0, s: 0, l: 50 };
   let fill: HslColor = { h: 0, s: 0, l: 15 };
@@ -51,9 +61,12 @@ export function circleTemplate(id: string, props: Record<string, unknown>): Node
     }));
   }
 
+  // For auto-sized circles the text must never wrap narrower than measured
+  const textMaxWidth = measured ? measured.width : Math.floor(r * 2 * 0.7);
   return createNode({
     id,
     children,
+    _textMaxWidth: textMaxWidth,
     ...(props.transform ? { transform: props.transform as any } : {}),
     ...(props.opacity !== undefined ? { opacity: props.opacity as number } : {}),
     ...(props.style ? { style: props.style as string } : {}),

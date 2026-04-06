@@ -5,6 +5,7 @@ import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 import type { AnchorPoint } from '../../../types/anchor';
 import { dsl } from '../../../dsl/dslMeta';
+import type { TextMeasurer } from '../../../text/measure';
 
 export const arrowProps = dsl(z.object({
   from: z.string().describe('Start point (node ID or x,y)'),
@@ -28,7 +29,7 @@ export const arrowProps = dsl(z.object({
 
 const ARROW_SIZE = 8;
 
-export function arrowTemplate(id: string, props: Record<string, unknown>): Node {
+export function arrowTemplate(id: string, props: Record<string, unknown>, measure?: TextMeasurer): Node {
   const from = props.from as PointRef;
   const to = props.to as PointRef;
   const fromAnchor = props.fromAnchor as AnchorPoint | undefined;
@@ -106,15 +107,21 @@ export function arrowTemplate(id: string, props: Record<string, unknown>): Node 
   if (label) {
     const labelPadX = 6;
     const labelPadY = 3;
-    const estWidth = label.length * labelSize * 0.6 + labelPadX * 2;
-    const estHeight = labelSize + labelPadY * 2;
+    let labelW = label.length * labelSize * 0.6 + labelPadX * 2;
+    let labelH = labelSize + labelPadY * 2;
+    if (measure) {
+      const m = measure.measure(label, { size: labelSize });
+      labelW = Math.ceil(m.width + labelPadX * 2);
+      labelH = Math.ceil(m.height + labelPadY * 2);
+    }
     children.push(createNode({
       id: `${id}.label`,
       transform: { pathFollow: `${id}.route`, pathProgress: 0.5 },
+      _textMaxWidth: labelW - labelPadX * 2,
       children: [
         createNode({
           id: `${id}.label.bg`,
-          rect: { w: estWidth, h: estHeight, radius: 3 },
+          rect: { w: labelW, h: labelH, radius: 3 },
           fill: { h: 0, s: 0, l: 8 },
           opacity: 0.85,
         }),

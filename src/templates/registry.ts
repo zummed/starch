@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import type { Node, NodeInput } from '../types/node';
 import { createNode } from '../types/node';
+import type { TextMeasurer } from '../text/measure';
 
 export type TemplateDefinition = {
   children?: any[];
   [key: string]: any;
 };
 
-export type TemplateFn = (id: string, props: Record<string, unknown>) => Node;
+export type TemplateFn = (id: string, props: Record<string, unknown>, measure?: TextMeasurer) => Node;
 
 const templates = new Map<string, TemplateFn>();
 
@@ -181,6 +182,7 @@ export function expandTemplate(
 export function expandTemplates(
   nodes: Array<Record<string, unknown>>,
   searchPath: string[] = ['core'],
+  measure?: TextMeasurer,
 ): Node[] {
   const result: Node[] = [];
   for (const nodeDef of nodes) {
@@ -190,6 +192,7 @@ export function expandTemplates(
         const node = fn(
           nodeDef.id as string,
           (nodeDef.props as Record<string, unknown>) ?? {},
+          measure,
         );
         // Merge node-level properties (transform, fill, stroke, etc.)
         // that were parsed alongside the template invocation.
@@ -203,7 +206,7 @@ export function expandTemplates(
     }
     // Not a template — pass through as a regular node
     const children = Array.isArray(nodeDef.children)
-      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>, searchPath)
+      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>, searchPath, measure)
       : [];
     result.push(createNode({ ...nodeDef, children } as NodeInput));
   }

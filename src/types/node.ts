@@ -192,6 +192,13 @@ export interface NodeInput {
   camera?: { look?: PointRef | string[] | 'all'; zoom?: number; ratio?: number; active?: boolean };
   template?: string;
   props?: Record<string, unknown>;
+  _textPad?: { x: number; y: number };
+  _textMaxWidth?: number;  // effective text wrap width; set by templates, read by measurement pass
+  _measured?: {
+    width: number;
+    height: number;
+    lines: Array<{ text: string; width: number }>;
+  };
 }
 
 // Node is the runtime type with resolved defaults.
@@ -219,6 +226,13 @@ export interface Node {
   _ownKeys?: Set<string>;
   _styleKeys?: Set<string>;
   _isStyle?: boolean;
+  _measured?: {
+    width: number;
+    height: number;
+    lines: Array<{ text: string; width: number }>;
+  };
+  _textPad?: { x: number; y: number };
+  _textMaxWidth?: number;
 }
 
 export function createNode(input: NodeInput): Node {

@@ -13,10 +13,13 @@ import { emitFrame } from '../../renderer/emitter';
 import { SvgRenderBackend } from '../../renderer/svgBackend';
 import type { RenderBackend } from '../../renderer/backend';
 import { colorToRgba } from '../../types/color';
+import { measureTextNodes } from '../../text/measurePass';
+import { getTextMeasurer } from '../../text/measure';
 
 // Register layout strategies (idempotent)
 registerStrategy('flex', flexStrategy);
 registerStrategy('absolute', absoluteStrategy);
+
 
 
 export interface V2DiagramProps {
@@ -43,7 +46,7 @@ export function useV2Diagram(props: V2DiagramProps) {
   const fallbackRef = useRef<ParsedScene | null>(null);
   const scene = useMemo(() => {
     try {
-      const parsed = parseScene(props.dsl);
+      const parsed = parseScene(props.dsl, getTextMeasurer());
       fallbackRef.current = parsed;
       return parsed;
     } catch {
@@ -102,7 +105,16 @@ export function useV2Diagram(props: V2DiagramProps) {
         if (n.rect) { w = n.rect.w; h = n.rect.h; }
         else if (n.ellipse) { w = n.ellipse.rx * 2; h = n.ellipse.ry * 2; }
 
+        else if (n.text && n._measured) { w = n._measured.width; h = n._measured.height; }
         else if (n.text) { w = (n.text.content?.length ?? 0) * (n.text.size ?? 14) * 0.6; h = (n.text.size ?? 14); }
+        if (n.path?.points?.length) {
+          for (const [ptx, pty] of n.path.points) {
+            minX = Math.min(minX, px + ptx);
+            minY = Math.min(minY, py + pty);
+            maxX = Math.max(maxX, px + ptx);
+            maxY = Math.max(maxY, py + pty);
+          }
+        }
         if (w > 0 || h > 0) {
           minX = Math.min(minX, px - w / 2);
           minY = Math.min(minY, py - h / 2);
@@ -116,6 +128,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     for (const t of times) {
       const values = evaluateAllTracks(tracks, t);
       const animated = applyTrackValues(scene.nodes, values);
+      measureTextNodes(animated, getTextMeasurer());
       runLayout(animated, animatedSlotNodeIds);
       addBounds(animated, 0, 0);
     }
@@ -151,6 +164,7 @@ export function useV2Diagram(props: V2DiagramProps) {
 
     const values = evaluateAllTracks(currentTracks, t);
     const animated = applyTrackValues(currentScene.nodes, values);
+    measureTextNodes(animated, getTextMeasurer());
     runLayout(animated, slotIdsRef.current);
 
     let viewBox: ViewBox | undefined;
@@ -263,7 +277,16 @@ export function useV2Diagram(props: V2DiagramProps) {
         if (n.rect) { w = n.rect.w; h = n.rect.h; }
         else if (n.ellipse) { w = n.ellipse.rx * 2; h = n.ellipse.ry * 2; }
 
+        else if (n.text && n._measured) { w = n._measured.width; h = n._measured.height; }
         else if (n.text) { w = (n.text.content?.length ?? 0) * (n.text.size ?? 14) * 0.6; h = (n.text.size ?? 14); }
+        if (n.path?.points?.length) {
+          for (const [ptx, pty] of n.path.points) {
+            minX = Math.min(minX, px + ptx);
+            minY = Math.min(minY, py + pty);
+            maxX = Math.max(maxX, px + ptx);
+            maxY = Math.max(maxY, py + pty);
+          }
+        }
         if (w > 0 || h > 0) {
           minX = Math.min(minX, px - w / 2);
           minY = Math.min(minY, py - h / 2);
@@ -277,6 +300,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     for (const t of times) {
       const values = evaluateAllTracks(currentTracks, t);
       const animated = applyTrackValues(currentScene.nodes, values);
+      measureTextNodes(animated, getTextMeasurer());
       runLayout(animated, slotIdsRef.current);
       addBounds(animated, 0, 0);
     }

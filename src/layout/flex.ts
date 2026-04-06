@@ -13,6 +13,12 @@ function getNodeSize(node: Node, isRow: boolean): { main: number; cross: number 
   } else if (node.image) {
     w = node.image.w;
     h = node.image.h;
+  } else if (node.text && node._measured) {
+    w = node._measured.width;
+    h = node._measured.height;
+  } else if (node.text) {
+    w = (node.text.content?.length ?? 0) * (node.text.size ?? 14) * 0.6;
+    h = node.text.size ?? 14;
   } else {
     w = 100;
     h = 50;

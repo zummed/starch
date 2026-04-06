@@ -227,6 +227,8 @@ function emitNode(
       node.text.align ?? 'middle',
       node.text.bold ?? false,
       node.text.mono ?? false,
+      node._measured?.lines,
+      node.text.lineHeight,
     );
   } else if (node.path) {
     const resolved = resolvePathGeometry(node.path, allRoots);

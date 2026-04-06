@@ -28,8 +28,8 @@ describe('state.node', () => {
     ]);
     const node = nodes[0];
     expect(node.children.find(c => c.id === 's2.divider')).toBeDefined();
-    expect(node.children.find(c => c.id === 's2.entry')?.text?.content).toContain('startTimer');
-    expect(node.children.find(c => c.id === 's2.exit')?.text?.content).toContain('stopTimer');
+    expect(node.children.find(c => c.id === 's2.action0')?.text?.content).toContain('startTimer');
+    expect(node.children.find(c => c.id === 's2.action1')?.text?.content).toContain('stopTimer');
   });
 
   it('applies color to stroke and faded fill', () => {
