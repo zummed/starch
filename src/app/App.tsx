@@ -423,16 +423,6 @@ export default function App() {
         ))}
         <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
         <div style={{ flex: 1 }} />
-        <div
-          onClick={() => setShowFileManager(!showFileManager)}
-          style={{
-            padding: '6px 10px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
-            color: showFileManager ? '#a78bfa' : '#4a4f59',
-            userSelect: 'none',
-          }}
-        >
-          ☰
-        </div>
       </div>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
@@ -547,7 +537,6 @@ export default function App() {
             <>
               <div style={{ width: 1, height: 20, background: '#1e2028', margin: '0 4px' }} />
               {[
-                { label: 'Samples', active: showBrowser, onClick: () => setShowBrowser(!showBrowser) },
                 { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
                 { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
                 { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
@@ -598,41 +587,90 @@ export default function App() {
           style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, userSelect: isDragging ? 'none' : 'auto' }}
           onMouseMove={(e) => {
             if (!dragging.current || !bodyRef.current) return;
-            const panelsWidth = (showBrowser ? 240 : 0) + (showFileManager ? 240 : 0);
+            const panelsWidth = 36 + ((showBrowser || showFileManager) ? 240 : 0);
             const bodyLeft = bodyRef.current.getBoundingClientRect().left;
             setEditorWidth(Math.max(e.clientX - bodyLeft - panelsWidth, 200));
           }}
           onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
           onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
         >
-          {/* Sample browser — slide in/out */}
+          {/* Left blade bar */}
           <div style={{
-            width: showBrowser ? 240 : 0,
+            width: 32,
             height: '100%',
-            flexShrink: 0, overflow: 'hidden',
-            transition: 'width 0.2s ease',
+            flexShrink: 0,
+            background: '#08090d',
+            borderRight: '1px solid #1a1d24',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 0,
           }}>
-            <V2SampleBrowser
-              activeSampleId={activeSampleId}
-              onSelect={handleSampleClick}
-            />
+            {[
+              { id: 'samples' as const, label: 'SAMPLES', active: showBrowser, onClick: () => { setShowBrowser(!showBrowser); if (!showBrowser) setShowFileManager(false); } },
+              { id: 'files' as const, label: 'FILES', active: showFileManager, onClick: () => { setShowFileManager(!showFileManager); if (!showFileManager) setShowBrowser(false); } },
+            ].map(blade => (
+              <div
+                key={blade.id}
+                onClick={blade.onClick}
+                style={{
+                  writingMode: 'vertical-rl',
+                  textOrientation: 'mixed',
+                  transform: 'rotate(180deg)',
+                  padding: '14px 0',
+                  fontSize: 10,
+                  fontFamily: FONT,
+                  fontWeight: 600,
+                  letterSpacing: 1.5,
+                  cursor: 'pointer',
+                  color: blade.active ? '#a78bfa' : '#4a4f59',
+                  background: blade.active ? 'rgba(167,139,250,0.06)' : 'transparent',
+                  transition: 'all 0.15s ease',
+                  userSelect: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  if (!blade.active) {
+                    (e.currentTarget as HTMLDivElement).style.color = '#8a8f98';
+                    (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!blade.active) {
+                    (e.currentTarget as HTMLDivElement).style.color = '#4a4f59';
+                    (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+                  }
+                }}
+              >
+                {blade.label}
+              </div>
+            ))}
           </div>
 
-          {/* File manager — slide in/out */}
+          {/* Side panel — slides in/out */}
           <div style={{
-            width: showFileManager ? 240 : 0,
+            width: (showBrowser || showFileManager) ? 240 : 0,
             height: '100%',
-            flexShrink: 0, overflow: 'hidden',
+            flexShrink: 0,
+            overflow: 'hidden',
             transition: 'width 0.2s ease',
           }}>
-            <TabFileManager
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onSelectTab={setActiveTabId}
-              onToggleVisible={handleToggleVisible}
-              onDuplicateTab={handleDuplicateTab}
-              onDeleteTab={closeTab}
-            />
+            {showBrowser && (
+              <V2SampleBrowser
+                activeSampleId={activeSampleId}
+                onSelect={handleSampleClick}
+              />
+            )}
+            {showFileManager && (
+              <TabFileManager
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onSelectTab={setActiveTabId}
+                onToggleVisible={handleToggleVisible}
+                onDuplicateTab={handleDuplicateTab}
+                onDeleteTab={closeTab}
+              />
+            )}
           </div>
 
           {/* Editor panel — slide in/out */}
