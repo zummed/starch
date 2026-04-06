@@ -6,6 +6,10 @@ import { lineTemplate, lineProps } from './line';
 import { tableTemplate, tableProps } from './table';
 import { textblockTemplate, textblockProps } from './textblock';
 import { codeblockTemplate, codeblockProps } from './codeblock';
+import { pillTemplate, pillProps } from './pill';
+import { cardTemplate, cardProps } from './card';
+import { noteTemplate, noteProps } from './note';
+import { groupTemplate, groupProps } from './group';
 
 export const coreSet: ShapeSet = {
   name: 'core',
@@ -18,5 +22,9 @@ export const coreSet: ShapeSet = {
     ['table', { template: tableTemplate, props: tableProps }],
     ['textblock', { template: textblockTemplate, props: textblockProps }],
     ['codeblock', { template: codeblockTemplate, props: codeblockProps }],
+    ['pill', { template: pillTemplate, props: pillProps }],
+    ['card', { template: cardTemplate, props: cardProps }],
+    ['note', { template: noteTemplate, props: noteProps }],
+    ['group', { template: groupTemplate, props: groupProps }],
   ]),
 };
