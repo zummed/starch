@@ -612,17 +612,47 @@ export function executeNodeBody(
   // ── Template syntax ────────────────────────────────────────────
   // `template name key=val ...` — sets node.template + node.props
   if (!result.path && ctx.is('identifier', 'template')) {
-    ctx.next(); // consume 'template'
-    const templateSchema = resolveFieldSchema(schema, 'template');
+    const templateKwTok = ctx.next()!; // consume 'template'
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.template`,
+      from: templateKwTok.offset,
+      to: templateKwTok.offset + templateKwTok.value.length,
+      value: 'template',
+      dslRole: 'keyword',
+    });
     let templateName: string | undefined;
+    let templateNameFrom: number | undefined;
+    let templateNameTo: number | undefined;
     if (ctx.is('string')) {
-      templateName = ctx.next()!.value;
+      const tok = ctx.next()!;
+      templateName = tok.value;
+      templateNameFrom = tok.offset;
+      templateNameTo = tok.offset + tok.value.length;
     } else if (ctx.is('identifier')) {
-      templateName = ctx.next()!.value;
+      const tok = ctx.next()!;
+      templateName = tok.value;
+      templateNameFrom = tok.offset;
+      templateNameTo = tok.offset + tok.value.length;
+      // Handle dotted template names: `core.box`, `state.node`
+      while (ctx.is('dot' as any)) {
+        ctx.next(); // consume dot
+        if (ctx.is('identifier')) {
+          const partTok = ctx.next()!;
+          templateName += '.' + partTok.value;
+          templateNameTo = partTok.offset + partTok.value.length;
+        }
+      }
     }
     if (templateName != null) {
       result.template = templateName;
-      // Parse key=val props
+      ctx.emitLeaf({
+        schemaPath: `${schemaPath}.template`,
+        from: templateNameFrom!,
+        to: templateNameTo!,
+        value: templateName,
+        dslRole: 'value',
+      });
+      // Parse key=val props, emitting AST leaves for each kwarg
       const props: Record<string, unknown> = {};
       while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
         const keyTok = ctx.next()!;
@@ -637,6 +667,22 @@ export function executeNodeBody(
         else break;
         ctx.next();
         props[keyTok.value] = val;
+        // Emit kwarg-key leaf
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+          from: keyTok.offset,
+          to: keyTok.offset + keyTok.value.length,
+          value: keyTok.value,
+          dslRole: 'kwarg-key',
+        });
+        // Emit kwarg-value leaf
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+          from: valTok.offset,
+          to: valTok.offset + valTok.value.length,
+          value: val,
+          dslRole: 'kwarg-value',
+        });
       }
       if (Object.keys(props).length > 0) result.props = props;
     }

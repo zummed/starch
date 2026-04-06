@@ -22,12 +22,54 @@ import {
   type SchemaType,
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
+import { getShapeDefinition, listSets } from '../../templates/registry';
 import type { z } from 'zod';
 
-/** Resolve a schema path against NodeSchema first, then DocumentSchema. */
+/**
+ * Resolve a template prop schema from a `tplprops:templateName.propName` path.
+ *
+ * Template names can be unqualified (`box`) or qualified (`core.box`).
+ * For unqualified names, we search all registered shape sets.
+ */
+function resolveTemplatePropSchema(schemaPath: string): z.ZodType | null {
+  // The schemaPath format is: tplprops:<templateName>.<propName>
+  // After localSchemaPath strips "objects.", we get something like:
+  //   tplprops:box.w  or  tplprops:core.box.w
+  const tplMatch = schemaPath.match(/^tplprops:(.+)\.(\w+)$/);
+  if (!tplMatch) return null;
+
+  const templateName = tplMatch[1];
+  const propName = tplMatch[2];
+
+  // Try qualified name first: "setName.shapeName"
+  if (templateName.includes('.')) {
+    const dotIdx = templateName.indexOf('.');
+    const setName = templateName.slice(0, dotIdx);
+    const shapeName = templateName.slice(dotIdx + 1);
+    const def = getShapeDefinition(setName, shapeName);
+    if (def) {
+      const propSchema = (def.props as any).shape?.[propName];
+      if (propSchema) return propSchema;
+    }
+    return null;
+  }
+
+  // Unqualified name: search all sets
+  for (const set of listSets()) {
+    const def = set.shapes.get(templateName);
+    if (def) {
+      const propSchema = (def.props as any).shape?.[propName];
+      if (propSchema) return propSchema;
+    }
+  }
+  return null;
+}
+
+/** Resolve a schema path against NodeSchema first, then DocumentSchema, then template props. */
 function resolvePropertySchema(path: string): z.ZodType | null {
   return getPropertySchema(path, NodeSchema)
-    ?? getPropertySchema(path, DocumentSchema);
+    ?? getPropertySchema(path, DocumentSchema)
+    ?? resolveTemplatePropSchema(path);
 }
 
 /** List available properties at a path, trying both roots. */
@@ -114,7 +156,14 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     rangeTo = compound?.to ?? node.to;
   } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
     const compound = findCompound(node);
-    schemaPath = compound?.schemaPath ?? node.schemaPath;
+    // For kwarg-values at node-line level (compound schemaPath is empty),
+    // use the node's own schemaPath — this handles template props kwargs.
+    schemaPath = (compound?.schemaPath) ? compound.schemaPath : node.schemaPath;
+    rangeFrom = node.from;
+    rangeTo = node.to;
+  } else if (node.dslRole === 'kwarg-key') {
+    // Kwarg keys carry their own schemaPath (e.g., template props)
+    schemaPath = node.schemaPath;
     rangeFrom = node.from;
     rangeTo = node.to;
   } else {
