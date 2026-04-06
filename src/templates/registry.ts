@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Node, NodeInput } from '../types/node';
 import { createNode } from '../types/node';
 
@@ -6,7 +7,7 @@ export type TemplateDefinition = {
   [key: string]: any;
 };
 
-type TemplateFn = (id: string, props: Record<string, unknown>) => Node;
+export type TemplateFn = (id: string, props: Record<string, unknown>) => Node;
 
 const templates = new Map<string, TemplateFn>();
 
@@ -15,6 +16,48 @@ export function registerTemplate(name: string, fn: TemplateFn): void {
 }
 
 export function getTemplate(name: string): TemplateFn | undefined {
+  return templates.get(name);
+}
+
+export interface ShapeDefinition {
+  template: TemplateFn;
+  props: z.ZodObject<any>;
+}
+
+export interface ShapeSet {
+  name: string;
+  description: string;
+  shapes: Map<string, ShapeDefinition>;
+}
+
+const shapeSets = new Map<string, ShapeSet>();
+
+export function registerSet(set: ShapeSet): void {
+  shapeSets.set(set.name, set);
+  for (const [shapeName, def] of set.shapes) {
+    templates.set(`${set.name}.${shapeName}`, def.template);
+  }
+}
+
+export function getSet(name: string): ShapeSet | undefined {
+  return shapeSets.get(name);
+}
+
+export function listSets(): ShapeSet[] {
+  return Array.from(shapeSets.values());
+}
+
+export function resolveTemplateName(
+  name: string,
+  searchPath: string[],
+): TemplateFn | undefined {
+  if (name.includes('.')) {
+    return templates.get(name);
+  }
+  for (const setName of searchPath) {
+    const fn = templates.get(`${setName}.${name}`);
+    if (fn) return fn;
+  }
   return templates.get(name);
 }
 
