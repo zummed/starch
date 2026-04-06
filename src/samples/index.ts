@@ -608,27 +608,27 @@ objects
   title: text "core" size=20 bold fill slategray at 300,30
 
   bl: text "box" size=10 fill gray at 80,80
-  b: box w=120 h=60 text="Box" color=steelblue
+  b: box "Box" 120x60 color=steelblue
     at 80,120
 
   cl: text "circle" size=10 fill gray at 240,80
-  c: circle r=30 text="Circle" color=mediumseagreen
+  c: circle "Circle" 30 color=mediumseagreen
     at 240,120
 
   pl: text "pill" size=10 fill gray at 400,80
-  p: pill text="Status" color=darkorange
+  p: pill "Status" color=darkorange
     at 400,120
 
   cdl: text "card" size=10 fill gray at 80,200
-  cd: card title="Card" body="Body text" color=mediumpurple
+  cd: card "Card" 180x100 color=mediumpurple
     at 80,260
 
   nl: text "note" size=10 fill gray at 280,200
-  n: note text="Remember"
+  n: note "Remember"
     at 280,260
 
   gl: text "group" size=10 fill gray at 80,370
-  g: group label="Group" w=180 h=100 color=teal
+  g: group "Group" 180x100 color=teal
     at 80,420
 
   al: text "arrow" size=10 fill gray at 340,370
@@ -654,11 +654,11 @@ objects
   title: text "state" size=20 bold fill slategray at 300,30
 
   nl: text "state.node" size=10 fill gray at 100,70
-  n: state.node name="Idle" color=steelblue
+  n: state.node "Idle" color=steelblue
     at 100,110
 
   n2l: text "state.node (with actions)" size=10 fill gray at 340,70
-  n2: state.node name="Active" entry="startTimer" exit="cleanup" color=mediumseagreen w=160 h=70
+  n2: state.node "Active" 160x70 entry="startTimer" exit="cleanup" color=mediumseagreen
     at 340,110
 
   il: text "state.initial" size=10 fill gray at 100,200
@@ -674,7 +674,7 @@ objects
     at 380,230
 
   rl: text "state.region" size=10 fill gray at 100,290
-  r: state.region label="Region A" w=400 h=120 color=slategray
+  r: state.region "Region A" 400x120 color=slategray
     at 100,330`,
   },
 ];
