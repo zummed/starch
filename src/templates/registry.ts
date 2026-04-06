@@ -144,11 +144,12 @@ export function expandTemplate(
  */
 export function expandTemplates(
   nodes: Array<Record<string, unknown>>,
+  searchPath: string[] = ['core'],
 ): Node[] {
   const result: Node[] = [];
   for (const nodeDef of nodes) {
     if (nodeDef.template && typeof nodeDef.template === 'string') {
-      const fn = getTemplate(nodeDef.template);
+      const fn = resolveTemplateName(nodeDef.template, searchPath);
       if (fn) {
         result.push(fn(
           nodeDef.id as string,
@@ -159,7 +160,7 @@ export function expandTemplates(
     }
     // Not a template — pass through as a regular node
     const children = Array.isArray(nodeDef.children)
-      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>)
+      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>, searchPath)
       : [];
     result.push(createNode({ ...nodeDef, children } as NodeInput));
   }

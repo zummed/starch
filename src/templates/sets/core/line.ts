@@ -1,7 +1,20 @@
-import type { Node, PointRef } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
+import { z } from 'zod';
+import type { Node, PointRef } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+
+export const lineProps = z.object({
+  from: z.string().describe('Start point'),
+  to: z.string().describe('End point'),
+  label: z.string().describe('Label text').optional(),
+  labelSize: z.number().describe('Label font size').optional(),
+  arrow: z.boolean().describe('Show arrowhead').optional(),
+  smooth: z.boolean().describe('Smooth curves').optional(),
+  bend: z.number().describe('Bend amount').optional(),
+  dashed: z.boolean().describe('Dashed line').optional(),
+  color: z.string().describe('Color').optional(),
+});
 
 export function lineTemplate(id: string, props: Record<string, unknown>): Node {
   const from = props.from as PointRef;

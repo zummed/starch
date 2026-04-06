@@ -1,7 +1,15 @@
-import type { Node } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
+import { z } from 'zod';
+import type { Node } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+
+export const circleProps = z.object({
+  r: z.number().min(1).describe('Radius').optional(),
+  text: z.string().describe('Label text').optional(),
+  textSize: z.number().min(1).describe('Font size').optional(),
+  color: z.string().describe('Color').optional(),
+});
 
 export function circleTemplate(id: string, props: Record<string, unknown>): Node {
   const r = (props.r as number) ?? 30;

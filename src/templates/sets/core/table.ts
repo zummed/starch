@@ -1,7 +1,15 @@
-import type { Node } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
+import { z } from 'zod';
+import type { Node } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+
+export const tableProps = z.object({
+  cols: z.array(z.string()).describe('Column headers'),
+  rows: z.array(z.array(z.string())).describe('Row data'),
+  colWidth: z.number().describe('Column width').optional(),
+  rowHeight: z.number().describe('Row height').optional(),
+});
 
 export function tableTemplate(id: string, props: Record<string, unknown>): Node {
   const cols = (props.cols as string[]) ?? [];

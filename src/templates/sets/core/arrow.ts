@@ -1,8 +1,23 @@
-import type { Node, PointRef } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
-import type { AnchorPoint } from '../../types/anchor';
+import { z } from 'zod';
+import type { Node, PointRef } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+import type { AnchorPoint } from '../../../types/anchor';
+
+export const arrowProps = z.object({
+  from: z.string().describe('Start point (node ID or x,y)'),
+  to: z.string().describe('End point (node ID or x,y)'),
+  label: z.string().describe('Label text').optional(),
+  labelSize: z.number().describe('Label font size').optional(),
+  arrow: z.boolean().describe('Show end arrowhead').optional(),
+  arrowStart: z.boolean().describe('Show start arrowhead').optional(),
+  smooth: z.boolean().describe('Smooth curves').optional(),
+  bend: z.number().describe('Bend amount').optional(),
+  dashed: z.boolean().describe('Dashed line').optional(),
+  gap: z.number().describe('Gap from node edge').optional(),
+  color: z.string().describe('Color').optional(),
+});
 
 const ARROW_SIZE = 8;
 

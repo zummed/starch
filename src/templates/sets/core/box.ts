@@ -1,7 +1,18 @@
-import type { Node } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
+import { z } from 'zod';
+import type { Node } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+
+export const boxProps = z.object({
+  w: z.number().min(1).describe('Width').optional(),
+  h: z.number().min(1).describe('Height').optional(),
+  radius: z.number().min(0).describe('Corner radius').optional(),
+  text: z.string().describe('Label text').optional(),
+  textSize: z.number().min(1).describe('Font size').optional(),
+  color: z.string().describe('Color (sets stroke + faded fill)').optional(),
+  textColor: z.string().describe('Text color').optional(),
+});
 
 function deriveFillFromStroke(stroke: HslColor): HslColor {
   return {

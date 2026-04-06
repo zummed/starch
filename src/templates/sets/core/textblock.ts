@@ -1,7 +1,17 @@
-import type { Node } from '../../types/node';
-import { createNode } from '../../types/node';
-import { parseColor } from '../../types/color';
-import type { HslColor } from '../../types/properties';
+import { z } from 'zod';
+import type { Node } from '../../../types/node';
+import { createNode } from '../../../types/node';
+import { parseColor } from '../../../types/color';
+import type { HslColor } from '../../../types/properties';
+
+export const textblockProps = z.object({
+  lines: z.array(z.string()).describe('Lines of text'),
+  size: z.number().describe('Font size').optional(),
+  lineHeight: z.number().describe('Line height').optional(),
+  mono: z.boolean().describe('Monospace font').optional(),
+  bold: z.boolean().describe('Bold text').optional(),
+  color: z.string().describe('Text color').optional(),
+});
 
 export function textblockTemplate(id: string, props: Record<string, unknown>): Node {
   const lines = (props.lines as string[]) ?? [];

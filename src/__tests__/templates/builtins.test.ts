@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { boxTemplate } from '../../templates/builtins/box';
-import { circleTemplate } from '../../templates/builtins/circle';
-import { labelTemplate } from '../../templates/builtins/label';
-import { lineTemplate } from '../../templates/builtins/line';
-import { textblockTemplate } from '../../templates/builtins/textblock';
-import { codeblockTemplate } from '../../templates/builtins/codeblock';
-import { tableTemplate } from '../../templates/builtins/table';
+import { boxTemplate } from '../../templates/sets/core/box';
+import { circleTemplate } from '../../templates/sets/core/circle';
+import { lineTemplate } from '../../templates/sets/core/line';
+import { textblockTemplate } from '../../templates/sets/core/textblock';
+import { codeblockTemplate } from '../../templates/sets/core/codeblock';
+import { tableTemplate } from '../../templates/sets/core/table';
 
 describe('boxTemplate', () => {
   it('creates a box with bg and label children', () => {
@@ -45,15 +44,6 @@ describe('circleTemplate', () => {
     expect(node.children).toHaveLength(2);
     expect(node.children[0].ellipse!.rx).toBe(40);
     expect(node.children[1].text!.content).toBe('Test');
-  });
-});
-
-describe('labelTemplate', () => {
-  it('creates a text-only node', () => {
-    const node = labelTemplate('l1', { text: 'Title', size: 20, bold: true });
-    expect(node.text!.content).toBe('Title');
-    expect(node.text!.size).toBe(20);
-    expect(node.text!.bold).toBe(true);
   });
 });
 
