@@ -3,14 +3,20 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const stateNodeProps = z.object({
+export const stateNodeProps = dsl(z.object({
   name: z.string().describe('State name'),
   entry: z.string().describe('Entry action').optional(),
   exit: z.string().describe('Exit action').optional(),
-  color: z.string().describe('Color').optional(),
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
+  color: z.string().describe('Color').optional(),
+}), {
+  positional: [
+    { keys: ['name'], format: 'quoted' },
+  ],
+  kwargs: ['entry', 'exit', 'w', 'h', 'color'],
 });
 
 export function stateNodeTemplate(id: string, props: Record<string, unknown>): Node {

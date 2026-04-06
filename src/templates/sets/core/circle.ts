@@ -3,12 +3,19 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const circleProps = z.object({
-  r: z.number().min(1).describe('Radius').optional(),
+export const circleProps = dsl(z.object({
   text: z.string().describe('Label text').optional(),
+  r: z.number().min(1).describe('Radius').optional(),
   textSize: z.number().min(1).describe('Font size').optional(),
   color: z.string().describe('Color').optional(),
+}), {
+  positional: [
+    { keys: ['text'], format: 'quoted' },
+    { keys: ['r'], format: 'spaced' },
+  ],
+  kwargs: ['textSize', 'color'],
 });
 
 export function circleTemplate(id: string, props: Record<string, unknown>): Node {
