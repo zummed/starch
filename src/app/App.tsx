@@ -339,7 +339,7 @@ export default function App() {
       }}
       onWheel={(e) => {
         e.preventDefault();
-        const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
+        const cur = panZoom || diagram.computeFitAll();
         const rect = e.currentTarget.getBoundingClientRect();
         const mx = (e.clientX - rect.left) / rect.width;
         const my = (e.clientY - rect.top) / rect.height;
@@ -361,7 +361,7 @@ export default function App() {
         const startX = e.clientX;
         const startY = e.clientY;
         const rect = e.currentTarget.getBoundingClientRect();
-        const cur = panZoom || { x: vpW / 2, y: vpH / 2, zoom: 1 };
+        const cur = panZoom || diagram.computeFitAll();
         const pixelToWorld = (vpW / cur.zoom) / rect.width;
         const onMove = (me: MouseEvent) => {
           setPanZoom({ x: cur.x - (me.clientX - startX) * pixelToWorld, y: cur.y - (me.clientY - startY) * pixelToWorld, zoom: cur.zoom });
