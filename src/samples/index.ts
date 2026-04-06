@@ -595,6 +595,88 @@ animate 14s loop
     cam.transform.rotation: 0
     cam.camera.ratio: 1.78`,
   },
+  // ─── SHAPE SETS ──────────────────────────────────────────────
+  {
+    name: 'core-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all core shape set templates',
+    dsl: `\
+name "Core Shapes"
+background #14161c
+
+objects
+  title: text "core" size=20 bold fill slategray at 300,30
+
+  bl: text "box" size=10 fill gray at 80,80
+  b: at 80,120
+    template box w=120 h=60 text="Box" color=steelblue
+
+  cl: text "circle" size=10 fill gray at 240,80
+  c: at 240,120
+    template circle r=30 text="Circle" color=mediumseagreen
+
+  pl: text "pill" size=10 fill gray at 400,80
+  p: at 400,120
+    template pill text="Status" color=darkorange
+
+  cdl: text "card" size=10 fill gray at 80,200
+  cd: at 80,260
+    template card title="Card" body="Body text" color=mediumpurple
+
+  nl: text "note" size=10 fill gray at 280,200
+  n: at 280,260
+    template note text="Remember"
+
+  gl: text "group" size=10 fill gray at 80,370
+  g: at 80,420
+    template group label="Group" w=180 h=100 color=teal
+
+  al: text "arrow" size=10 fill gray at 340,370
+  a_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,410
+  a_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,410
+  a: template arrow from=a_src to=a_dst label="arrow" color=steelblue
+
+  ll: text "line" size=10 fill gray at 340,460
+  l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 340,500
+  l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 500,500
+  l: template line from=l_src to=l_dst color=coral`,
+  },
+  {
+    name: 'state-shapes',
+    category: 'Shape Sets',
+    description: 'Reference grid of all state shape set templates',
+    dsl: `\
+name "State Shapes"
+background #14161c
+use [core, state]
+
+objects
+  title: text "state" size=20 bold fill slategray at 300,30
+
+  nl: text "state.node" size=10 fill gray at 100,70
+  n: at 100,110
+    template state.node name="Idle" color=steelblue
+
+  n2l: text "state.node (with actions)" size=10 fill gray at 340,70
+  n2: at 340,110
+    template state.node name="Active" entry="startTimer" exit="cleanup" color=mediumseagreen w=160 h=70
+
+  il: text "state.initial" size=10 fill gray at 100,200
+  i: at 100,230
+    template state.initial color=whitesmoke
+
+  fl: text "state.final" size=10 fill gray at 240,200
+  f: at 240,230
+    template state.final color=whitesmoke
+
+  chl: text "state.choice" size=10 fill gray at 380,200
+  ch: at 380,230
+    template state.choice color=goldenrod
+
+  rl: text "state.region" size=10 fill gray at 100,290
+  r: at 100,330
+    template state.region label="Region A" w=400 h=120 color=slategray`,
+  },
 ];
 
 export function getV2SampleCategories(): string[] {
