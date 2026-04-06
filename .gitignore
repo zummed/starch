@@ -5,3 +5,4 @@ dist
 docs/plans/
 .playwright-mcp
 .superpowers
+dist-app/
