@@ -49,6 +49,7 @@ export class StarchDiagram {
   private _tracks: Tracks = new Map();
   private _animatedSlotNodeIds = new Set<string>();
   private _viewport = { w: 800, h: 500 };
+  private _valuesMap = new Map<string, unknown>();
 
   private _time = 0;
   private _playing = false;
@@ -268,7 +269,7 @@ export class StarchDiagram {
   }
 
   private _render(): void {
-    const values = evaluateAllTracks(this._tracks, this._time);
+    const values = evaluateAllTracks(this._tracks, this._time, this._valuesMap);
     const animated = applyTrackValues(this._scene.nodes, values);
     measureTextNodes(animated, getTextMeasurer());
     runLayout(animated, this._animatedSlotNodeIds);

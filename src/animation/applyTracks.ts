@@ -17,12 +17,39 @@ function cloneNode(node: Node): Node {
   };
 }
 
+/** Deep-clone a node tree. Useful for creating a persistent animated copy. */
+export function cloneNodeTree(roots: Node[]): Node[] {
+  return roots.map(cloneNode);
+}
+
+/**
+ * Apply track values to a node tree, returning a new cloned tree.
+ * Original nodes are not mutated.
+ */
 export function applyTrackValues(
   roots: Node[],
   values: Map<string, unknown>,
 ): Node[] {
   const cloned = roots.map(cloneNode);
+  applyToNodes(cloned, values);
+  return cloned;
+}
 
+/**
+ * Apply track values by mutating nodes in place — no cloning.
+ * Use with a persistent animated tree to avoid per-frame allocations.
+ */
+export function applyTrackValuesMut(
+  roots: Node[],
+  values: Map<string, unknown>,
+): void {
+  applyToNodes(roots, values);
+}
+
+function applyToNodes(
+  cloned: Node[],
+  values: Map<string, unknown>,
+): void {
   for (const [trackPath, value] of values) {
     const segments = trackPath.split('.');
 
@@ -69,6 +96,4 @@ export function applyTrackValues(
       }
     }
   }
-
-  return cloned;
 }

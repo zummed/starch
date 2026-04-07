@@ -123,8 +123,18 @@ export function applyLayoutPlacements(roots: Node[], placements: LayoutResult[],
   }
 }
 
+/** Check if any node in the tree declares a layout container. */
+function hasLayoutContainers(nodes: Node[]): boolean {
+  for (const node of nodes) {
+    if (node.layout?.type) return true;
+    if (node.children.length > 0 && hasLayoutContainers(node.children)) return true;
+  }
+  return false;
+}
+
 /** Convenience: compute and apply in one step */
 export function runLayout(roots: Node[], animatedSlotNodeIds?: Set<string>): void {
+  if (!hasLayoutContainers(roots)) return;
   const placements = computeLayoutPlacements(roots);
   applyLayoutPlacements(roots, placements, animatedSlotNodeIds);
 }
