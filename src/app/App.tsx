@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useV2Diagram } from './components/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabFileManager } from './components/TabFileManager';
-import { TabLayout } from './components/TabLayout';
 import { Timeline } from './components/Timeline';
 import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
 import { v2Samples, type V2Sample } from '../samples/index';
@@ -13,7 +12,7 @@ const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
 const PREFS_KEY = 'starch-v2-prefs';
 const TABS_KEY = 'starch-tabs';
 
-type LayoutMode = 'panel' | 'blade' | 'tab';
+type LayoutMode = 'panel' | 'blade';
 
 interface EditorTab {
   id: string;
@@ -55,18 +54,15 @@ function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: numbe
 
 function detectDefaultMode(): LayoutMode {
   if (typeof window === 'undefined') return 'panel';
-  const w = window.innerWidth;
-  if (w < 768) return 'tab';
-  if (w < 1024) return 'blade';
-  return 'panel';
+  return window.innerWidth < 1024 ? 'blade' : 'panel';
 }
 
-function loadPrefs(): { layoutMode: LayoutMode | null; showBrowser: boolean; showEditor: boolean; editorWidth: number } {
+function loadPrefs(): { showBrowser: boolean; showEditor: boolean; editorWidth: number } {
   try {
     const stored = localStorage.getItem(PREFS_KEY);
-    if (stored) return { layoutMode: null, showBrowser: true, showEditor: true, editorWidth: 360, ...JSON.parse(stored) };
+    if (stored) return { showBrowser: true, showEditor: true, editorWidth: 360, ...JSON.parse(stored) };
   } catch { /* ignore */ }
-  return { layoutMode: null, showBrowser: true, showEditor: true, editorWidth: 360 };
+  return { showBrowser: true, showEditor: true, editorWidth: 360 };
 }
 
 function savePrefs(prefs: Record<string, unknown>) {
@@ -75,9 +71,7 @@ function savePrefs(prefs: Record<string, unknown>) {
 
 export default function App() {
   const initialPrefs = useRef(loadPrefs());
-  const [userLayoutMode, setUserLayoutMode] = useState<LayoutMode | null>(initialPrefs.current.layoutMode);
-  const [autoMode, setAutoMode] = useState<LayoutMode>(detectDefaultMode);
-  const layoutMode = userLayoutMode ?? autoMode;
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(detectDefaultMode);
 
   const storedTabs = useRef(loadStoredTabs());
   const nextTabIdRef = useRef(storedTabs.current?.nextTabId ?? 1);
@@ -113,8 +107,8 @@ export default function App() {
     activeTabIdRef.current = id;
     _setActiveTabId(id);
   }, []);
-  const [showEditor, setShowEditor] = useState(layoutMode === 'panel' ? initialPrefs.current.showEditor : true);
-  const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
+  const [showEditor, setShowEditor] = useState(initialPrefs.current.showEditor);
+  const [showBrowser, setShowBrowser] = useState(initialPrefs.current.showBrowser);
   const [showFileManager, setShowFileManager] = useState(false);
   const [activeBlade, setActiveBlade] = useState<'samples' | 'files' | 'editor' | 'viewer'>('viewer');
   const [debugMode, setDebugMode] = useState(false);
@@ -152,21 +146,19 @@ export default function App() {
     }
   }, []);
 
-  // Auto-detect layout on resize (only when user hasn't explicitly chosen)
+  // Auto-detect layout on resize
   useEffect(() => {
-    if (userLayoutMode !== null) return;
     const handler = () => {
-      const w = window.innerWidth;
-      setAutoMode(w < 768 ? 'tab' : w < 1024 ? 'blade' : 'panel');
+      setLayoutMode(window.innerWidth < 1024 ? 'blade' : 'panel');
     };
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
-  }, [userLayoutMode]);
+  }, []);
 
   // Persist prefs
   useEffect(() => {
-    savePrefs({ layoutMode: userLayoutMode, showBrowser, showEditor, editorWidth });
-  }, [userLayoutMode, showBrowser, showEditor, editorWidth]);
+    savePrefs({ showBrowser, showEditor, editorWidth });
+  }, [showBrowser, showEditor, editorWidth]);
 
   // Persist user tabs (debounced)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,7 +182,6 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
-  const isCompact = layoutMode === 'tab';
   const isBlade = layoutMode === 'blade';
 
   const vpW = 800;
@@ -307,8 +298,8 @@ export default function App() {
   }, []);
 
   // Touch-friendly button size
-  const btnPad = isCompact ? '8px 14px' : '4px 10px';
-  const btnSize = isCompact ? 12 : 11;
+  const btnPad = isBlade ? '8px 14px' : '4px 10px';
+  const btnSize = isBlade ? 12 : 11;
 
   // Compute fitted container dimensions for ratio preview
   const ratioContainerStyle = (() => {
@@ -535,14 +526,14 @@ export default function App() {
           -webkit-appearance: none; height: 4px; background: #1e2028; border-radius: 2px; outline: none;
         }
         input[type=range]::-webkit-slider-thumb {
-          -webkit-appearance: none; width: ${isCompact ? 20 : 14}px; height: ${isCompact ? 20 : 14}px;
+          -webkit-appearance: none; width: ${isBlade ? 20 : 14}px; height: ${isBlade ? 20 : 14}px;
           border-radius: 50%; background: #a78bfa; cursor: pointer; border: 2px solid #0e1117;
         }
       `}</style>
 
       {/* Header */}
       <div style={{
-        padding: isCompact ? '8px 12px' : '10px 20px',
+        padding: isBlade ? '8px 12px' : '10px 20px',
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', borderBottom: '1px solid #1a1d24', flexShrink: 0,
       }}>
@@ -554,52 +545,32 @@ export default function App() {
           <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e5ea' }}>starch</span>
           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 2, fontWeight: 600 }}>v2</span>
         </div>
-        {!isCompact && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {[
-              { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
-              { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
-              { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
-              { label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
-            ].map(btn => (
-              <button
-                key={btn.label}
-                onClick={btn.onClick}
-                style={{
-                  padding: btnPad, borderRadius: 6,
-                  border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
-                  background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
-                  color: btn.active ? '#a78bfa' : '#6b7280',
-                  fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {[
+            { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
+            { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
+            { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
+            { label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              onClick={btn.onClick}
+              style={{
+                padding: btnPad, borderRadius: 6,
+                border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
+                background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
+                color: btn.active ? '#a78bfa' : '#6b7280',
+                fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Body */}
-      {isCompact ? (
-        <TabLayout
-          canvasContent={canvasContent}
-          timelineContent={timelineContent}
-          editorContent={editorContent}
-          fileManagerContent={
-            <TabFileManager
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onSelectTab={setActiveTabId}
-              onToggleVisible={handleToggleVisible}
-              onDuplicateTab={handleDuplicateTab}
-              onDeleteTab={closeTab}
-            />
-          }
-          onSampleSelect={handleSampleClick}
-          activeSampleId={activeSampleId}
-        />
-      ) : isBlade ? (
+      {isBlade ? (
         /* Blade mode: 4 blades, one content area at a time */
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
           {/* Left blade bar — 4 blades */}
