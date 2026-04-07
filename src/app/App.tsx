@@ -510,7 +510,7 @@ export default function App() {
 
   return (
     <div style={{
-      width: '100%', height: '100vh', display: 'flex', flexDirection: 'column',
+      width: '100%', height: '100dvh', display: 'flex', flexDirection: 'column',
       background: '#0e1117', fontFamily: FONT, color: '#c9cdd4', overflow: 'hidden',
     }}>
       <style>{`

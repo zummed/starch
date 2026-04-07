@@ -28,16 +28,17 @@ export function Timeline({
   onSpeedChange,
 }: TimelineProps) {
   const pct = duration > 0 ? (time / duration) * 100 : 0;
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 1024;
 
   return (
     <div
       style={{
         height: 48,
         borderTop: '1px solid #1a1d24',
-        padding: '0 20px',
+        padding: narrow ? '0 8px' : '0 20px',
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: narrow ? 6 : 12,
         flexShrink: 0,
         fontFamily: FONT,
       }}
@@ -45,7 +46,7 @@ export function Timeline({
       <button
         className="ctrl-btn"
         onClick={onTogglePlay}
-        style={ctrlBtnStyle(playing)}
+        style={ctrlBtnStyle(playing, narrow)}
       >
         <svg width="12" height="12" viewBox="0 0 12 12">
           {playing
@@ -57,14 +58,14 @@ export function Timeline({
       <button
         className="ctrl-btn"
         onClick={onRestart}
-        style={ctrlBtnStyle(false)}
+        style={ctrlBtnStyle(false, narrow)}
       >
         <svg width="12" height="12" viewBox="0 0 12 12">
           <rect x="0" y="1" width="2.5" height="10" rx="0.5" fill="currentColor"/>
           <polygon points="10,0 3,6 10,12" fill="currentColor"/>
         </svg>
       </button>
-      {keyframeTimes.length > 0 && (<>
+      {keyframeTimes.length > 0 && !narrow && (<>
         <button
           className="ctrl-btn"
           title="Previous keyframe"
@@ -72,7 +73,7 @@ export function Timeline({
             const prev = [...keyframeTimes].reverse().find(t => t < time - 0.01);
             onSeek(prev ?? keyframeTimes[0]);
           }}
-          style={ctrlBtnStyle(false)}
+          style={ctrlBtnStyle(false, narrow)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12">
             <polygon points="6,0 0,6 6,12" fill="currentColor"/>
@@ -87,7 +88,7 @@ export function Timeline({
             const next = keyframeTimes.find(t => t > time + 0.01);
             onSeek(next ?? keyframeTimes[keyframeTimes.length - 1]);
           }}
-          style={ctrlBtnStyle(false)}
+          style={ctrlBtnStyle(false, narrow)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12">
             <polygon points="0,2 4,6 0,10" fill="currentColor"/>
@@ -96,14 +97,14 @@ export function Timeline({
           </svg>
         </button>
       </>)}
-      <div style={{ flex: 1, position: 'relative', height: 20, display: 'flex', alignItems: 'center' }}>
+      <div style={{ flex: 1, position: 'relative', height: 20, display: 'flex', alignItems: 'center', minWidth: 0 }}>
         <input
           type="range"
           min={0}
           max={1000}
           value={pct * 10}
           onChange={(e) => onSeek((Number(e.target.value) / 1000) * duration)}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0 }}
         />
         {/* Chapter markers */}
         {chapters.map((ch) => {
@@ -129,41 +130,46 @@ export function Timeline({
           );
         })}
       </div>
-      <span
-        style={{
-          fontSize: 11,
-          color: '#4a4f59',
-          minWidth: 70,
-          textAlign: 'right',
-          fontFamily: FONT,
-        }}
-      >
-        {time.toFixed(1)}s / {duration.toFixed(1)}s
-      </span>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {[0.5, 1, 2].map((s) => (
-          <button
-            key={s}
-            onClick={() => onSpeedChange(s)}
-            style={{
-              ...speedBtnStyle,
-              borderColor: speed === s ? '#22d3ee' : '#2a2d35',
-              color: speed === s ? '#22d3ee' : '#6b7280',
-              background: speed === s ? 'rgba(34,211,238,0.06)' : '#14161c',
-            }}
-          >
-            {s}x
-          </button>
-        ))}
-      </div>
+      {!narrow && (
+        <span
+          style={{
+            fontSize: 11,
+            color: '#4a4f59',
+            minWidth: 70,
+            textAlign: 'right',
+            fontFamily: FONT,
+          }}
+        >
+          {time.toFixed(1)}s / {duration.toFixed(1)}s
+        </span>
+      )}
+      {!narrow && (
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[0.5, 1, 2].map((s) => (
+            <button
+              key={s}
+              onClick={() => onSpeedChange(s)}
+              style={{
+                ...speedBtnStyle,
+                borderColor: speed === s ? '#22d3ee' : '#2a2d35',
+                color: speed === s ? '#22d3ee' : '#6b7280',
+                background: speed === s ? 'rgba(34,211,238,0.06)' : '#14161c',
+              }}
+            >
+              {s}x
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ctrlBtnStyle(active: boolean): React.CSSProperties {
+function ctrlBtnStyle(active: boolean, narrow?: boolean): React.CSSProperties {
+  const size = narrow ? 28 : 32;
   return {
-    width: 32,
-    height: 32,
+    width: size,
+    height: size,
     borderRadius: 6,
     border: `1px solid ${active ? '#a78bfa' : '#2a2d35'}`,
     background: '#14161c',
@@ -174,6 +180,7 @@ function ctrlBtnStyle(active: boolean): React.CSSProperties {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   };
 }
 
