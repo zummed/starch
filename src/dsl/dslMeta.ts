@@ -50,9 +50,12 @@ const dslRegistry = new WeakMap<z.ZodType, DslHints>();
 
 export function dsl<T extends z.ZodType>(schema: T, hints: DslHints): T {
   dslRegistry.set(schema, hints);
+  // Also store on _def so hints survive Zod's .describe() copies
+  // (.describe() spreads _def into a new object, losing WeakMap identity).
+  (schema as any)._def._dslHints = hints;
   return schema;
 }
 
 export function getDsl(schema: z.ZodType): DslHints | undefined {
-  return dslRegistry.get(schema);
+  return dslRegistry.get(schema) ?? (schema as any)._def?._dslHints;
 }
