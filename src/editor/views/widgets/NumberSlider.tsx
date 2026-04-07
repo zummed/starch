@@ -25,9 +25,17 @@ const TRACK_WIDTH = 160;
 const THUMB_W = 4;
 const MAX_DEFLECT = (TRACK_WIDTH / 2) - THUMB_W;
 
+function formatDisplay(val: number, step: number): string {
+  if (step < 0.01) return val.toFixed(3);
+  if (step < 0.1) return val.toFixed(2);
+  if (step < 1) return val.toFixed(1);
+  return Number.isInteger(val) ? String(val) : val.toFixed(1);
+}
+
 export function NumberSlider({ value, min, max, step = 1, label, onChange }: NumberSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
+  const displayRef = useRef<HTMLSpanElement>(null);
   const dragging = useRef(false);
   const startX = useRef(0);
   const deflect = useRef(0);
@@ -35,7 +43,11 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
   const accumulator = useRef(0); // accumulates sub-step fractional amounts
   const rafId = useRef<number | null>(null);
 
-  useEffect(() => { currentVal.current = value; }, [value]);
+  useEffect(() => {
+    currentVal.current = value;
+    // Sync display when value prop changes (e.g., from scroll nudge)
+    if (displayRef.current) displayRef.current.textContent = formatDisplay(value, step);
+  }, [value, step]);
 
   // Animation loop: continuously applies velocity while dragging
   const tick = useCallback(() => {
@@ -56,6 +68,8 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
         const clamped = clamp(raw, min, max);
         if (clamped !== currentVal.current) {
           currentVal.current = clamped;
+          // Update display directly via DOM — avoids React re-render during drag
+          if (displayRef.current) displayRef.current.textContent = formatDisplay(clamped, step);
           onChange(clamped);
         }
         accumulator.current = 0;
@@ -145,11 +159,6 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
     if (rafId.current) cancelAnimationFrame(rafId.current);
   }, []);
 
-  const display = step < 0.01 ? value.toFixed(3)
-    : step < 0.1 ? value.toFixed(2)
-    : step < 1 ? value.toFixed(1)
-    : Number.isInteger(value) ? String(value) : value.toFixed(1);
-
   return (
     <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 8 }} onMouseDown={stop}>
       {label && <span style={{ fontSize: 10, color: '#6b7280', fontFamily: FONT, flexShrink: 0 }}>{label}</span>}
@@ -190,7 +199,7 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
           }}
         />
       </div>
-      <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: FONT, minWidth: '4ch', textAlign: 'right', flexShrink: 0 }}>{display}</span>
+      <span ref={displayRef} style={{ fontSize: 11, color: '#a78bfa', fontFamily: FONT, minWidth: '4ch', textAlign: 'right', flexShrink: 0 }}>{formatDisplay(value, step)}</span>
     </div>
   );
 }
