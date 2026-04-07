@@ -129,6 +129,19 @@ const EMPTY: PopupState = {
   value: undefined, from: 0, to: 0, coords: { left: 0, top: 0 },
 };
 
+/**
+ * Find a direct value child whose schemaPath matches the compound's.
+ * This identifies "whole value" nodes (e.g., "red" in "fill red" has
+ * schemaPath='fill', same as the compound) vs sub-component nodes
+ * (e.g., "255" in "fill rgb 255 0 0" has schemaPath='fill.r').
+ */
+function findDirectValue(compound: AstNode, schemaPath: string): AstNode | null {
+  for (const child of compound.children) {
+    if (child.dslRole === 'value' && child.schemaPath === schemaPath) return child;
+  }
+  return null;
+}
+
 /** Find a kwarg-value descendant with the given schemaPath inside a compound. */
 function findKwargValue(compound: AstNode, schemaPath: string): AstNode | null {
   for (const child of compound.children) {
@@ -165,8 +178,25 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   if (node.dslRole === 'keyword' || node.dslRole === 'compound') {
     schemaPath = node.schemaPath;
     const compound = node.dslRole === 'compound' ? node : findCompound(node);
-    rangeFrom = compound?.from ?? node.from;
-    rangeTo = compound?.to ?? node.to;
+
+    // If this compound resolves to a leaf widget type (color, number, enum),
+    // clicking the keyword should target just the value portion so the
+    // replacement doesn't delete the keyword (e.g., "fill red" → picking
+    // blue should produce "fill blue", not just "blue").
+    const compSchema = schemaPath ? resolvePropertySchema(schemaPath) : null;
+    const compType = compSchema ? detectSchemaType(compSchema) : 'unknown';
+    const valueChild = compound && ['color', 'number', 'enum'].includes(compType)
+      ? findDirectValue(compound, schemaPath)
+      : null;
+
+    if (valueChild) {
+      rangeFrom = valueChild.from;
+      rangeTo = valueChild.to;
+      popupValue = valueChild.value;
+    } else {
+      rangeFrom = compound?.from ?? node.from;
+      rangeTo = compound?.to ?? node.to;
+    }
   } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
     const compound = findCompound(node);
     // Prefer the node's own schemaPath when it resolves to a concrete
