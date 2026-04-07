@@ -18,6 +18,7 @@ import {
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
+  getSchemaDefault,
   DocumentSchema,
   unwrap,
   type SchemaType,
@@ -458,7 +459,10 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
       .slice(0, 8)
       .map(prop => {
         const type = detectSchemaType(prop.schema);
-        const val = fields[prop.name] ?? '';
+        const raw = fields[prop.name] ?? '';
+        // Fall back to schema default when the field isn't in the DSL text
+        const schemaDef = raw === '' ? getSchemaDefault(prop.schema) : undefined;
+        const val = raw !== '' ? raw : (schemaDef !== undefined ? String(schemaDef) : '');
 
         let widget: ReactElement;
 
