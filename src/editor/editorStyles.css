@@ -118,8 +118,9 @@
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   color: #6b7280;
   font-size: 10px;
-  min-width: 60px;
+  min-width: max-content;
   text-align: right;
+  flex-shrink: 0;
 }
 .compound-popup-input {
   background: #14161c;
