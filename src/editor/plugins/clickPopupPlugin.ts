@@ -19,6 +19,7 @@ import {
   getEnumValues,
   getNumberConstraints,
   DocumentSchema,
+  unwrap,
   type SchemaType,
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
@@ -262,9 +263,11 @@ function parseCompoundText(text: string, schemaPath: string): Record<string, str
     if (!kwargTokenIndices.has(i)) positionalTokens.push(tokens[i]);
   }
 
-  // Map positional tokens to properties using DSL hints
+  // Map positional tokens to properties using DSL hints.
+  // unwrap() strips ZodOptional/ZodDefault wrappers so getDsl can find
+  // the hints that were registered on the original (unwrapped) schema.
   const schema = resolvePropertySchema(schemaPath);
-  const hints = schema ? getDsl(schema) : undefined;
+  const hints = schema ? getDsl(unwrap(schema)) : undefined;
 
   if (hints?.positional && positionalTokens.length > 0) {
     let tokenIdx = 0;
@@ -322,7 +325,7 @@ function rebuildCompoundText(
   schemaPath: string,
 ): string {
   const schema = resolvePropertySchema(schemaPath);
-  const hints = schema ? getDsl(schema) : undefined;
+  const hints = schema ? getDsl(unwrap(schema)) : undefined;
   const parts: string[] = [keyword];
 
   const emittedKeys = new Set<string>();
