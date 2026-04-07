@@ -13,7 +13,18 @@ interface ParsePluginOptions {
 }
 
 export function parseOnChangePlugin({ onModelChange, debounceMs = 100 }: ParsePluginOptions): Plugin {
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let rafId: number | null = null;
+  let trailing: ReturnType<typeof setTimeout> | null = null;
+
+  function flush(view: any) {
+    const text = view.state.doc.textContent;
+    try {
+      const { model } = walkDocument(text);
+      onModelChange(model);
+    } catch {
+      // Parse error — don't update model
+    }
+  }
 
   return new Plugin({
     key: parseKey,
@@ -21,19 +32,27 @@ export function parseOnChangePlugin({ onModelChange, debounceMs = 100 }: ParsePl
     view() {
       return {
         update(view) {
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(() => {
-            const text = view.state.doc.textContent;
-            try {
-              const { model } = walkDocument(text);
-              onModelChange(model);
-            } catch {
-              // Parse error — don't update model
-            }
+          // Immediate: throttle to once per animation frame so continuous
+          // slider drags update the canvas every frame instead of waiting
+          // for the debounce timeout.
+          if (rafId === null) {
+            rafId = requestAnimationFrame(() => {
+              rafId = null;
+              flush(view);
+            });
+          }
+          // Trailing: also schedule a debounced parse to catch the final
+          // state after edits stop (in case the RAF was coalesced or the
+          // last change arrived between frames).
+          if (trailing) clearTimeout(trailing);
+          trailing = setTimeout(() => {
+            trailing = null;
+            flush(view);
           }, debounceMs);
         },
         destroy() {
-          if (timer) clearTimeout(timer);
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          if (trailing) clearTimeout(trailing);
         },
       };
     },
