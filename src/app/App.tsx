@@ -298,8 +298,8 @@ export default function App() {
   }, []);
 
   // Touch-friendly button size
-  const btnPad = isBlade ? '8px 14px' : '4px 10px';
-  const btnSize = isBlade ? 12 : 11;
+  const btnPad = isBlade ? '6px 10px' : '4px 10px';
+  const btnSize = isBlade ? 11 : 11;
 
   // Compute fitted container dimensions for ratio preview
   const ratioContainerStyle = (() => {
@@ -545,7 +545,7 @@ export default function App() {
           <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e5ea' }}>starch</span>
           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 2, fontWeight: 600 }}>v2</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {(!isBlade || activeBlade === 'editor' || activeBlade === 'viewer') && (<div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {[
             { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
             { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
@@ -566,7 +566,7 @@ export default function App() {
               {btn.label}
             </button>
           ))}
-        </div>
+        </div>)}
       </div>
 
       {/* Body */}
@@ -599,7 +599,7 @@ export default function App() {
             <div style={{ flex: 1, overflow: 'hidden', display: activeBlade === 'editor' ? 'flex' : 'none', flexDirection: 'column' }}>
               {editorContent}
             </div>
-            <div style={{ flex: 1, display: activeBlade === 'viewer' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0 }}>
+            <div style={{ flex: 1, display: activeBlade === 'viewer' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
               <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                 {canvasContent}
               </div>
