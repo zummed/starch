@@ -49,7 +49,7 @@ export function isOptional(schema: z.ZodType): boolean {
   return schema instanceof z.ZodOptional || schema instanceof z.ZodDefault;
 }
 
-function unwrap(schema: z.ZodType): z.ZodType {
+export function unwrap(schema: z.ZodType): z.ZodType {
   if (schema instanceof z.ZodOptional) return unwrap((schema as any)._def.innerType);
   if (schema instanceof z.ZodDefault) return unwrap((schema as any)._def.innerType);
   return schema;
