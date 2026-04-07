@@ -608,11 +608,15 @@ class PopupView {
     const handleChange = (newValue: unknown) => {
       this.state.value = newValue;
       pendingValue = newValue;
-      // Re-render widget immediately for responsiveness
-      this.renderWidget();
       if (!rafPending) {
         rafPending = true;
-        requestAnimationFrame(flushChange);
+        requestAnimationFrame(() => {
+          flushChange();
+          // Re-render after dispatch so non-slider widgets (color, enum)
+          // reflect the new value.  Sliders update their own display via
+          // DOM ref so this is a no-op for them during drag.
+          this.renderWidget();
+        });
       }
     };
 
