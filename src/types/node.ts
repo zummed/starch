@@ -11,7 +11,7 @@ import { dsl } from '../dsl/dslMeta';
 export const RectGeomSchema = dsl(z.object({
   w: z.number().min(0).describe('Rectangle width in pixels (number, >= 0)').default(0),
   h: z.number().min(0).describe('Rectangle height in pixels (number, >= 0)').default(0),
-  radius: z.number().min(0).describe('Corner radius in pixels (number, >= 0)').optional(),
+  radius: z.number().min(0).max(100).describe('Corner radius in pixels (number, >= 0)').optional(),
 }), {
   keyword: 'rect',
   positional: [{ keys: ['w', 'h'], format: 'dimension' }],
