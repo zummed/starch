@@ -130,6 +130,28 @@ const EMPTY: PopupState = {
 };
 
 /**
+ * Check whether a value's schemaPath corresponds to a key inside a
+ * dimension/joined positional hint on the compound.  These values
+ * are encoded as a single token (e.g., "100x50") and must not be
+ * edited individually — the compound popup handles them as a group.
+ */
+function isJoinedPositional(compoundSchemaPath: string, valueSchemaPath: string): boolean {
+  const schema = resolvePropertySchema(compoundSchemaPath);
+  if (!schema) return false;
+  const hints = getDsl(unwrap(schema));
+  if (!hints?.positional) return false;
+
+  const prefix = compoundSchemaPath + '.';
+  if (!valueSchemaPath.startsWith(prefix)) return false;
+  const key = valueSchemaPath.slice(prefix.length);
+
+  return hints.positional.some(hint =>
+    (hint.format === 'dimension' || hint.format === 'joined') &&
+    hint.keys.includes(key),
+  );
+}
+
+/**
  * Find a direct value child whose schemaPath matches the compound's.
  * This identifies "whole value" nodes (e.g., "red" in "fill red" has
  * schemaPath='fill', same as the compound) vs sub-component nodes
@@ -199,21 +221,31 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     }
   } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
     const compound = findCompound(node);
-    // Prefer the node's own schemaPath when it resolves to a concrete
-    // widget type (color, number, enum).  This ensures that e.g. clicking
-    // a stroke color value ('stroke.color') opens a ColorPicker instead of
-    // the compound-level object popup for 'stroke'.
-    const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
-    const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
-    if (ownType !== 'unknown' && ['color', 'number', 'enum'].includes(ownType)) {
-      schemaPath = node.schemaPath;
-    } else if (compound?.schemaPath) {
+
+    // Values that are part of a joined/dimension positional (e.g., "100" in
+    // "rect 100x50") must redirect to the compound popup — editing one
+    // component alone destroys the joined format.
+    if (compound?.schemaPath && isJoinedPositional(compound.schemaPath, node.schemaPath)) {
       schemaPath = compound.schemaPath;
+      rangeFrom = compound.from;
+      rangeTo = compound.to;
     } else {
-      schemaPath = node.schemaPath;
+      // Prefer the node's own schemaPath when it resolves to a concrete
+      // widget type (color, number, enum).  This ensures that e.g. clicking
+      // a stroke color value ('stroke.color') opens a ColorPicker instead of
+      // the compound-level object popup for 'stroke'.
+      const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
+      const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
+      if (ownType !== 'unknown' && ['color', 'number', 'enum'].includes(ownType)) {
+        schemaPath = node.schemaPath;
+      } else if (compound?.schemaPath) {
+        schemaPath = compound.schemaPath;
+      } else {
+        schemaPath = node.schemaPath;
+      }
+      rangeFrom = node.from;
+      rangeTo = node.to;
     }
-    rangeFrom = node.from;
-    rangeTo = node.to;
   } else if (node.dslRole === 'kwarg-key') {
     // Kwarg keys carry their own schemaPath (e.g., template props).
     // Target the sibling kwarg-value so the popup edits the value, not the key name.
