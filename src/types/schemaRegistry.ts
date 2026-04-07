@@ -273,7 +273,8 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
     const range = result.max - result.min;
     if (range <= 2) result.step = 0.01;
     else if (range <= 20) result.step = 0.1;
-    else if (range <= 100) result.step = 1;
+    else if (range <= 100) result.step = 0.5;
+    else result.step = 1;
   }
 
   return result;
