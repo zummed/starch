@@ -266,6 +266,24 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     return null;
   }
 
+  // Node ID click: value with empty schemaPath inside a node-line compound.
+  // Show a node-level popup with kwargs like depth/opacity.
+  if (!schemaPath && node.dslRole === 'value') {
+    const compound = findCompound(node);
+    if (compound && compound.schemaPath === '') {
+      return {
+        active: true,
+        schemaType: 'object' as SchemaType,
+        schemaPath: '_node',
+        value: popupValue,
+        from: compound.from + PM_OFFSET,
+        to: compound.to + PM_OFFSET,
+        coords: { left: view.coordsAtPos(node.from + PM_OFFSET).left, top: view.coordsAtPos(node.from + PM_OFFSET).bottom + 4 },
+      };
+    }
+    return null;
+  }
+
   if (!schemaPath) return null;
 
   const schema = resolvePropertySchema(schemaPath);
@@ -436,12 +454,57 @@ function rebuildCompoundText(
   return parts.join(' ');
 }
 
+/** Node-level kwargs that should appear in the node ID popup. */
+const NODE_KWARG_NAMES = ['opacity', 'depth'];
+
+/** Parse known kwargs from a full node line. */
+function parseNodeKwargs(text: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  const kwargSet = new Set(NODE_KWARG_NAMES);
+  for (const token of text.split(/\s+/)) {
+    const eq = token.indexOf('=');
+    if (eq > 0) {
+      const key = token.slice(0, eq);
+      if (kwargSet.has(key)) fields[key] = token.slice(eq + 1);
+    }
+  }
+  return fields;
+}
+
+/** Rebuild a node line by updating/adding/removing kwargs. */
+function rebuildNodeKwargs(originalText: string, fields: Record<string, string>): string {
+  const tokens = originalText.split(/\s+/);
+  const kwargSet = new Set(NODE_KWARG_NAMES);
+
+  // Remove existing node-level kwargs
+  const kept = tokens.filter(t => {
+    const eq = t.indexOf('=');
+    return eq <= 0 || !kwargSet.has(t.slice(0, eq));
+  });
+
+  // Append updated kwargs
+  for (const name of NODE_KWARG_NAMES) {
+    const val = fields[name];
+    if (val !== undefined && val !== '') {
+      kept.push(`${name}=${val}`);
+    }
+  }
+
+  return kept.join(' ');
+}
+
 function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
-  const properties = resolveAvailableProperties(schemaPath);
+  const isNode = schemaPath === '_node';
+  const properties = isNode
+    ? NODE_KWARG_NAMES.map(name => {
+        const schema = getPropertySchema(name, NodeSchema);
+        return schema ? { name, schema, description: '', required: false, category: 'meta' as const } : null;
+      }).filter(Boolean) as { name: string; schema: z.ZodType; description: string; required: boolean; category: string }[]
+    : resolveAvailableProperties(schemaPath);
   const keyword = currentText.split(/\s+/)[0] || schemaPath;
 
   const [fields, setFields] = useState<Record<string, string>>(() =>
-    parseCompoundText(currentText, schemaPath),
+    isNode ? parseNodeKwargs(currentText) : parseCompoundText(currentText, schemaPath),
   );
 
   // Throttle onReplace to once per animation frame so rapid slider
@@ -460,7 +523,9 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
   const handleFieldChange = useCallback((name: string, value: string) => {
     setFields(prev => {
       const updated = { ...prev, [name]: value };
-      pendingText.current = rebuildCompoundText(keyword, updated, schemaPath);
+      pendingText.current = isNode
+        ? rebuildNodeKwargs(currentText, updated)
+        : rebuildCompoundText(keyword, updated, schemaPath);
       if (rafId.current === null) {
         rafId.current = requestAnimationFrame(flushReplace);
       }
@@ -477,7 +542,7 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
     className: 'compound-popup',
     style: { '--label-width': `${longestLabel}ch` } as any,
   },
-    createElement('div', { className: 'compound-popup-title' }, schemaPath),
+    createElement('div', { className: 'compound-popup-title' }, isNode ? keyword : schemaPath),
     ...visibleProps
       .map(prop => {
         const type = detectSchemaType(prop.schema);
