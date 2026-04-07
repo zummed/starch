@@ -452,11 +452,17 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
     });
   }, [keyword, schemaPath, onReplace]);
 
-  return createElement('div', { className: 'compound-popup' },
+  const visibleProps = properties
+    .filter(p => p.name !== 'id' && p.name !== 'children')
+    .slice(0, 8);
+  const longestLabel = Math.max(...visibleProps.map(p => p.name.length), 4);
+
+  return createElement('div', {
+    className: 'compound-popup',
+    style: { '--label-width': `${longestLabel}ch` } as any,
+  },
     createElement('div', { className: 'compound-popup-title' }, schemaPath),
-    ...properties
-      .filter(p => p.name !== 'id' && p.name !== 'children')
-      .slice(0, 8)
+    ...visibleProps
       .map(prop => {
         const type = detectSchemaType(prop.schema);
         const raw = fields[prop.name] ?? '';
