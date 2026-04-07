@@ -11,7 +11,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createElement, useState, type ReactElement } from 'react';
 import { walkDocument } from '../../dsl/schemaWalker';
 import { leavesToAst } from '../../dsl/astAdapter';
-import { nodeAt, findCompound } from '../../dsl/astTypes';
+import { type AstNode, nodeAt, findCompound } from '../../dsl/astTypes';
 import {
   getPropertySchema,
   getAvailableProperties,
@@ -127,6 +127,16 @@ const EMPTY: PopupState = {
   value: undefined, from: 0, to: 0, coords: { left: 0, top: 0 },
 };
 
+/** Find a kwarg-value descendant with the given schemaPath inside a compound. */
+function findKwargValue(compound: AstNode, schemaPath: string): AstNode | null {
+  for (const child of compound.children) {
+    if (child.dslRole === 'kwarg-value' && child.schemaPath === schemaPath) return child;
+    const found = findKwargValue(child, schemaPath);
+    if (found) return found;
+  }
+  return null;
+}
+
 function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   const text = view.state.doc.textContent;
   const textPos = pmPos - PM_OFFSET;
@@ -148,6 +158,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   let schemaPath: string;
   let rangeFrom: number;
   let rangeTo: number;
+  let popupValue: unknown = node.value;
 
   if (node.dslRole === 'keyword' || node.dslRole === 'compound') {
     schemaPath = node.schemaPath;
@@ -156,16 +167,35 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     rangeTo = compound?.to ?? node.to;
   } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
     const compound = findCompound(node);
-    // For kwarg-values at node-line level (compound schemaPath is empty),
-    // use the node's own schemaPath — this handles template props kwargs.
-    schemaPath = (compound?.schemaPath) ? compound.schemaPath : node.schemaPath;
+    // Prefer the node's own schemaPath when it resolves to a concrete
+    // widget type (color, number, enum).  This ensures that e.g. clicking
+    // a stroke color value ('stroke.color') opens a ColorPicker instead of
+    // the compound-level object popup for 'stroke'.
+    const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
+    const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
+    if (ownType !== 'unknown' && ['color', 'number', 'enum'].includes(ownType)) {
+      schemaPath = node.schemaPath;
+    } else if (compound?.schemaPath) {
+      schemaPath = compound.schemaPath;
+    } else {
+      schemaPath = node.schemaPath;
+    }
     rangeFrom = node.from;
     rangeTo = node.to;
   } else if (node.dslRole === 'kwarg-key') {
-    // Kwarg keys carry their own schemaPath (e.g., template props)
+    // Kwarg keys carry their own schemaPath (e.g., template props).
+    // Target the sibling kwarg-value so the popup edits the value, not the key name.
     schemaPath = node.schemaPath;
-    rangeFrom = node.from;
-    rangeTo = node.to;
+    const compound = findCompound(node);
+    const sibling = compound ? findKwargValue(compound, node.schemaPath) : null;
+    if (sibling) {
+      rangeFrom = sibling.from;
+      rangeTo = sibling.to;
+      popupValue = sibling.value;
+    } else {
+      rangeFrom = node.from;
+      rangeTo = node.to;
+    }
   } else {
     return null;
   }
@@ -186,7 +216,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     active: true,
     schemaType,
     schemaPath,
-    value: node.value,
+    value: popupValue,
     from: rangeFrom + PM_OFFSET,
     to: rangeTo + PM_OFFSET,
     coords: { left: coords.left, top: coords.bottom + 4 },
