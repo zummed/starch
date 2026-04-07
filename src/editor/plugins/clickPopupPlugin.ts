@@ -473,6 +473,7 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
             value: parseFloat(val) || 0,
             min: constraints?.min,
             max: constraints?.max,
+            step: constraints?.step,
             onChange: (n: number) => handleFieldChange(prop.name, String(n)),
           });
         } else if (type === 'enum') {
@@ -600,6 +601,7 @@ class PopupView {
         value: typeof value === 'number' ? value : parseFloat(String(value)) || 0,
         min: constraints?.min,
         max: constraints?.max,
+        step: constraints?.step,
         onChange: handleChange,
       });
     } else if (schemaType === 'enum') {
