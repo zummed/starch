@@ -266,9 +266,12 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     return null;
   }
 
-  // Node ID click: value with empty schemaPath inside a node-line compound.
-  // Show a node-level popup with kwargs like depth/opacity.
-  if (!schemaPath && node.dslRole === 'value') {
+  if (!schemaPath) return null;
+
+  // Node ID click: schemaPath is 'id' inside a node-line compound.
+  // Show a node-level popup with kwargs like depth/opacity instead of
+  // a text input for the ID itself.
+  if (schemaPath === 'id' && node.dslRole === 'value') {
     const compound = findCompound(node);
     if (compound && compound.schemaPath === '') {
       return {
@@ -281,10 +284,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
         coords: { left: view.coordsAtPos(node.from + PM_OFFSET).left, top: view.coordsAtPos(node.from + PM_OFFSET).bottom + 4 },
       };
     }
-    return null;
   }
-
-  if (!schemaPath) return null;
 
   const schema = resolvePropertySchema(schemaPath);
   if (!schema) return null;
