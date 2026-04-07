@@ -274,6 +274,10 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
     if (range <= 2) result.step = 0.01;
     else if (range <= 20) result.step = 0.1;
     else if (range <= 100) result.step = 1;
+  } else {
+    // Open-ended ranges (e.g., radius: min 0, no max) — default to
+    // fractional steps so values like corner radii feel smooth.
+    result.step = 0.5;
   }
 
   return result;
