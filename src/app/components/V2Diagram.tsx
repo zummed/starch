@@ -153,6 +153,9 @@ export function useV2Diagram(props: V2DiagramProps) {
   vpRef.current = { w: vpW, h: vpH };
   viewportOverrideRef.current = props.viewportOverride;
 
+  // Reusable Map for track evaluation (avoids allocation per frame)
+  const valuesMapRef = useRef(new Map<string, unknown>());
+
   // Render function — always reads from refs
   const render = useCallback((t: number) => {
     const backend = backendRef.current;
@@ -162,7 +165,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     const currentTracks = tracksRef.current;
     const { w, h } = vpRef.current;
 
-    const values = evaluateAllTracks(currentTracks, t);
+    const values = evaluateAllTracks(currentTracks, t, valuesMapRef.current);
     const animated = applyTrackValues(currentScene.nodes, values);
     measureTextNodes(animated, getTextMeasurer());
     runLayout(animated, slotIdsRef.current);

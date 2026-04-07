@@ -65,8 +65,10 @@ export function evaluateTrack(keyframes: TrackKeyframe[], time: number): unknown
 export function evaluateAllTracks(
   tracks: Tracks,
   time: number,
+  reuse?: Map<string, unknown>,
 ): Map<string, unknown> {
-  const result = new Map<string, unknown>();
+  const result = reuse ?? new Map<string, unknown>();
+  if (reuse) reuse.clear();
   for (const [path, keyframes] of tracks) {
     result.set(path, evaluateTrack(keyframes, time));
   }

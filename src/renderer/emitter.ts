@@ -79,6 +79,19 @@ function strokeToStyle(stroke: Stroke | undefined, dash?: Node['dash']): StrokeS
   return style;
 }
 
+/** Build a flat id→Node lookup map for O(1) access during emit. */
+function buildNodeIndex(roots: Node[]): Map<string, Node> {
+  const index = new Map<string, Node>();
+  function walk(nodes: Node[]): void {
+    for (const node of nodes) {
+      index.set(node.id, node);
+      walk(node.children);
+    }
+  }
+  walk(roots);
+  return index;
+}
+
 function findNodeById(roots: Node[], id: string): Node | undefined {
   for (const root of roots) {
     if (root.id === id) return root;
@@ -160,6 +173,7 @@ function emitNode(
   parentFill: Color | undefined,
   parentStroke: Stroke | undefined,
   parentOpacity: number,
+  nodeIndex?: Map<string, Node>,
 ): void {
   if (!node.visible) return;
 
@@ -171,7 +185,7 @@ function emitNode(
   let styleStroke: Stroke | undefined;
   let styleOpacity: number | undefined;
   if (node.style) {
-    const styleNode = findNodeById(allRoots, node.style);
+    const styleNode = nodeIndex?.get(node.style) ?? findNodeById(allRoots, node.style);
     if (styleNode) {
       styleFill = styleNode.fill;
       styleStroke = styleNode.stroke;
@@ -249,10 +263,13 @@ function emitNode(
     );
   }
 
-  // Children sorted by depth
-  const sorted = [...node.children].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
-  for (const child of sorted) {
-    emitNode(backend, child, allRoots, fill, stroke, opacity);
+  // Children sorted by depth — skip allocation when no non-zero depths exist
+  const needsSort = node.children.length > 1 && node.children.some(c => c.depth);
+  const children = needsSort
+    ? [...node.children].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))
+    : node.children;
+  for (const child of children) {
+    emitNode(backend, child, allRoots, fill, stroke, opacity, nodeIndex);
   }
 
   backend.popOpacity();
@@ -273,12 +290,17 @@ export function emitFrame(
     backend.clearViewBox();
   }
 
-  const sorted = [...nodes]
-    .filter(n => !n.camera && !n._isStyle)
-    .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
+  // Build O(1) lookup for style/pathFollow resolution
+  const nodeIndex = buildNodeIndex(allRoots);
+
+  const filtered = nodes.filter(n => !n.camera && !n._isStyle);
+  const needsSort = filtered.length > 1 && filtered.some(n => n.depth);
+  const sorted = needsSort
+    ? filtered.sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))
+    : filtered;
 
   for (const root of sorted) {
-    emitNode(backend, root, allRoots, undefined, undefined, 1);
+    emitNode(backend, root, allRoots, undefined, undefined, 1, nodeIndex);
   }
 
   backend.endFrame();

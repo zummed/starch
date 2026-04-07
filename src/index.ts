@@ -13,7 +13,7 @@ export type { ParsedScene } from './parser/parser';
 // ── Animation ──
 export { buildTimeline } from './animation/timeline';
 export { evaluateAllTracks, evaluateTrack } from './animation/evaluator';
-export { applyTrackValues } from './animation/applyTracks';
+export { applyTrackValues, applyTrackValuesMut, cloneNodeTree } from './animation/applyTracks';
 
 // ── Rendering ──
 export { SvgRenderBackend } from './renderer/svgBackend';
