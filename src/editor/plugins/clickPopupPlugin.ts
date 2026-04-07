@@ -84,6 +84,7 @@ import type { Color } from '../../types/properties';
 import { ColorPicker } from '../views/widgets/ColorPicker';
 import { NumberSlider } from '../views/widgets/NumberSlider';
 import { EnumDropdown } from '../views/widgets/EnumDropdown';
+import { AnchorEditor } from '../views/widgets/AnchorEditor';
 
 /** Serialize a Color value to DSL text. */
 function colorToDsl(color: Color): string {
@@ -207,7 +208,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
     // blue should produce "fill blue", not just "blue").
     const compSchema = schemaPath ? resolvePropertySchema(schemaPath) : null;
     const compType = compSchema ? detectSchemaType(compSchema) : 'unknown';
-    const valueChild = compound && ['color', 'number', 'enum'].includes(compType)
+    const valueChild = compound && ['color', 'number', 'enum', 'anchor', 'string'].includes(compType)
       ? findDirectValue(compound, schemaPath)
       : null;
 
@@ -236,7 +237,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
       // the compound-level object popup for 'stroke'.
       const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
       const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
-      if (ownType !== 'unknown' && ['color', 'number', 'enum'].includes(ownType)) {
+      if (ownType !== 'unknown' && ['color', 'number', 'enum', 'anchor', 'string'].includes(ownType)) {
         schemaPath = node.schemaPath;
       } else if (compound?.schemaPath) {
         schemaPath = compound.schemaPath;
@@ -272,7 +273,7 @@ function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   const schemaType = detectSchemaType(schema);
 
   // Show popups for types that have widgets
-  if (!['color', 'number', 'enum', 'object'].includes(schemaType)) return null;
+  if (!['color', 'number', 'enum', 'object', 'anchor', 'string'].includes(schemaType)) return null;
 
   const coords = view.coordsAtPos(rangeFrom + PM_OFFSET);
 
@@ -480,6 +481,16 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
             options: getEnumValues(prop.schema) ?? [],
             onChange: (v: string) => handleFieldChange(prop.name, v),
           });
+        } else if (type === 'anchor') {
+          widget = createElement(AnchorEditor, {
+            value: val || 'center',
+            onChange: (v: unknown) => {
+              // Named anchors → string, custom → serialize tuple
+              if (typeof v === 'string') handleFieldChange(prop.name, v);
+              else if (Array.isArray(v)) handleFieldChange(prop.name, `(${v.join(',')})`);
+              else handleFieldChange(prop.name, String(v));
+            },
+          });
         } else {
           widget = createElement('input', {
             type: 'text',
@@ -600,6 +611,25 @@ class PopupView {
         options,
         onChange: handleChange,
       });
+    } else if (schemaType === 'anchor') {
+      widget = createElement(AnchorEditor, {
+        value: value as any,
+        onChange: handleChange,
+      });
+    } else if (schemaType === 'string') {
+      widget = createElement('div', { style: { padding: 8, minWidth: 160 } },
+        createElement('input', {
+          type: 'text',
+          value: String(value ?? ''),
+          onMouseDown: (e: any) => e.stopPropagation(),
+          onPointerDown: (e: any) => e.stopPropagation(),
+          onKeyDown: (e: any) => e.stopPropagation(),
+          onChange: (e: any) => handleChange(e.target.value),
+          className: 'compound-popup-input',
+          style: { width: '100%', boxSizing: 'border-box' },
+          autoFocus: true,
+        }),
+      );
     }
 
     if (widget && this.root) {
