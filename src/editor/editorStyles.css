@@ -116,8 +116,9 @@
 }
 .compound-popup-label {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  color: #6b7280;
+  color: #9ca3af;
   font-size: 10px;
+  font-weight: 600;
   width: var(--label-width, 8ch);
   text-align: right;
   flex-shrink: 0;
