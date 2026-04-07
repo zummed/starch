@@ -8,7 +8,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createRoot, type Root } from 'react-dom/client';
-import { createElement, useState, type ReactElement } from 'react';
+import { createElement, useState, useCallback, type ReactElement } from 'react';
 import { walkDocument } from '../../dsl/schemaWalker';
 import { leavesToAst } from '../../dsl/astAdapter';
 import { type AstNode, nodeAt, findCompound } from '../../dsl/astTypes';
@@ -24,6 +24,7 @@ import {
 import { NodeSchema } from '../../types/node';
 import { getShapeDefinition, listSets } from '../../templates/registry';
 import type { z } from 'zod';
+import { getDsl } from '../../dsl/dslMeta';
 
 /**
  * Resolve a template prop schema from a `tplprops:templateName.propName` path.
@@ -234,78 +235,203 @@ interface CompoundPopupProps {
   onClose: () => void;
 }
 
-function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
-  const properties = resolveAvailableProperties(schemaPath);
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    // Parse current text into field values (best-effort)
-    const fields: Record<string, string> = {};
-    // Simple parsing: extract key=value pairs and positional values
-    const parts = currentText.split(/\s+/);
-    // Skip the keyword (first part)
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      if (part.includes('=')) {
-        const [k, v] = part.split('=', 2);
-        fields[k] = v;
+/**
+ * Parse compound DSL text into a map of property name → string value.
+ *
+ * Uses the schema's DSL hints to map positional values to property names.
+ * For example, `stroke red width=2` → { color: 'red', width: '2' }.
+ */
+function parseCompoundText(text: string, schemaPath: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  const tokens = text.split(/\s+/);
+  if (tokens.length === 0) return fields;
+
+  // Extract kwargs first
+  const kwargTokenIndices = new Set<number>();
+  for (let i = 1; i < tokens.length; i++) {
+    const eq = tokens[i].indexOf('=');
+    if (eq > 0) {
+      fields[tokens[i].slice(0, eq)] = tokens[i].slice(eq + 1);
+      kwargTokenIndices.add(i);
+    }
+  }
+
+  // Remaining tokens after keyword are positional
+  const positionalTokens: string[] = [];
+  for (let i = 1; i < tokens.length; i++) {
+    if (!kwargTokenIndices.has(i)) positionalTokens.push(tokens[i]);
+  }
+
+  // Map positional tokens to properties using DSL hints
+  const schema = resolvePropertySchema(schemaPath);
+  const hints = schema ? getDsl(schema) : undefined;
+
+  if (hints?.positional && positionalTokens.length > 0) {
+    let tokenIdx = 0;
+    for (const hint of hints.positional) {
+      if (tokenIdx >= positionalTokens.length) break;
+      if (hint.format === 'color') {
+        // Color may span multiple tokens (e.g., `rgb 255 0 0` or `hsl 120 50 50`)
+        // Consume tokens until we hit another positional hint boundary or run out
+        const colorTokens: string[] = [];
+        while (tokenIdx < positionalTokens.length) {
+          colorTokens.push(positionalTokens[tokenIdx]);
+          tokenIdx++;
+          // Named/hex colors are single token; rgb/hsl consume 3 more
+          const first = colorTokens[0];
+          if (first === 'rgb' || first === 'hsl') {
+            if (colorTokens.length >= 4) break;
+          } else {
+            break;
+          }
+        }
+        if (hint.keys.length === 1) {
+          fields[hint.keys[0]] = colorTokens.join(' ');
+        }
+      } else if (hint.format === 'dimension' || hint.format === 'joined') {
+        // e.g., "100x50" or "100,200" — single token, multiple keys
+        const token = positionalTokens[tokenIdx++];
+        const sep = hint.separator || 'x';
+        const parts = token.split(sep);
+        for (let k = 0; k < hint.keys.length && k < parts.length; k++) {
+          fields[hint.keys[k]] = parts[k];
+        }
+      } else {
+        // Default: one token per key
+        for (const key of hint.keys) {
+          if (tokenIdx < positionalTokens.length) {
+            fields[key] = positionalTokens[tokenIdx++];
+          }
+        }
       }
     }
-    return fields;
-  });
+  } else if (positionalTokens.length > 0) {
+    // No hints — store positional tokens under numeric keys as fallback
+    positionalTokens.forEach((t, i) => { fields[`_pos${i}`] = t; });
+  }
 
-  const handleFieldChange = (name: string, value: string) => {
-    const updated = { ...values, [name]: value };
-    setValues(updated);
+  return fields;
+}
 
-    // Rebuild the DSL text from the fields
-    // Keep the keyword, update/add kwargs
-    const parts = currentText.split(/\s+/);
-    const keyword = parts[0] || schemaPath;
+/**
+ * Rebuild compound DSL text from property values.
+ */
+function rebuildCompoundText(
+  keyword: string,
+  fields: Record<string, string>,
+  schemaPath: string,
+): string {
+  const schema = resolvePropertySchema(schemaPath);
+  const hints = schema ? getDsl(schema) : undefined;
+  const parts: string[] = [keyword];
 
-    // Collect positional parts (non-kwarg)
-    const positionals = parts.slice(1).filter(p => !p.includes('='));
+  const emittedKeys = new Set<string>();
 
-    // Build new text
-    const kwargParts = Object.entries(updated)
-      .filter(([, v]) => v !== '')
-      .map(([k, v]) => `${k}=${v}`);
+  // Emit positional values in order
+  if (hints?.positional) {
+    for (const hint of hints.positional) {
+      if (hint.format === 'color' && hint.keys.length === 1) {
+        const val = fields[hint.keys[0]];
+        if (val) { parts.push(val); emittedKeys.add(hint.keys[0]); }
+      } else if (hint.format === 'dimension' || hint.format === 'joined') {
+        const sep = hint.separator || 'x';
+        const vals = hint.keys.map(k => fields[k]).filter(Boolean);
+        if (vals.length === hint.keys.length) {
+          parts.push(vals.join(sep));
+          hint.keys.forEach(k => emittedKeys.add(k));
+        }
+      } else {
+        for (const key of hint.keys) {
+          const val = fields[key];
+          if (val) { parts.push(val); emittedKeys.add(key); }
+        }
+      }
+    }
+  }
 
-    const newText = [keyword, ...positionals, ...kwargParts].join(' ');
-    onReplace(newText);
-  };
+  // Emit kwargs
+  const kwargNames = hints?.kwargs ?? [];
+  // Emit declared kwargs first (in order), then any remaining
+  for (const name of kwargNames) {
+    const val = fields[name];
+    if (val !== undefined && val !== '') {
+      parts.push(`${name}=${val}`);
+      emittedKeys.add(name);
+    }
+  }
+  // Any remaining fields not yet emitted (shouldn't happen normally)
+  for (const [name, val] of Object.entries(fields)) {
+    if (!emittedKeys.has(name) && !name.startsWith('_pos') && val !== '') {
+      parts.push(`${name}=${val}`);
+    }
+  }
+
+  return parts.join(' ');
+}
+
+function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
+  const properties = resolveAvailableProperties(schemaPath);
+  const keyword = currentText.split(/\s+/)[0] || schemaPath;
+
+  const [fields, setFields] = useState<Record<string, string>>(() =>
+    parseCompoundText(currentText, schemaPath),
+  );
+
+  const handleFieldChange = useCallback((name: string, value: string) => {
+    setFields(prev => {
+      const updated = { ...prev, [name]: value };
+      onReplace(rebuildCompoundText(keyword, updated, schemaPath));
+      return updated;
+    });
+  }, [keyword, schemaPath, onReplace]);
 
   return createElement('div', { className: 'compound-popup' },
     createElement('div', { className: 'compound-popup-title' }, schemaPath),
     ...properties
       .filter(p => p.name !== 'id' && p.name !== 'children')
-      .slice(0, 8) // limit to avoid overwhelming UI
+      .slice(0, 8)
       .map(prop => {
         const type = detectSchemaType(prop.schema);
-        const val = values[prop.name] ?? '';
+        const val = fields[prop.name] ?? '';
+
+        let widget: ReactElement;
+
+        if (type === 'color') {
+          widget = createElement(ColorPicker, {
+            value: val || 'gray',
+            onChange: (c: Color) => handleFieldChange(prop.name, colorToDsl(c)),
+          });
+        } else if (type === 'number') {
+          const constraints = getNumberConstraints(prop.schema);
+          widget = createElement(NumberSlider, {
+            value: parseFloat(val) || 0,
+            min: constraints?.min,
+            max: constraints?.max,
+            onChange: (n: number) => handleFieldChange(prop.name, String(n)),
+          });
+        } else if (type === 'enum') {
+          widget = createElement(EnumDropdown, {
+            value: val,
+            options: getEnumValues(prop.schema) ?? [],
+            onChange: (v: string) => handleFieldChange(prop.name, v),
+          });
+        } else {
+          widget = createElement('input', {
+            type: 'text',
+            value: val,
+            placeholder: prop.description || prop.name,
+            onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
+            onKeyDown: (e: any) => e.stopPropagation(),
+            className: 'compound-popup-input',
+          });
+        }
 
         return createElement('div', {
           key: prop.name,
           className: 'compound-popup-field',
         },
           createElement('label', { className: 'compound-popup-label' }, prop.name),
-          type === 'enum'
-            ? createElement('select', {
-                value: val,
-                onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
-                className: 'compound-popup-input',
-              },
-                createElement('option', { value: '' }, '—'),
-                ...(getEnumValues(prop.schema) ?? []).map(v =>
-                  createElement('option', { key: v, value: v }, v)
-                ),
-              )
-            : createElement('input', {
-                type: type === 'number' ? 'number' : 'text',
-                value: val,
-                placeholder: prop.description || prop.name,
-                onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
-                onKeyDown: (e: any) => e.stopPropagation(),
-                className: 'compound-popup-input',
-              }),
+          widget,
         );
       }),
   );
