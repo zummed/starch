@@ -100,9 +100,10 @@
 
 /* Compound popup fields */
 .compound-popup-title {
-  font-size: 11px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 10px;
   color: #a29bfe;
-  font-weight: bold;
+  font-weight: 600;
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -114,8 +115,9 @@
   margin-bottom: 4px;
 }
 .compound-popup-label {
-  color: #74b9ff;
-  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #6b7280;
+  font-size: 10px;
   min-width: 60px;
   text-align: right;
 }
@@ -124,8 +126,8 @@
   border: 1px solid #2a2d35;
   border-radius: 4px;
   color: #e0e0e0;
-  font-family: inherit;
-  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
   padding: 3px 6px;
   width: 100px;
   outline: none;
