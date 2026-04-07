@@ -559,6 +559,8 @@ class PopupView {
       // Update range for subsequent changes
       this.state.to = this.state.from + text.length;
       this.state.value = newValue;
+      // Re-render so the widget reflects the new value
+      this.renderWidget();
     };
 
     let widget;
