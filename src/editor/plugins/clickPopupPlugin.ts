@@ -8,7 +8,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createRoot, type Root } from 'react-dom/client';
-import { createElement, useState, useCallback, type ReactElement } from 'react';
+import { createElement, useState, useCallback, useRef, type ReactElement } from 'react';
 import { walkDocument } from '../../dsl/schemaWalker';
 import { leavesToAst } from '../../dsl/astAdapter';
 import { type AstNode, nodeAt, findCompound } from '../../dsl/astTypes';
@@ -444,13 +444,29 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
     parseCompoundText(currentText, schemaPath),
   );
 
+  // Throttle onReplace to once per animation frame so rapid slider
+  // ticks don't cause a ProseMirror transaction on every call.
+  const pendingText = useRef<string | null>(null);
+  const rafId = useRef<number | null>(null);
+
+  const flushReplace = useCallback(() => {
+    if (pendingText.current !== null) {
+      onReplace(pendingText.current);
+      pendingText.current = null;
+    }
+    rafId.current = null;
+  }, [onReplace]);
+
   const handleFieldChange = useCallback((name: string, value: string) => {
     setFields(prev => {
       const updated = { ...prev, [name]: value };
-      onReplace(rebuildCompoundText(keyword, updated, schemaPath));
+      pendingText.current = rebuildCompoundText(keyword, updated, schemaPath);
+      if (rafId.current === null) {
+        rafId.current = requestAnimationFrame(flushReplace);
+      }
       return updated;
     });
-  }, [keyword, schemaPath, onReplace]);
+  }, [keyword, schemaPath, flushReplace]);
 
   const visibleProps = properties
     .filter(p => p.name !== 'id' && p.name !== 'children')
@@ -568,21 +584,36 @@ class PopupView {
   private renderWidget() {
     const { schemaType, schemaPath, value } = this.state;
 
-    const handleChange = (newValue: unknown) => {
+    // Throttle editor dispatch to once per frame; update widget state
+    // immediately so the slider/picker stays responsive.
+    let pendingValue: unknown = undefined;
+    let rafPending = false;
+
+    const flushChange = () => {
+      rafPending = false;
+      if (pendingValue === undefined) return;
       const text = schemaType === 'color'
-        ? colorToDsl(newValue as Color)
-        : String(newValue);
+        ? colorToDsl(pendingValue as Color)
+        : String(pendingValue);
       const tr = this.view.state.tr.replaceWith(
         this.state.from,
         this.state.to,
         this.view.state.schema.text(text),
       );
       this.view.dispatch(tr);
-      // Update range for subsequent changes
       this.state.to = this.state.from + text.length;
+      pendingValue = undefined;
+    };
+
+    const handleChange = (newValue: unknown) => {
       this.state.value = newValue;
-      // Re-render so the widget reflects the new value
+      pendingValue = newValue;
+      // Re-render widget immediately for responsiveness
       this.renderWidget();
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(flushChange);
+      }
     };
 
     let widget;
