@@ -151,14 +151,8 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
     : Number.isInteger(value) ? String(value) : value.toFixed(1);
 
   return (
-    <div style={{ padding: '6px 8px' }} onMouseDown={stop}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 4,
-      }}>
-        {label && <span style={{ fontSize: 10, color: '#6b7280', fontFamily: FONT }}>{label}</span>}
-        <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: FONT }}>{display}</span>
-      </div>
+    <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 8 }} onMouseDown={stop}>
+      {label && <span style={{ fontSize: 10, color: '#6b7280', fontFamily: FONT, flexShrink: 0 }}>{label}</span>}
       <div
         ref={trackRef}
         onPointerDown={onPointerDown}
@@ -174,6 +168,7 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
           cursor: 'ew-resize',
           overflow: 'hidden',
           touchAction: 'none',
+          flexShrink: 0,
         }}
       >
         {/* Center mark */}
@@ -195,6 +190,7 @@ export function NumberSlider({ value, min, max, step = 1, label, onChange }: Num
           }}
         />
       </div>
+      <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: FONT, minWidth: '4ch', textAlign: 'right', flexShrink: 0 }}>{display}</span>
     </div>
   );
 }
