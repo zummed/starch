@@ -13,7 +13,7 @@ const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
 const PREFS_KEY = 'starch-v2-prefs';
 const TABS_KEY = 'starch-tabs';
 
-type LayoutMode = 'panel' | 'tab';
+type LayoutMode = 'panel' | 'blade' | 'tab';
 
 interface EditorTab {
   id: string;
@@ -55,7 +55,10 @@ function saveStoredTabs(tabs: EditorTab[], activeTabId: string, nextTabId: numbe
 
 function detectDefaultMode(): LayoutMode {
   if (typeof window === 'undefined') return 'panel';
-  return window.innerWidth < 768 ? 'tab' : 'panel';
+  const w = window.innerWidth;
+  if (w < 768) return 'tab';
+  if (w < 1024) return 'blade';
+  return 'panel';
 }
 
 function loadPrefs(): { layoutMode: LayoutMode | null; showBrowser: boolean; showEditor: boolean; editorWidth: number } {
@@ -113,6 +116,7 @@ export default function App() {
   const [showEditor, setShowEditor] = useState(layoutMode === 'panel' ? initialPrefs.current.showEditor : true);
   const [showBrowser, setShowBrowser] = useState(layoutMode === 'panel' ? initialPrefs.current.showBrowser : true);
   const [showFileManager, setShowFileManager] = useState(false);
+  const [activeBlade, setActiveBlade] = useState<'samples' | 'files' | 'editor' | 'viewer'>('viewer');
   const [debugMode, setDebugMode] = useState(false);
   const [previewRatio, setPreviewRatio] = useState(false);
   const [fixedCamera, setFixedCamera] = useState(false);
@@ -151,10 +155,12 @@ export default function App() {
   // Auto-detect layout on resize (only when user hasn't explicitly chosen)
   useEffect(() => {
     if (userLayoutMode !== null) return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const handler = (e: MediaQueryListEvent) => setAutoMode(e.matches ? 'tab' : 'panel');
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    const handler = () => {
+      const w = window.innerWidth;
+      setAutoMode(w < 768 ? 'tab' : w < 1024 ? 'blade' : 'panel');
+    };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
   }, [userLayoutMode]);
 
   // Persist prefs
@@ -185,6 +191,7 @@ export default function App() {
   }, []);
 
   const isCompact = layoutMode === 'tab';
+  const isBlade = layoutMode === 'blade';
 
   const vpW = 800;
   const vpH = 500;
@@ -299,18 +306,13 @@ export default function App() {
     });
   }, []);
 
-  const toggleLayoutMode = useCallback(() => {
-    const next: LayoutMode = layoutMode === 'panel' ? 'tab' : 'panel';
-    setUserLayoutMode(next);
-  }, [layoutMode]);
-
   // Touch-friendly button size
   const btnPad = isCompact ? '8px 14px' : '4px 10px';
   const btnSize = isCompact ? 12 : 11;
 
   // Compute fitted container dimensions for ratio preview
   const ratioContainerStyle = (() => {
-    if (!previewRatio || !diagram.cameraRatio || !canvasSize) {
+    if (!previewRatio || !diagram.cameraRatio || !canvasSize || canvasSize.w === 0 || canvasSize.h === 0) {
       return { width: '100%', height: '100%' } as const;
     }
     const { w: pw, h: ph } = canvasSize;
@@ -478,6 +480,43 @@ export default function App() {
     </div>
   );
 
+  const bladeBarItem = (id: string, label: string, active: boolean, onClick: () => void) => (
+    <div
+      key={id}
+      onClick={onClick}
+      style={{
+        writingMode: 'vertical-rl',
+        textOrientation: 'mixed',
+        transform: 'rotate(180deg)',
+        padding: '14px 0',
+        fontSize: 10,
+        fontFamily: FONT,
+        fontWeight: 600,
+        letterSpacing: 1.5,
+        cursor: 'pointer',
+        color: active ? '#a78bfa' : '#4a4f59',
+        background: active ? 'rgba(167,139,250,0.06)' : 'transparent',
+        transition: 'all 0.15s ease',
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          (e.currentTarget as HTMLDivElement).style.color = '#8a8f98';
+          (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          (e.currentTarget as HTMLDivElement).style.color = '#4a4f59';
+          (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+        }
+      }}
+    >
+      {label}
+    </div>
+  );
+
   return (
     <div style={{
       width: '100%', height: '100vh', display: 'flex', flexDirection: 'column',
@@ -515,51 +554,30 @@ export default function App() {
           <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e5ea' }}>starch</span>
           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 2, fontWeight: 600 }}>v2</span>
         </div>
-        <div style={{ display: 'flex', gap: isCompact ? 4 : 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Layout mode toggle — small icon button */}
-          <button
-            onClick={toggleLayoutMode}
-            title={layoutMode === 'panel' ? 'Switch to compact view' : 'Switch to full view'}
-            style={{
-              padding: isCompact ? '8px 10px' : '4px 8px', borderRadius: 6,
-              border: '1px solid #2a2d35',
-              background: '#14161c',
-              color: '#6b7280',
-              fontSize: isCompact ? 16 : 13, fontFamily: FONT, cursor: 'pointer',
-              minHeight: isCompact ? 44 : undefined,
-              lineHeight: 1,
-            }}
-          >
-            {layoutMode === 'panel' ? '⊟' : '⊞'}
-          </button>
-
-          {!isCompact && (
-            <>
-              <div style={{ width: 1, height: 20, background: '#1e2028', margin: '0 4px' }} />
-              {[
-                { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
-                { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
-                { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
-                { label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
-                { label: showEditor ? 'Hide' : 'Edit', active: false, onClick: () => { const next = !showEditor; setShowEditor(next); if (!next) setShowBrowser(false); } },
-              ].map(btn => (
-                <button
-                  key={btn.label}
-                  onClick={btn.onClick}
-                  style={{
-                    padding: btnPad, borderRadius: 6,
-                    border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
-                    background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
-                    color: btn.active ? '#a78bfa' : '#6b7280',
-                    fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {btn.label}
-                </button>
-              ))}
-            </>
-          )}
-        </div>
+        {!isCompact && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {[
+              { label: 'Debug', active: debugMode, onClick: () => setDebugMode(!debugMode) },
+              { label: 'Fit All', active: false, onClick: () => { const fit = diagram.computeFitAll(); setPanZoom(fit); setFixedCamera(true); } },
+              { label: 'Lock View', active: fixedCamera, onClick: () => { const next = !fixedCamera; setFixedCamera(next); if (!next) { setPanZoom(null); } } },
+              { label: 'Viewport', active: previewRatio, onClick: () => setPreviewRatio(!previewRatio) },
+            ].map(btn => (
+              <button
+                key={btn.label}
+                onClick={btn.onClick}
+                style={{
+                  padding: btnPad, borderRadius: 6,
+                  border: `1px solid ${btn.active ? '#a78bfa' : '#2a2d35'}`,
+                  background: btn.active ? 'rgba(167,139,250,0.1)' : '#14161c',
+                  color: btn.active ? '#a78bfa' : '#6b7280',
+                  fontSize: btnSize, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -581,6 +599,43 @@ export default function App() {
           onSampleSelect={handleSampleClick}
           activeSampleId={activeSampleId}
         />
+      ) : isBlade ? (
+        /* Blade mode: 4 blades, one content area at a time */
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+          {/* Left blade bar — 4 blades */}
+          <div style={{
+            width: 32, height: '100%', flexShrink: 0,
+            background: '#08090d', borderRight: '1px solid #1a1d24',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
+          }}>
+            {bladeBarItem('samples', 'SAMPLES', activeBlade === 'samples', () => setActiveBlade('samples'))}
+            {bladeBarItem('files', 'FILES', activeBlade === 'files', () => setActiveBlade('files'))}
+            {bladeBarItem('editor', 'EDITOR', activeBlade === 'editor', () => setActiveBlade('editor'))}
+            {bladeBarItem('viewer', 'VIEWER', activeBlade === 'viewer', () => setActiveBlade('viewer'))}
+          </div>
+
+          {/* Content area — all mounted, only one visible */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'samples' ? 'block' : 'none' }}>
+              <V2SampleBrowser activeSampleId={activeSampleId} onSelect={handleSampleClick} />
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'files' ? 'block' : 'none' }}>
+              <TabFileManager
+                tabs={tabs} activeTabId={activeTabId} onSelectTab={setActiveTabId}
+                onToggleVisible={handleToggleVisible} onDuplicateTab={handleDuplicateTab} onDeleteTab={closeTab}
+              />
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden', display: activeBlade === 'editor' ? 'flex' : 'none', flexDirection: 'column' }}>
+              {editorContent}
+            </div>
+            <div style={{ flex: 1, display: activeBlade === 'viewer' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0 }}>
+              <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                {canvasContent}
+              </div>
+              {timelineContent}
+            </div>
+          </div>
+        </div>
       ) : (
         <div
           ref={bodyRef}
@@ -596,55 +651,12 @@ export default function App() {
         >
           {/* Left blade bar */}
           <div style={{
-            width: 32,
-            height: '100%',
-            flexShrink: 0,
-            background: '#08090d',
-            borderRight: '1px solid #1a1d24',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 0,
+            width: 32, height: '100%', flexShrink: 0,
+            background: '#08090d', borderRight: '1px solid #1a1d24',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
           }}>
-            {[
-              { id: 'samples' as const, label: 'SAMPLES', active: showBrowser, onClick: () => { setShowBrowser(!showBrowser); if (!showBrowser) setShowFileManager(false); } },
-              { id: 'files' as const, label: 'FILES', active: showFileManager, onClick: () => { setShowFileManager(!showFileManager); if (!showFileManager) setShowBrowser(false); } },
-            ].map(blade => (
-              <div
-                key={blade.id}
-                onClick={blade.onClick}
-                style={{
-                  writingMode: 'vertical-rl',
-                  textOrientation: 'mixed',
-                  transform: 'rotate(180deg)',
-                  padding: '14px 0',
-                  fontSize: 10,
-                  fontFamily: FONT,
-                  fontWeight: 600,
-                  letterSpacing: 1.5,
-                  cursor: 'pointer',
-                  color: blade.active ? '#a78bfa' : '#4a4f59',
-                  background: blade.active ? 'rgba(167,139,250,0.06)' : 'transparent',
-                  transition: 'all 0.15s ease',
-                  userSelect: 'none',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => {
-                  if (!blade.active) {
-                    (e.currentTarget as HTMLDivElement).style.color = '#8a8f98';
-                    (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!blade.active) {
-                    (e.currentTarget as HTMLDivElement).style.color = '#4a4f59';
-                    (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-                  }
-                }}
-              >
-                {blade.label}
-              </div>
-            ))}
+            {bladeBarItem('samples', 'SAMPLES', showBrowser, () => { setShowBrowser(!showBrowser); if (!showBrowser) setShowFileManager(false); })}
+            {bladeBarItem('files', 'FILES', showFileManager, () => { setShowFileManager(!showFileManager); if (!showFileManager) setShowBrowser(false); })}
           </div>
 
           {/* Side panel — slides in/out */}
