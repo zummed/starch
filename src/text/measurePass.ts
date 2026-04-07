@@ -26,20 +26,22 @@ function walkNode(node: Node, measurer: TextMeasurer): void {
     walkNode(child, measurer);
   }
 
-  // Text node inside a shape — wrap within the shape's width
+  // Text nodes inside a shape — wrap within the shape's width
   if (node.children.length >= 2) {
-    const textChild = node.children.find(c => c.text);
+    const textChildren = node.children.filter(c => c.text);
 
-    if (textChild) {
+    if (textChildren.length > 0) {
       const rectChild = node.children.find(c => c.rect && c.rect.w > 0);
       if (rectChild) {
         const padX = node._textPad?.x ?? DEFAULT_PAD_X;
         const maxWidth = node._textMaxWidth ?? (rectChild.rect!.w - padX * 2);
         if (maxWidth > 0) {
-          const t = textChild.text!;
-          textChild._measured = measurer.measure(t.content, {
-            size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
-          });
+          for (const textChild of textChildren) {
+            const t = textChild.text!;
+            textChild._measured = measurer.measure(t.content, {
+              size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
+            });
+          }
         }
         return;
       }
@@ -49,10 +51,12 @@ function walkNode(node: Node, measurer: TextMeasurer): void {
         const padX = node._textPad?.x ?? DEFAULT_PAD_X;
         const maxWidth = node._textMaxWidth ?? (ellipseChild.ellipse!.rx * 2 * 0.7 - padX);
         if (maxWidth > 0) {
-          const t = textChild.text!;
-          textChild._measured = measurer.measure(t.content, {
-            size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
-          });
+          for (const textChild of textChildren) {
+            const t = textChild.text!;
+            textChild._measured = measurer.measure(t.content, {
+              size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
+            });
+          }
         }
         return;
       }
