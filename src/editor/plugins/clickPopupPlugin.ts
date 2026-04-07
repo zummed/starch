@@ -584,17 +584,10 @@ class PopupView {
   private renderWidget() {
     const { schemaType, schemaPath, value } = this.state;
 
-    // Throttle editor dispatch to once per frame; update widget state
-    // immediately so the slider/picker stays responsive.
-    let pendingValue: unknown = undefined;
-    let rafPending = false;
-
-    const flushChange = () => {
-      rafPending = false;
-      if (pendingValue === undefined) return;
+    const handleChange = (newValue: unknown) => {
       const text = schemaType === 'color'
-        ? colorToDsl(pendingValue as Color)
-        : String(pendingValue);
+        ? colorToDsl(newValue as Color)
+        : String(newValue);
       const tr = this.view.state.tr.replaceWith(
         this.state.from,
         this.state.to,
@@ -602,22 +595,7 @@ class PopupView {
       );
       this.view.dispatch(tr);
       this.state.to = this.state.from + text.length;
-      pendingValue = undefined;
-    };
-
-    const handleChange = (newValue: unknown) => {
       this.state.value = newValue;
-      pendingValue = newValue;
-      if (!rafPending) {
-        rafPending = true;
-        requestAnimationFrame(() => {
-          flushChange();
-          // Re-render after dispatch so non-slider widgets (color, enum)
-          // reflect the new value.  Sliders update their own display via
-          // DOM ref so this is a no-op for them during drag.
-          this.renderWidget();
-        });
-      }
     };
 
     let widget;
