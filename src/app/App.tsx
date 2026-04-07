@@ -121,6 +121,18 @@ export default function App() {
   const dragging = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const touchState = useRef<{
+    type: 'pan' | 'pinch';
+    startX: number; startY: number;
+    curPanZoom: { x: number; y: number; zoom: number };
+    pixelToWorld: number;
+    startDist: number; startMidX: number; startMidY: number; startZoom: number;
+  } | null>(null);
+  const panZoomRef = useRef(panZoom);
+  panZoomRef.current = panZoom;
+  const fixedCameraRef = useRef(fixedCamera);
+  fixedCameraRef.current = fixedCamera;
+  const diagramRef = useRef<ReturnType<typeof useV2Diagram>>(null!);
   const [canvasSize, setCanvasSize] = useState<{ w: number; h: number } | null>(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
@@ -182,6 +194,133 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
+  // Touch pan & pinch-zoom on the viewer canvas
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+
+    const dist = (t1: Touch, t2: Touch) =>
+      Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cur = panZoomRef.current || diagramRef.current.computeFitAll();
+
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        const pixelToWorld = (vpW / cur.zoom) / rect.width;
+        touchState.current = {
+          type: 'pan', startX: t.clientX, startY: t.clientY,
+          curPanZoom: cur, pixelToWorld,
+          startDist: 0, startMidX: 0, startMidY: 0, startZoom: 0,
+        };
+      } else if (e.touches.length === 2) {
+        const [t1, t2] = [e.touches[0], e.touches[1]];
+        touchState.current = {
+          type: 'pinch', startX: 0, startY: 0,
+          curPanZoom: cur,
+          pixelToWorld: (vpW / cur.zoom) / rect.width,
+          startDist: dist(t1, t2),
+          startMidX: (t1.clientX + t2.clientX) / 2,
+          startMidY: (t1.clientY + t2.clientY) / 2,
+          startZoom: cur.zoom,
+        };
+      }
+      if (!fixedCameraRef.current) setFixedCamera(true);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (!touchState.current) return;
+      const rect = el.getBoundingClientRect();
+
+      if (e.touches.length === 1 && touchState.current.type === 'pan') {
+        const t = e.touches[0];
+        const { startX, startY, curPanZoom, pixelToWorld } = touchState.current;
+        setPanZoom({
+          x: curPanZoom.x - (t.clientX - startX) * pixelToWorld,
+          y: curPanZoom.y - (t.clientY - startY) * pixelToWorld,
+          zoom: curPanZoom.zoom,
+        });
+      } else if (e.touches.length === 2) {
+        const [t1, t2] = [e.touches[0], e.touches[1]];
+
+        // Transition from 1-finger pan to 2-finger pinch
+        if (touchState.current.type === 'pan') {
+          const cur = panZoomRef.current || diagramRef.current.computeFitAll();
+          touchState.current = {
+            type: 'pinch', startX: 0, startY: 0,
+            curPanZoom: cur,
+            pixelToWorld: (vpW / cur.zoom) / rect.width,
+            startDist: dist(t1, t2),
+            startMidX: (t1.clientX + t2.clientX) / 2,
+            startMidY: (t1.clientY + t2.clientY) / 2,
+            startZoom: cur.zoom,
+          };
+          return;
+        }
+
+        const { startDist, startMidX, startMidY, startZoom, curPanZoom, pixelToWorld } = touchState.current;
+
+        // Zoom from pinch distance ratio
+        const curDist = dist(t1, t2);
+        const newZoom = Math.max(0.1, Math.min(20, startZoom * (curDist / startDist)));
+
+        // Pan from midpoint movement
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        const dx = (midX - startMidX) * pixelToWorld;
+        const dy = (midY - startMidY) * pixelToWorld;
+
+        // Zoom centering (same math as onWheel)
+        const mx = (midX - rect.left) / rect.width;
+        const my = (midY - rect.top) / rect.height;
+        const viewW = vpW / curPanZoom.zoom;
+        const viewH = vpH / curPanZoom.zoom;
+        const worldX = curPanZoom.x - viewW / 2 + mx * viewW;
+        const worldY = curPanZoom.y - viewH / 2 + my * viewH;
+        const newViewW = vpW / newZoom;
+        const newViewH = vpH / newZoom;
+
+        setPanZoom({
+          x: worldX + newViewW * (0.5 - mx) - dx,
+          y: worldY + newViewH * (0.5 - my) - dy,
+          zoom: newZoom,
+        });
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) {
+        touchState.current = null;
+      } else if (e.touches.length === 1 && touchState.current?.type === 'pinch') {
+        // Transition from pinch back to single-finger pan
+        const t = e.touches[0];
+        const cur = panZoomRef.current || diagramRef.current.computeFitAll();
+        const rect = el.getBoundingClientRect();
+        const pixelToWorld = (vpW / cur.zoom) / rect.width;
+        touchState.current = {
+          type: 'pan', startX: t.clientX, startY: t.clientY,
+          curPanZoom: cur, pixelToWorld,
+          startDist: 0, startMidX: 0, startMidY: 0, startZoom: 0,
+        };
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: false });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: false });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
+
   const isBlade = layoutMode === 'blade';
 
   const vpW = 800;
@@ -200,6 +339,7 @@ export default function App() {
     debug: debugMode,
     viewportOverride: fixedCamera ? viewportOverride : null,
   });
+  diagramRef.current = diagram;
 
   // Sync parsed name to tab label (user tabs only)
   useEffect(() => {
@@ -329,6 +469,7 @@ export default function App() {
         width: '100%', height: '100%', position: 'relative', overflow: 'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'grab',
+        touchAction: 'none',
       }}
       onWheel={(e) => {
         e.preventDefault();
