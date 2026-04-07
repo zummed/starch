@@ -519,14 +519,16 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
             },
           });
         } else {
-          widget = createElement('input', {
-            type: 'text',
-            value: val,
-            placeholder: prop.description || prop.name,
-            onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
-            onKeyDown: (e: any) => e.stopPropagation(),
-            className: 'compound-popup-input',
-          });
+          widget = createElement('div', { style: { padding: '4px 8px' } },
+            createElement('input', {
+              type: 'text',
+              value: val,
+              placeholder: prop.description || prop.name,
+              onChange: (e: any) => handleFieldChange(prop.name, e.target.value),
+              onKeyDown: (e: any) => e.stopPropagation(),
+              className: 'compound-popup-input',
+            }),
+          );
         }
 
         return createElement('div', {
