@@ -305,6 +305,15 @@ export class SvgRenderBackend implements RenderBackend {
       const totalHeight = lines.length * lh;
       const startY = -totalHeight / 2 + lh / 2;
 
+      // Clear any raw text nodes left from single-line rendering.
+      // el.children only counts element children, so a raw text node
+      // would persist invisibly alongside new tspans, causing duplicates.
+      for (let i = el.childNodes.length - 1; i >= 0; i--) {
+        if (el.childNodes[i].nodeType === 3 /* TEXT_NODE */) {
+          el.removeChild(el.childNodes[i]);
+        }
+      }
+
       // Reuse or create tspan children
       for (let i = 0; i < lines.length; i++) {
         let tspan: SVGTSpanElement;
@@ -331,10 +340,6 @@ export class SvgRenderBackend implements RenderBackend {
     } else {
       el.setAttribute('dominant-baseline', 'central');
       el.textContent = content;
-      // Remove any leftover tspans from a previous frame with multiline
-      while (el.children.length > 0) {
-        el.removeChild(el.lastElementChild!);
-      }
     }
 
     this._applyOpacity(el);
@@ -367,7 +372,9 @@ export class SvgRenderBackend implements RenderBackend {
       el.setAttribute('stroke-dasharray', String(totalLen));
       el.setAttribute('stroke-dashoffset', String(totalLen * (1 - drawProgress)));
     } else {
-      el.removeAttribute('stroke-dasharray');
+      // Only clean up draw-progress overrides.
+      // Don't remove stroke-dasharray — applyFillStroke already handles
+      // the stroke.dash value on the line above.
       el.removeAttribute('stroke-dashoffset');
     }
 
