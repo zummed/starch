@@ -239,11 +239,11 @@ export function getEnumValues(schema: z.ZodType): string[] | null {
  * Get number constraints from a schema using validation probes.
  * Uses binary search to find the actual min/max boundaries.
  */
-export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: number } | null {
+export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: number; step?: number } | null {
   const unwrapped = unwrap(schema);
   if (!(unwrapped instanceof z.ZodNumber)) return null;
 
-  const result: { min?: number; max?: number } = {};
+  const result: { min?: number; max?: number; step?: number } = {};
 
   // Find min: binary search between -10000 and 0
   if (!unwrapped.safeParse(-10000).success && unwrapped.safeParse(0).success) {
@@ -265,6 +265,15 @@ export function getNumberConstraints(schema: z.ZodType): { min?: number; max?: n
       else hi = mid;
     }
     result.max = Math.round(lo * 100) / 100;
+  }
+
+  // Derive step from the range so small-range properties (e.g., scale 0-10,
+  // pathProgress 0-1) get fine-grained control automatically.
+  if (result.min !== undefined && result.max !== undefined) {
+    const range = result.max - result.min;
+    if (range <= 2) result.step = 0.01;
+    else if (range <= 20) result.step = 0.1;
+    else if (range <= 100) result.step = 1;
   }
 
   return result;
