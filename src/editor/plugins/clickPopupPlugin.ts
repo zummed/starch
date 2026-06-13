@@ -1,115 +1,45 @@
 /**
  * Click-to-edit popup plugin.
  *
- * When the user clicks on a value in the DSL, this plugin detects the
- * schema type at that position and shows the appropriate widget popup
- * (ColorPicker, NumberSlider, EnumDropdown, etc.).
+ * When the user clicks on a value in the DSL, this plugin detects the schema
+ * type at that position and shows the appropriate widget popup (ColorPicker,
+ * NumberSlider, EnumDropdown, etc.). All of the actual edit logic — resolving
+ * the target, serializing values, and splicing text — lives in the pure,
+ * view-independent `popupEdit` module so the live editor and the interaction
+ * test harness share exactly one implementation.
  */
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createRoot, type Root } from 'react-dom/client';
 import { createElement, useState, useCallback, useRef, type ReactElement } from 'react';
-import { walkDocument } from '../../dsl/schemaWalker';
-import { leavesToAst } from '../../dsl/astAdapter';
-import { type AstNode, nodeAt, findCompound } from '../../dsl/astTypes';
 import {
-  getPropertySchema,
-  getAvailableProperties,
   detectSchemaType,
   getEnumValues,
   getNumberConstraints,
   getSchemaDefault,
-  DocumentSchema,
-  unwrap,
+  getPropertySchema,
   type SchemaType,
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
-import { getShapeDefinition, listSets } from '../../templates/registry';
 import type { z } from 'zod';
-import { getDsl } from '../../dsl/dslMeta';
-
-/**
- * Resolve a template prop schema from a `tplprops:templateName.propName` path.
- *
- * Template names can be unqualified (`box`) or qualified (`core.box`).
- * For unqualified names, we search all registered shape sets.
- */
-function resolveTemplatePropSchema(schemaPath: string): z.ZodType | null {
-  // The schemaPath format is: tplprops:<templateName>.<propName>
-  // After localSchemaPath strips "objects.", we get something like:
-  //   tplprops:box.w  or  tplprops:core.box.w
-  const tplMatch = schemaPath.match(/^tplprops:(.+)\.(\w+)$/);
-  if (!tplMatch) return null;
-
-  const templateName = tplMatch[1];
-  const propName = tplMatch[2];
-
-  // Try qualified name first: "setName.shapeName"
-  if (templateName.includes('.')) {
-    const dotIdx = templateName.indexOf('.');
-    const setName = templateName.slice(0, dotIdx);
-    const shapeName = templateName.slice(dotIdx + 1);
-    const def = getShapeDefinition(setName, shapeName);
-    if (def) {
-      const propSchema = (def.props as any).shape?.[propName];
-      if (propSchema) return propSchema;
-    }
-    return null;
-  }
-
-  // Unqualified name: search all sets
-  for (const set of listSets()) {
-    const def = set.shapes.get(templateName);
-    if (def) {
-      const propSchema = (def.props as any).shape?.[propName];
-      if (propSchema) return propSchema;
-    }
-  }
-  return null;
-}
-
-/** Resolve a schema path against NodeSchema first, then DocumentSchema, then template props. */
-function resolvePropertySchema(path: string): z.ZodType | null {
-  return getPropertySchema(path, NodeSchema)
-    ?? getPropertySchema(path, DocumentSchema)
-    ?? resolveTemplatePropSchema(path);
-}
-
-/** List available properties at a path, trying both roots. */
-function resolveAvailableProperties(path: string) {
-  const nodeProps = getAvailableProperties(path, NodeSchema);
-  if (nodeProps.length > 0) return nodeProps;
-  return getAvailableProperties(path, DocumentSchema);
-}
 import type { Color } from '../../types/properties';
+import {
+  resolveEditTarget,
+  resolvePropertySchema,
+  resolveAvailableProperties,
+  colorToDsl,
+  serializeLeafValue,
+  serializeFieldValue,
+  parseCompoundText,
+  rebuildCompoundText,
+  parseNodeKwargs,
+  rebuildNodeKwargs,
+  NODE_KWARG_NAMES,
+} from '../popupEdit';
 import { ColorPicker } from '../views/widgets/ColorPicker';
 import { NumberSlider } from '../views/widgets/NumberSlider';
 import { EnumDropdown } from '../views/widgets/EnumDropdown';
 import { AnchorEditor } from '../views/widgets/AnchorEditor';
-
-/** Serialize a Color value to DSL text. */
-function colorToDsl(color: Color): string {
-  if (typeof color === 'string') return color; // named or hex
-  if (typeof color === 'object' && color !== null) {
-    if ('h' in color && 's' in color && 'l' in color) {
-      const c = color as { h: number; s: number; l: number; a?: number };
-      return c.a !== undefined ? `hsl ${c.h} ${c.s} ${c.l} a=${c.a}` : `hsl ${c.h} ${c.s} ${c.l}`;
-    }
-    if ('r' in color && 'g' in color && 'b' in color) {
-      const c = color as { r: number; g: number; b: number; a?: number };
-      return c.a !== undefined ? `rgb ${c.r} ${c.g} ${c.b} a=${c.a}` : `rgb ${c.r} ${c.g} ${c.b}`;
-    }
-    if ('name' in color) {
-      const c = color as { name: string; a?: number };
-      return c.a !== undefined ? `${c.name} a=${c.a}` : c.name;
-    }
-    if ('hex' in color) {
-      const c = color as { hex: string; a?: number };
-      return c.a !== undefined ? `${c.hex} a=${c.a}` : c.hex;
-    }
-  }
-  return String(color);
-}
 
 export const clickPopupKey = new PluginKey('clickPopup');
 
@@ -132,177 +62,21 @@ const EMPTY: PopupState = {
 };
 
 /**
- * Check whether a value's schemaPath corresponds to a key inside a
- * dimension/joined positional hint on the compound.  These values
- * are encoded as a single token (e.g., "100x50") and must not be
- * edited individually — the compound popup handles them as a group.
+ * Detect the popup to show at a ProseMirror position. Thin view-layer wrapper
+ * over the pure `resolveEditTarget`: it adds the PM offset and screen coords.
  */
-function isJoinedPositional(compoundSchemaPath: string, valueSchemaPath: string): boolean {
-  const schema = resolvePropertySchema(compoundSchemaPath);
-  if (!schema) return false;
-  const hints = getDsl(unwrap(schema));
-  if (!hints?.positional) return false;
-
-  const prefix = compoundSchemaPath + '.';
-  if (!valueSchemaPath.startsWith(prefix)) return false;
-  const key = valueSchemaPath.slice(prefix.length);
-
-  return hints.positional.some(hint =>
-    (hint.format === 'dimension' || hint.format === 'joined') &&
-    hint.keys.includes(key),
-  );
-}
-
-/**
- * Find a direct value child whose schemaPath matches the compound's.
- * This identifies "whole value" nodes (e.g., "red" in "fill red" has
- * schemaPath='fill', same as the compound) vs sub-component nodes
- * (e.g., "255" in "fill rgb 255 0 0" has schemaPath='fill.r').
- */
-function findDirectValue(compound: AstNode, schemaPath: string): AstNode | null {
-  for (const child of compound.children) {
-    if (child.dslRole === 'value' && child.schemaPath === schemaPath) return child;
-  }
-  return null;
-}
-
-/** Find a kwarg-value descendant with the given schemaPath inside a compound. */
-function findKwargValue(compound: AstNode, schemaPath: string): AstNode | null {
-  for (const child of compound.children) {
-    if (child.dslRole === 'kwarg-value' && child.schemaPath === schemaPath) return child;
-    const found = findKwargValue(child, schemaPath);
-    if (found) return found;
-  }
-  return null;
-}
-
 function detectPopupAt(view: EditorView, pmPos: number): PopupState | null {
   const text = view.state.doc.textContent;
-  const textPos = pmPos - PM_OFFSET;
-  if (textPos < 0 || textPos >= text.length) return null;
-
-  let ast;
-  try {
-    const { ast: ctx } = walkDocument(text);
-    ast = leavesToAst(ctx.astLeaves(), text.length);
-  } catch {
-    return null;
-  }
-
-  const node = nodeAt(ast, textPos);
-  if (!node) return null;
-
-  // For keywords and compounds, use the node's own schemaPath
-  // For values, walk up to the compound ancestor
-  let schemaPath: string;
-  let rangeFrom: number;
-  let rangeTo: number;
-  let popupValue: unknown = node.value;
-
-  if (node.dslRole === 'keyword' || node.dslRole === 'compound') {
-    schemaPath = node.schemaPath;
-    const compound = node.dslRole === 'compound' ? node : findCompound(node);
-
-    // If this compound resolves to a leaf widget type (color, number, enum),
-    // clicking the keyword should target just the value portion so the
-    // replacement doesn't delete the keyword (e.g., "fill red" → picking
-    // blue should produce "fill blue", not just "blue").
-    const compSchema = schemaPath ? resolvePropertySchema(schemaPath) : null;
-    const compType = compSchema ? detectSchemaType(compSchema) : 'unknown';
-    const valueChild = compound && ['color', 'number', 'enum', 'anchor', 'string'].includes(compType)
-      ? findDirectValue(compound, schemaPath)
-      : null;
-
-    if (valueChild) {
-      rangeFrom = valueChild.from;
-      rangeTo = valueChild.to;
-      popupValue = valueChild.value;
-    } else {
-      rangeFrom = compound?.from ?? node.from;
-      rangeTo = compound?.to ?? node.to;
-    }
-  } else if (node.dslRole === 'value' || node.dslRole === 'kwarg-value') {
-    const compound = findCompound(node);
-
-    // Values that are part of a joined/dimension positional (e.g., "100" in
-    // "rect 100x50") must redirect to the compound popup — editing one
-    // component alone destroys the joined format.
-    if (compound?.schemaPath && isJoinedPositional(compound.schemaPath, node.schemaPath)) {
-      schemaPath = compound.schemaPath;
-      rangeFrom = compound.from;
-      rangeTo = compound.to;
-    } else {
-      // Prefer the node's own schemaPath when it resolves to a concrete
-      // widget type (color, number, enum).  This ensures that e.g. clicking
-      // a stroke color value ('stroke.color') opens a ColorPicker instead of
-      // the compound-level object popup for 'stroke'.
-      const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
-      const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
-      if (ownType !== 'unknown' && ['color', 'number', 'enum', 'anchor', 'string'].includes(ownType)) {
-        schemaPath = node.schemaPath;
-      } else if (compound?.schemaPath) {
-        schemaPath = compound.schemaPath;
-      } else {
-        schemaPath = node.schemaPath;
-      }
-      rangeFrom = node.from;
-      rangeTo = node.to;
-    }
-  } else if (node.dslRole === 'kwarg-key') {
-    // Kwarg keys carry their own schemaPath (e.g., template props).
-    // Target the sibling kwarg-value so the popup edits the value, not the key name.
-    schemaPath = node.schemaPath;
-    const compound = findCompound(node);
-    const sibling = compound ? findKwargValue(compound, node.schemaPath) : null;
-    if (sibling) {
-      rangeFrom = sibling.from;
-      rangeTo = sibling.to;
-      popupValue = sibling.value;
-    } else {
-      rangeFrom = node.from;
-      rangeTo = node.to;
-    }
-  } else {
-    return null;
-  }
-
-  if (!schemaPath) return null;
-
-  // Node ID click: schemaPath is 'id' inside a node-line compound.
-  // Show a node-level popup with kwargs like depth/opacity instead of
-  // a text input for the ID itself.
-  if (schemaPath === 'id' && node.dslRole === 'value') {
-    const compound = findCompound(node);
-    if (compound && compound.schemaPath === '') {
-      return {
-        active: true,
-        schemaType: 'object' as SchemaType,
-        schemaPath: '_node',
-        value: popupValue,
-        from: compound.from + PM_OFFSET,
-        to: compound.to + PM_OFFSET,
-        coords: { left: view.coordsAtPos(node.from + PM_OFFSET).left, top: view.coordsAtPos(node.from + PM_OFFSET).bottom + 4 },
-      };
-    }
-  }
-
-  const schema = resolvePropertySchema(schemaPath);
-  if (!schema) return null;
-
-  const schemaType = detectSchemaType(schema);
-
-  // Show popups for types that have widgets
-  if (!['color', 'number', 'enum', 'object', 'anchor', 'string'].includes(schemaType)) return null;
-
-  const coords = view.coordsAtPos(rangeFrom + PM_OFFSET);
-
+  const target = resolveEditTarget(text, pmPos - PM_OFFSET);
+  if (!target) return null;
+  const coords = view.coordsAtPos(target.from + PM_OFFSET);
   return {
     active: true,
-    schemaType,
-    schemaPath,
-    value: popupValue,
-    from: rangeFrom + PM_OFFSET,
-    to: rangeTo + PM_OFFSET,
+    schemaType: target.schemaType,
+    schemaPath: target.schemaPath,
+    value: target.value,
+    from: target.from + PM_OFFSET,
+    to: target.to + PM_OFFSET,
     coords: { left: coords.left, top: coords.bottom + 4 },
   };
 }
@@ -318,180 +92,6 @@ interface CompoundPopupProps {
   onClose: () => void;
 }
 
-/**
- * Parse compound DSL text into a map of property name → string value.
- *
- * Uses the schema's DSL hints to map positional values to property names.
- * For example, `stroke red width=2` → { color: 'red', width: '2' }.
- */
-function parseCompoundText(text: string, schemaPath: string): Record<string, string> {
-  const fields: Record<string, string> = {};
-  const tokens = text.split(/\s+/);
-  if (tokens.length === 0) return fields;
-
-  // Extract kwargs first
-  const kwargTokenIndices = new Set<number>();
-  for (let i = 1; i < tokens.length; i++) {
-    const eq = tokens[i].indexOf('=');
-    if (eq > 0) {
-      fields[tokens[i].slice(0, eq)] = tokens[i].slice(eq + 1);
-      kwargTokenIndices.add(i);
-    }
-  }
-
-  // Remaining tokens after keyword are positional
-  const positionalTokens: string[] = [];
-  for (let i = 1; i < tokens.length; i++) {
-    if (!kwargTokenIndices.has(i)) positionalTokens.push(tokens[i]);
-  }
-
-  // Map positional tokens to properties using DSL hints.
-  // unwrap() strips ZodOptional/ZodDefault wrappers so getDsl can find
-  // the hints that were registered on the original (unwrapped) schema.
-  const schema = resolvePropertySchema(schemaPath);
-  const hints = schema ? getDsl(unwrap(schema)) : undefined;
-
-  if (hints?.positional && positionalTokens.length > 0) {
-    let tokenIdx = 0;
-    for (const hint of hints.positional) {
-      if (tokenIdx >= positionalTokens.length) break;
-      if (hint.format === 'color') {
-        // Color may span multiple tokens (e.g., `rgb 255 0 0` or `hsl 120 50 50`)
-        // Consume tokens until we hit another positional hint boundary or run out
-        const colorTokens: string[] = [];
-        while (tokenIdx < positionalTokens.length) {
-          colorTokens.push(positionalTokens[tokenIdx]);
-          tokenIdx++;
-          // Named/hex colors are single token; rgb/hsl consume 3 more
-          const first = colorTokens[0];
-          if (first === 'rgb' || first === 'hsl') {
-            if (colorTokens.length >= 4) break;
-          } else {
-            break;
-          }
-        }
-        if (hint.keys.length === 1) {
-          fields[hint.keys[0]] = colorTokens.join(' ');
-        }
-      } else if (hint.format === 'dimension' || hint.format === 'joined') {
-        // e.g., "100x50" or "100,200" — single token, multiple keys
-        const token = positionalTokens[tokenIdx++];
-        const sep = hint.separator || 'x';
-        const parts = token.split(sep);
-        for (let k = 0; k < hint.keys.length && k < parts.length; k++) {
-          fields[hint.keys[k]] = parts[k];
-        }
-      } else {
-        // Default: one token per key
-        for (const key of hint.keys) {
-          if (tokenIdx < positionalTokens.length) {
-            fields[key] = positionalTokens[tokenIdx++];
-          }
-        }
-      }
-    }
-  } else if (positionalTokens.length > 0) {
-    // No hints — store positional tokens under numeric keys as fallback
-    positionalTokens.forEach((t, i) => { fields[`_pos${i}`] = t; });
-  }
-
-  return fields;
-}
-
-/**
- * Rebuild compound DSL text from property values.
- */
-function rebuildCompoundText(
-  keyword: string,
-  fields: Record<string, string>,
-  schemaPath: string,
-): string {
-  const schema = resolvePropertySchema(schemaPath);
-  const hints = schema ? getDsl(unwrap(schema)) : undefined;
-  const parts: string[] = [keyword];
-
-  const emittedKeys = new Set<string>();
-
-  // Emit positional values in order
-  if (hints?.positional) {
-    for (const hint of hints.positional) {
-      if (hint.format === 'color' && hint.keys.length === 1) {
-        const val = fields[hint.keys[0]];
-        if (val) { parts.push(val); emittedKeys.add(hint.keys[0]); }
-      } else if (hint.format === 'dimension' || hint.format === 'joined') {
-        const sep = hint.separator || 'x';
-        const vals = hint.keys.map(k => fields[k]).filter(Boolean);
-        if (vals.length === hint.keys.length) {
-          parts.push(vals.join(sep));
-          hint.keys.forEach(k => emittedKeys.add(k));
-        }
-      } else {
-        for (const key of hint.keys) {
-          const val = fields[key];
-          if (val) { parts.push(val); emittedKeys.add(key); }
-        }
-      }
-    }
-  }
-
-  // Emit kwargs
-  const kwargNames = hints?.kwargs ?? [];
-  // Emit declared kwargs first (in order), then any remaining
-  for (const name of kwargNames) {
-    const val = fields[name];
-    if (val !== undefined && val !== '') {
-      parts.push(`${name}=${val}`);
-      emittedKeys.add(name);
-    }
-  }
-  // Any remaining fields not yet emitted (shouldn't happen normally)
-  for (const [name, val] of Object.entries(fields)) {
-    if (!emittedKeys.has(name) && !name.startsWith('_pos') && val !== '') {
-      parts.push(`${name}=${val}`);
-    }
-  }
-
-  return parts.join(' ');
-}
-
-/** Node-level kwargs that should appear in the node ID popup. */
-const NODE_KWARG_NAMES = ['opacity', 'depth'];
-
-/** Parse known kwargs from a full node line. */
-function parseNodeKwargs(text: string): Record<string, string> {
-  const fields: Record<string, string> = {};
-  const kwargSet = new Set(NODE_KWARG_NAMES);
-  for (const token of text.split(/\s+/)) {
-    const eq = token.indexOf('=');
-    if (eq > 0) {
-      const key = token.slice(0, eq);
-      if (kwargSet.has(key)) fields[key] = token.slice(eq + 1);
-    }
-  }
-  return fields;
-}
-
-/** Rebuild a node line by updating/adding/removing kwargs. */
-function rebuildNodeKwargs(originalText: string, fields: Record<string, string>): string {
-  const tokens = originalText.split(/\s+/);
-  const kwargSet = new Set(NODE_KWARG_NAMES);
-
-  // Remove existing node-level kwargs
-  const kept = tokens.filter(t => {
-    const eq = t.indexOf('=');
-    return eq <= 0 || !kwargSet.has(t.slice(0, eq));
-  });
-
-  // Append updated kwargs
-  for (const name of NODE_KWARG_NAMES) {
-    const val = fields[name];
-    if (val !== undefined && val !== '') {
-      kept.push(`${name}=${val}`);
-    }
-  }
-
-  return kept.join(' ');
-}
 
 function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: CompoundPopupProps) {
   const isNode = schemaPath === '_node';
@@ -556,7 +156,7 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
         if (type === 'color') {
           widget = createElement(ColorPicker, {
             value: val || 'gray',
-            onChange: (c: Color) => handleFieldChange(prop.name, colorToDsl(c)),
+            onChange: (c: Color) => handleFieldChange(prop.name, serializeFieldValue('color', c)),
           });
         } else if (type === 'number') {
           const constraints = getNumberConstraints(prop.schema);
@@ -565,23 +165,18 @@ function CompoundPopup({ schemaPath, currentText, onReplace, onClose }: Compound
             min: constraints?.min,
             max: constraints?.max,
             step: constraints?.step,
-            onChange: (n: number) => handleFieldChange(prop.name, String(n)),
+            onChange: (n: number) => handleFieldChange(prop.name, serializeFieldValue('number', n)),
           });
         } else if (type === 'enum') {
           widget = createElement(EnumDropdown, {
             value: val,
             options: getEnumValues(prop.schema) ?? [],
-            onChange: (v: string) => handleFieldChange(prop.name, v),
+            onChange: (v: string) => handleFieldChange(prop.name, serializeFieldValue('enum', v)),
           });
         } else if (type === 'anchor') {
           widget = createElement(AnchorEditor, {
             value: val || 'center',
-            onChange: (v: unknown) => {
-              // Named anchors → string, custom → serialize tuple
-              if (typeof v === 'string') handleFieldChange(prop.name, v);
-              else if (Array.isArray(v)) handleFieldChange(prop.name, `(${v.join(',')})`);
-              else handleFieldChange(prop.name, String(v));
-            },
+            onChange: (v: unknown) => handleFieldChange(prop.name, serializeFieldValue('anchor', v)),
           });
         } else {
           widget = createElement('div', { style: { padding: '4px 8px' } },
@@ -652,9 +247,7 @@ class PopupView {
     const { schemaType, schemaPath, value } = this.state;
 
     const handleChange = (newValue: unknown) => {
-      const text = schemaType === 'color'
-        ? colorToDsl(newValue as Color)
-        : String(newValue);
+      const text = serializeLeafValue(schemaType, newValue);
       const tr = this.view.state.tr.replaceWith(
         this.state.from,
         this.state.to,
