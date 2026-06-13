@@ -78,6 +78,7 @@ export const TransformSchema = dsl(z.object({
   pathProgress: z.number().min(0).max(1).describe('Position along followed path (number, 0-1)').optional(),
 }), {
   keyword: 'at',
+  keywordOmittable: true,
   positional: [{ keys: ['x', 'y'], format: 'joined', separator: ',', fallbackToKwarg: true }],
   kwargs: ['rotation', 'scale', 'anchor', 'pathFollow', 'pathProgress'],
 });

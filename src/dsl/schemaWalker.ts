@@ -180,10 +180,11 @@ function matchSection(
     if (hints.keyword === keyword) {
       const parsed = executeSchema(ctx, hintSchema, name);
       if (parsed != null) {
-        // Parse indented keyframes block
+        // Parse indented block: interleaved chapters + keyframes.
         if (hints.children?.keyframes === 'block') {
-          const kfs = parseKeyframesBlock(ctx, `${name}.keyframes`);
-          parsed.keyframes = kfs; // always set, even if empty (consumers iterate it)
+          const { keyframes, chapters } = parseKeyframesBlock(ctx, `${name}.keyframes`);
+          parsed.keyframes = keyframes; // always set, even if empty (consumers iterate it)
+          if (chapters.length > 0) parsed.chapters = chapters;
         }
         model[name] = parsed;
       }
