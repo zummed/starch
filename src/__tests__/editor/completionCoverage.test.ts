@@ -303,3 +303,53 @@ describe('coverage: misc contexts', () => {
     expectOffers('background ', ['steelblue', 'hsl', 'rgb']);
   });
 });
+
+// ─── deferred-gap fixes (second audit pass) ──────────────────────
+
+describe('coverage: color alpha', () => {
+  it('offers a= after a fill color', () => {
+    expectOffers('box: rect 10x10 fill red ', ['a']);
+  });
+  it('offers a= after a stroke color', () => {
+    expectOffers('box: rect 10x10 stroke red ', ['a']);
+  });
+  it('does not duplicate a= once alpha is set', () => {
+    const labels = new EditorSession('box: rect 10x10 fill red a=0.5 ').availableLabels();
+    expect(labels.filter(l => l === 'a' || l === 'a=')).toEqual([]);
+  });
+});
+
+describe('coverage: layout direction positional', () => {
+  it('offers row/column after "layout <type> "', () => {
+    expectOffers('box: rect 10x10\n  layout flex ', ['row', 'column']);
+  });
+});
+
+describe('coverage: camera look union', () => {
+  const scene = 'a: rect 10x10\nb: rect 10x10\n';
+  it('offers the "all" literal and node ids for bare look=', () => {
+    expectOffers(scene + 'c: camera look=', ['all', 'a', 'b']);
+  });
+  it('offers node ids for the parenthesized look=( form', () => {
+    expectOffers(scene + 'c: camera look=(', ['a', 'b']);
+  });
+});
+
+describe('coverage: connection source', () => {
+  it('offers node ids (and geometry) at a fresh id: line', () => {
+    expectOffers('a: rect 10x10\nb: rect 10x10\nl: ', ['a', 'b', 'rect']);
+  });
+});
+
+describe('coverage: keyframe union + multi-change', () => {
+  const scene = 'a: rect 10x10\ncam: camera look=all\n';
+  it('offers all + node ids for a union-typed keyframe value', () => {
+    expectOffers(scene + 'animate 3s\n  1 cam.camera.look: ', ['all', 'a', 'cam']);
+  });
+  it('offers target paths on a deeper continuation line', () => {
+    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n    ', ['a', 'cam']);
+  });
+  it('still offers time/chapter on a same-indent fresh keyframe line', () => {
+    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n  ', ['time', 'chapter']);
+  });
+});

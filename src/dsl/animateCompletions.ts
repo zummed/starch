@@ -6,7 +6,7 @@
 import type { CompletionItem } from './astCompletions';
 import { AnimConfigSchema, EasingNameSchema } from '../types/animation';
 import { getDsl } from './dslMeta';
-import { getEnumValues, detectSchemaType } from '../types/schemaRegistry';
+import { getEnumValues, detectSchemaType, getUnionLiterals } from '../types/schemaRegistry';
 import { getAllColorNames } from '../types/color';
 import { currentValueAt, resolvePath, enumerateNextSegments } from './modelPathWalker';
 
@@ -354,6 +354,16 @@ export function animateValueCompletions(
     for (const v of ['true', 'false']) {
       if (items[0]?.label === v) continue;
       items.push({ label: v, type: 'value' });
+    }
+  } else if (type === 'pointref' || type === 'string') {
+    // Union/reference value (e.g. cam.camera.look) → union literals + node ids.
+    for (const lit of getUnionLiterals(loc.schema)) {
+      if (items[0]?.label === lit) continue;
+      items.push({ label: lit, type: 'value', detail: 'option' });
+    }
+    for (const id of sceneNodeIds(modelJson)) {
+      if (items[0]?.label === id) continue;
+      items.push({ label: id, type: 'value', detail: 'Node ID' });
     }
   }
   // number → only current-value item (no free list).

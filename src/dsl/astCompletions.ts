@@ -17,7 +17,7 @@ import { getAllColorNames } from '../types/color';
 import { NAMED_ANCHORS } from '../types/anchor';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
 import {
-  getPropertySchema, detectSchemaType, getEnumValues,
+  getPropertySchema, detectSchemaType, getEnumValues, getUnionLiterals,
   getAvailableProperties, getSchemaDefault, EasingNameSchema,
   DocumentSchema,
 } from '../types/schemaRegistry';
@@ -310,7 +310,7 @@ export function completionsAt(
       for (let i = node.children.length - 1; i >= 0; i--) {
         const child = node.children[i];
         if (child.to <= pos && child.dslRole === 'compound') {
-          return nodeContextCompletions(child, pos, modelJson);
+          return nodeContextCompletions(child, pos, modelJson, lineText);
         }
       }
     }
@@ -318,7 +318,7 @@ export function completionsAt(
   }
 
   // Inside a node or its children
-  return nodeContextCompletions(node, pos, modelJson);
+  return nodeContextCompletions(node, pos, modelJson, lineText);
 }
 
 // ─── Line-Text Completions ───────────────────────────────────────
@@ -330,6 +330,19 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   if (equalsMatch) {
     const key = equalsMatch[1];
     return kwargValueCompletions(key, modelJson, lineText);
+  }
+
+  // Parenthesized kwarg value, e.g. camera `look=(box,5,5)` — offer node ids.
+  const parenMatch = lineText.match(/(\w+)\s*=\s*\([\w,\s]*$/);
+  if (parenMatch) {
+    return kwargValueCompletions(parenMatch[1], modelJson, lineText);
+  }
+
+  // After `layout <type> ` the next positional is the direction enum (row/column).
+  if (/\blayout\s+\w+\s+\w*$/.test(lineText)) {
+    const dir = getPropertySchema('layout.direction');
+    const vals = dir ? getEnumValues(dir) ?? [] : [];
+    if (vals.length) return vals.map(v => ({ label: v, type: 'value' as const, detail: 'direction' }));
   }
 
   // After @ sign: style names from model. Labels keep the leading '@' so the
@@ -392,6 +405,8 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
         retrigger: true,
       });
     }
+    // And node ids, so a connection can start here (`l: a -> b`).
+    if (modelJson) items.push(...extractNodeIds(modelJson));
     return items;
   }
 
@@ -472,8 +487,11 @@ function kwargValueCompletions(key: string, modelJson?: any, lineText?: string):
         return NAMED_ANCHORS.map(a => ({ label: a, type: 'value', detail: 'anchor' }));
       }
       if (type === 'pointref' || type === 'string') {
-        // String/pointref kwargs may want node IDs or other contextual values
-        if (modelJson) return extractNodeIds(modelJson);
+        // String/pointref kwargs may want node IDs, plus any string literals in
+        // the union (e.g. camera look's `all`).
+        const lits = getUnionLiterals(fieldSchema).map(l => ({ label: l, type: 'value' as const, detail: 'option' }));
+        const ids = modelJson ? extractNodeIds(modelJson) : [];
+        if (lits.length || ids.length) return [...lits, ...ids];
       }
     }
   }
@@ -560,7 +578,7 @@ function sectionCompletions(node: AstNode, modelJson?: any): CompletionItem[] {
 
 // ─── Node Context Completions ────────────────────────────────────
 
-function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): CompletionItem[] {
+function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any, lineText?: string): CompletionItem[] {
   const compound = findCompound(node);
 
   if (!compound) {
@@ -611,6 +629,14 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): Co
 
     {
       const preceding = findPrecedingCompound(compound, pos);
+      // After a fill/stroke color value, alpha `a=` is valid (named+alpha, hsl
+      // alpha, etc.). Offer it (once) so it's reachable, since the bare-color
+      // path otherwise only shows node props (where 'a' resolves to 'at').
+      const alphaItem: CompletionItem[] =
+        preceding && (preceding.schemaPath === 'fill' || preceding.schemaPath === 'stroke')
+          && lineText && !/\ba\s*=/.test(lineText)
+          ? [{ label: 'a', type: 'property', detail: 'alpha (0-1)', scope: preceding.schemaPath, snippetTemplate: 'a=${1:1}' }]
+          : [];
       if (preceding && preceding.schemaPath) {
         const schema = getPropertySchema(preceding.schemaPath);
         if (schema) {
@@ -632,13 +658,13 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): Co
             if (remaining.length > 0) {
               const nodeItems = nodePropertyCompletions(compound, cursorPastChildren, modelJson)
                 .map(item => ({ ...item, scope: 'node' }));
-              return [...remaining, ...nodeItems];
+              return [...alphaItem, ...remaining, ...nodeItems];
             }
           }
         }
       }
+      return [...alphaItem, ...nodePropertyCompletions(compound, cursorPastChildren, modelJson)];
     }
-    return nodePropertyCompletions(compound, cursorPastChildren, modelJson);
   }
 
   // Generic compound → suggest missing kwargs/flags (not positional)
@@ -1116,8 +1142,26 @@ function routeAnimateContext(
   const lineStart = findLineStart(text, pos);
   const lineBeforeCursor = text.slice(lineStart, pos);
 
-  // Keyframe-start: fresh indented line (whitespace-only before cursor).
+  // Whitespace-only line: a fresh keyframe line (offer time/chapter) UNLESS it
+  // is indented deeper than its keyframe's time line — then it's a continuation
+  // change line in a multi-change keyframe, which wants target paths.
   if (/^\s*$/.test(lineBeforeCursor)) {
+    const cursorIndent = lineBeforeCursor.length;
+    const lines = text.split('\n');
+    const curLine = lineOf(pos, text);
+    let underTimeLine = false;
+    for (let ln = curLine - 1; ln >= 0; ln--) {
+      const l = lines[ln];
+      if (l.trim() === '') continue;
+      const ind = l.length - l.trimStart().length;
+      if (ind < cursorIndent) {
+        underTimeLine = /^\s*[+\d]/.test(l); // first shallower line is the time line?
+        break;
+      }
+    }
+    if (underTimeLine) {
+      return animatePathCompletions('', modelJson, (modelJson as any)?.animate);
+    }
     return animateKeyframeStartCompletions();
   }
 
