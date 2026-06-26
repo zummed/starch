@@ -14,7 +14,7 @@ import {
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
-import { getSetNames, getShapeNames } from '../templates/registry';
+import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
   getAvailableProperties, getSchemaDefault, EasingNameSchema,
@@ -316,7 +316,7 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   const equalsMatch = lineText.match(/(\w+)\s*=\s*(\w*)$/);
   if (equalsMatch) {
     const key = equalsMatch[1];
-    return kwargValueCompletions(key, modelJson);
+    return kwargValueCompletions(key, modelJson, lineText);
   }
 
   // After @ sign: style names from model
@@ -403,24 +403,42 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
 /**
  * Generate completions for values after a kwarg key (e.g., after `easing=`).
  * Looks up the key across all annotated schemas to find its type.
+ *
+ * The same kwarg name can live on multiple constructs (e.g. `align` on both
+ * text and layout, with different enums). When `lineText` is given, the owning
+ * construct is disambiguated by the keyword nearest before the kwarg on the
+ * line, so the right value set is offered for the cursor's context.
  */
-function kwargValueCompletions(key: string, modelJson?: any): CompletionItem[] {
-  // Try to find this key in any annotated schema
+function kwargValueCompletions(key: string, modelJson?: any, lineText?: string): CompletionItem[] {
+  // Collect every annotated construct that declares this kwarg.
+  const candidates: Array<[string, z.ZodType]> = [];
   for (const [schemaPath, schema] of Object.entries(ANNOTATED_SCHEMAS)) {
-    const hints = getDsl(schema);
-    if (hints?.kwargs?.includes(key)) {
-      const fieldSchema = getPropertySchema(schemaPath + '.' + key);
-      if (fieldSchema) {
-        const type = detectSchemaType(fieldSchema);
-        if (type === 'enum') {
-          const values = getEnumValues(fieldSchema);
-          if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
-        }
-        if (type === 'color') return colorCompletions();
-        if (type === 'pointref' || type === 'string') {
-          // String/pointref kwargs may want node IDs or other contextual values
-          if (modelJson) return extractNodeIds(modelJson);
-        }
+    if (getDsl(schema)?.kwargs?.includes(key)) candidates.push([schemaPath, schema]);
+  }
+
+  // Disambiguate by which construct keyword appears latest before the cursor.
+  let chosen: [string, z.ZodType] | undefined = candidates[0];
+  if (candidates.length > 1 && lineText) {
+    let bestIdx = -1;
+    for (const cand of candidates) {
+      const kw = getDsl(cand[1])?.keyword ?? cand[0];
+      const idx = lineText.lastIndexOf(kw);
+      if (idx > bestIdx) { bestIdx = idx; chosen = cand; }
+    }
+  }
+
+  if (chosen) {
+    const fieldSchema = getPropertySchema(chosen[0] + '.' + key);
+    if (fieldSchema) {
+      const type = detectSchemaType(fieldSchema);
+      if (type === 'enum') {
+        const values = getEnumValues(fieldSchema);
+        if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
+      }
+      if (type === 'color') return colorCompletions();
+      if (type === 'pointref' || type === 'string') {
+        // String/pointref kwargs may want node IDs or other contextual values
+        if (modelJson) return extractNodeIds(modelJson);
       }
     }
   }
@@ -538,6 +556,19 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): Co
   // Partially-typed tokens may be parsed as stray children, but the preceding
   // compound still tells us the relevant scope.
   if (isNodeLine(compound)) {
+    // Template instance (e.g. `box: state.node `) → offer the shape's own
+    // props (label, color, …) from its props schema, then node-level props.
+    const templateName = findTemplateName(compound);
+    if (templateName) {
+      const tplItems = templatePropCompletions(templateName, compound);
+      if (tplItems.length > 0) {
+        const nodeItems = nodePropertyCompletions(compound, cursorPastChildren, modelJson)
+          .filter(p => !GEOMETRY_KEYWORDS.includes(p.label)) // templates have no geometry slot
+          .map(item => ({ ...item, scope: 'node' }));
+        return [...tplItems, ...nodeItems];
+      }
+    }
+
     {
       const preceding = findPrecedingCompound(compound, pos);
       if (preceding && preceding.schemaPath) {
@@ -763,10 +794,9 @@ function buildPositionalOnlySnippet(schemaPath: string): { label: string; detail
 }
 
 /**
- * Build a kwarg snippet template using schema defaults and type detection.
+ * Build a kwarg snippet template from a field's schema using defaults + type.
  */
-function buildKwargSnippet(schemaPath: string, fieldName: string): string | null {
-  const fieldSchema = getPropertySchema(schemaPath + '.' + fieldName);
+function kwargSnippetFor(fieldName: string, fieldSchema: z.ZodType | undefined): string | null {
   if (!fieldSchema) return `${fieldName}=\${1:value}`;
 
   const defaultVal = getSchemaDefault(fieldSchema);
@@ -784,6 +814,60 @@ function buildKwargSnippet(schemaPath: string, fieldName: string): string | null
   if (type === 'string') return `${fieldName}=\${1:value}`;
 
   return null;
+}
+
+/** Build a kwarg snippet for a field at `schemaPath.fieldName`. */
+function buildKwargSnippet(schemaPath: string, fieldName: string): string | null {
+  return kwargSnippetFor(fieldName, getPropertySchema(schemaPath + '.' + fieldName) ?? undefined);
+}
+
+// ─── Template-instance prop completion ───────────────────────────
+
+/** Find the template name a node-line compound instantiates, if any. */
+function findTemplateName(compound: AstNode): string | null {
+  for (const c of compound.children) {
+    if (c.schemaPath === 'template' && typeof c.value === 'string') return c.value;
+  }
+  return null;
+}
+
+/** Existing template-prop keys already typed on the node line. */
+function collectTemplatePropKeys(compound: AstNode): Set<string> {
+  const keys = new Set<string>();
+  for (const c of compound.children) {
+    if (
+      (c.dslRole === 'kwarg-key' || c.dslRole === 'flag') &&
+      c.schemaPath.startsWith('tplprops:') &&
+      typeof c.value === 'string'
+    ) {
+      keys.add(c.value);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Completions for a template instance's own props, derived from the shape's
+ * props schema (the same schema the click-popup resolves via tplprops paths).
+ */
+function templatePropCompletions(templateName: string, compound: AstNode): CompletionItem[] {
+  const propsSchema = getShapePropsSchema(templateName);
+  if (!propsSchema) return [];
+  const available = getAvailableProperties('', propsSchema);
+  const existing = collectTemplatePropKeys(compound);
+  return available
+    .filter(p => p.name !== 'id' && p.name !== 'children' && !existing.has(p.name))
+    .map(p => {
+      const item: CompletionItem = {
+        label: p.name,
+        type: 'property',
+        detail: p.description,
+        scope: templateName,
+      };
+      const tmpl = kwargSnippetFor(p.name, p.schema);
+      if (tmpl) item.snippetTemplate = tmpl;
+      return item;
+    });
 }
 
 function nodePropertyCompletions(compound: AstNode, cursorPastChildren: boolean, modelJson?: any): CompletionItem[] {

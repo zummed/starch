@@ -1,0 +1,204 @@
+import { describe, it, expect } from 'vitest';
+import { EditorSession } from '../../editor/editorSession';
+import { getDsl } from '../../dsl/dslMeta';
+import {
+  getPropertySchema, detectSchemaType, getEnumValues, getAvailableProperties,
+  DocumentSchema, EasingNameSchema,
+} from '../../types/schemaRegistry';
+import { NodeSchema } from '../../types/node';
+import {
+  RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema,
+} from '../../types/node';
+import { StrokeSchema, TransformSchema, DashSchema, LayoutSchema } from '../../types/properties';
+import { AnimConfigSchema } from '../../types/animation';
+import { getSetNames, getShapeNames, getShapePropsSchema } from '../../templates/registry';
+import { registerBuiltinTemplates } from '../../templates/index';
+import type { z } from 'zod';
+
+/**
+ * Completion-coverage gate. For every construct the grammar admits, this asserts
+ * the simulator offers a completion for it — turning "does completion cover
+ * everything typeable?" into an enforced test. Expectations are DERIVED from the
+ * same object definitions (DslHints) the parser uses, so adding a field/kwarg to
+ * a schema fails this gate until completion is wired for it.
+ */
+
+registerBuiltinTemplates();
+
+/** Labels the simulator would offer at the end of `dsl`. */
+function labelsAt(dsl: string): string[] {
+  return new EditorSession(dsl).availableLabels();
+}
+
+function expectOffers(dsl: string, expected: string[]) {
+  const got = labelsAt(dsl);
+  // A kwarg may be offered bare ("easing") or with the "=" pre-typed
+  // ("easing=") — both let the user type the kwarg, so accept either form.
+  const has = (e: string) => got.includes(e) || got.includes(e + '=');
+  const missing = expected.filter(e => !has(e));
+  expect(missing, `at <${JSON.stringify(dsl)}> missing [${missing.join(', ')}] — got [${got.join(', ')}]`).toEqual([]);
+}
+
+const hints = (s: z.ZodType) => getDsl(s) ?? {};
+
+// ─── Top-level keywords ──────────────────────────────────────────
+
+describe('coverage: top-level keywords', () => {
+  const expected = Object.keys((DocumentSchema as any).shape)
+    .filter(k => k !== 'objects')
+    .map(k => (k === 'styles' ? 'style' : k));
+
+  it(`offers all document-level keywords: ${expected.join(', ')}`, () => {
+    expectOffers('', expected);
+  });
+});
+
+// ─── Geometry keywords ───────────────────────────────────────────
+
+describe('coverage: geometry keywords', () => {
+  const geometry = getDsl(NodeSchema)?.geometry ?? [];
+  it(`offers all geometry types after "id:": ${geometry.join(', ')}`, () => {
+    expectOffers('box: ', geometry);
+  });
+});
+
+// ─── Node-level properties ───────────────────────────────────────
+
+describe('coverage: node properties', () => {
+  const nh = getDsl(NodeSchema)!;
+  const fieldKeyword = (f: string): string => {
+    const map: Record<string, z.ZodType> = {
+      transform: TransformSchema, dash: DashSchema, layout: LayoutSchema, stroke: StrokeSchema,
+    };
+    return map[f] ? (getDsl(map[f])?.keyword ?? f) : f;
+  };
+  const expected = Array.from(new Set([
+    ...[...(nh.inlineProps ?? []), ...(nh.blockProps ?? [])].map(fieldKeyword),
+    ...(nh.kwargs ?? []),
+    ...(nh.flags ?? []),
+  ]));
+
+  it(`offers all node properties: ${expected.join(', ')}`, () => {
+    expectOffers('box: rect 10x10 ', expected);
+  });
+});
+
+// ─── Compound constructs: kwargs, flags, enums ───────────────────
+
+interface ConstructCtx { name: string; schema: z.ZodType; prefix: string; }
+const CONSTRUCTS: ConstructCtx[] = [
+  { name: 'rect', schema: RectGeomSchema, prefix: 'b: rect 10x10' },
+  { name: 'text', schema: TextGeomSchema, prefix: 'b: text "hi"' },
+  { name: 'image', schema: ImageGeomSchema, prefix: 'b: image "x" 10x10' },
+  { name: 'camera', schema: CameraSchema, prefix: 'c: camera' },
+  { name: 'stroke', schema: StrokeSchema, prefix: 'b: rect 10x10 stroke red' },
+  { name: 'transform', schema: TransformSchema, prefix: 'b: rect 10x10 at 1,2' },
+  { name: 'dash', schema: DashSchema, prefix: 'b: rect 10x10\n  dash dashed' },
+  { name: 'layout', schema: LayoutSchema, prefix: 'b: rect 10x10\n  layout flex row' },
+];
+
+describe('coverage: construct kwargs + flags', () => {
+  for (const c of CONSTRUCTS) {
+    const h = hints(c.schema);
+    const expected = [...(h.kwargs ?? []), ...(h.flags ?? [])];
+    if (expected.length === 0) continue;
+    it(`${c.name} offers: ${expected.join(', ')}`, () => {
+      expectOffers(c.prefix + ' ', expected);
+    });
+  }
+});
+
+describe('coverage: enum kwarg values', () => {
+  for (const c of CONSTRUCTS) {
+    const h = hints(c.schema);
+    for (const kw of (h.kwargs ?? [])) {
+      const fieldSchema = getPropertySchema(`${c.name}.${kw}`, NodeSchema);
+      if (!fieldSchema || detectSchemaType(fieldSchema) !== 'enum') continue;
+      const values = getEnumValues(fieldSchema) ?? [];
+      it(`${c.name}.${kw} offers enum values: ${values.join(', ')}`, () => {
+        expectOffers(`${c.prefix} ${kw}=`, values);
+      });
+    }
+  }
+});
+
+// ─── Colors ──────────────────────────────────────────────────────
+
+describe('coverage: color values', () => {
+  it('offers named colors + hsl/rgb after fill', () => {
+    expectOffers('box: rect 10x10 fill ', ['steelblue', 'hsl', 'rgb']);
+  });
+  it('offers colors after stroke', () => {
+    expectOffers('box: rect 10x10 stroke ', ['steelblue', 'hsl', 'rgb']);
+  });
+});
+
+// ─── Shape sets + their shapes ───────────────────────────────────
+
+describe('coverage: shape sets', () => {
+  const sets = getSetNames();
+  it(`offers all shape-set prefixes after "id:": ${sets.join(', ')}`, () => {
+    expectOffers('box: ', sets);
+  });
+
+  for (const set of sets) {
+    const shapes = getShapeNames(set);
+    it(`offers all ${set} shapes after "${set}.": ${shapes.join(', ')}`, () => {
+      expectOffers(`box: ${set}.`, shapes);
+    });
+  }
+});
+
+// ─── Template-instance props ─────────────────────────────────────
+
+describe('coverage: template props', () => {
+  for (const set of getSetNames()) {
+    for (const shape of getShapeNames(set)) {
+      const propsSchema = getShapePropsSchema(`${set}.${shape}`);
+      if (!propsSchema) continue;
+      const props = getAvailableProperties('', propsSchema)
+        .map(p => p.name)
+        .filter(n => n !== 'id' && n !== 'children');
+      if (props.length === 0) continue;
+      it(`${set}.${shape} offers props: ${props.join(', ')}`, () => {
+        expectOffers(`x: ${set}.${shape} `, props);
+      });
+    }
+  }
+});
+
+// ─── use [ … ] ───────────────────────────────────────────────────
+
+describe('coverage: use directive', () => {
+  const sets = getSetNames();
+  it('offers shape sets after "use "', () => {
+    expectOffers('use ', sets);
+  });
+  it('offers shape sets inside "use ["', () => {
+    expectOffers('use [', sets);
+  });
+});
+
+// ─── animate ─────────────────────────────────────────────────────
+
+describe('coverage: animate', () => {
+  const ah = getDsl(AnimConfigSchema)!;
+  const headerExpected = [...(ah.flags ?? []), ...(ah.kwargs ?? [])];
+  it(`animate header offers: ${headerExpected.join(', ')}`, () => {
+    expectOffers('animate 3s ', headerExpected);
+  });
+
+  it('animate easing= offers easing names', () => {
+    const easings = getEnumValues(EasingNameSchema) ?? [];
+    expectOffers('animate 3s easing=', easings);
+  });
+});
+
+// ─── connections ─────────────────────────────────────────────────
+
+describe('coverage: connection targets', () => {
+  it('offers node IDs after "->"', () => {
+    const dsl = 'a: rect 10x10 at 0,0\nb: rect 10x10 at 100,0\nl: a -> ';
+    expectOffers(dsl, ['a', 'b']);
+  });
+});

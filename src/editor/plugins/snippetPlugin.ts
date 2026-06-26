@@ -109,6 +109,38 @@ export function activateSnippet(
   return state.apply(tr);
 }
 
+/**
+ * Advance to the next snippet placeholder (Tab/Enter). When past the last
+ * placeholder, exit snippet mode and insert a trailing space. Pure, view-free
+ * so the live keymap and the headless EditorSession share one implementation.
+ */
+export function advanceSnippet(state: EditorState): EditorState {
+  const ss = snippetKey.getState(state);
+  if (!ss || !ss.active) return state;
+
+  const nextIndex = ss.activeIndex + 1;
+  if (nextIndex >= ss.placeholders.length) {
+    // Exit snippet — insert trailing space after the full snippet text.
+    const insertPos = ss.snippetEnd + PM_OFFSET;
+    const tr = state.tr
+      .insertText(' ', insertPos)
+      .setMeta(snippetKey, { ...ss, active: false });
+    tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
+    return state.apply(tr);
+  }
+
+  const ph = ss.placeholders[nextIndex];
+  const tr = state.tr
+    .setSelection(TextSelection.create(state.doc, ph.from + PM_OFFSET, ph.to + PM_OFFSET))
+    .setMeta(snippetKey, { ...ss, activeIndex: nextIndex });
+  return state.apply(tr);
+}
+
+/** Exit snippet mode (Escape). */
+export function exitSnippet(state: EditorState): EditorState {
+  return state.apply(state.tr.setMeta(snippetKey, EMPTY));
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -166,34 +198,13 @@ export function snippetPlugin(): Plugin<SnippetState> {
 
         if ((event.key === 'Tab' || event.key === 'Enter') && !event.shiftKey) {
           event.preventDefault();
-
-          const nextIndex = ss.activeIndex + 1;
-          if (nextIndex >= ss.placeholders.length) {
-            // Exit snippet — insert trailing space after the full snippet text
-            const insertPos = ss.snippetEnd + PM_OFFSET;
-            const tr = view.state.tr
-              .insertText(' ', insertPos)
-              .setMeta(snippetKey, { ...ss, active: false });
-            // Cursor lands after the inserted space
-            tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
-            view.dispatch(tr);
-          } else {
-            // Move to next placeholder
-            const ph = ss.placeholders[nextIndex];
-            const tr = view.state.tr
-              .setSelection(TextSelection.create(
-                view.state.doc, ph.from + PM_OFFSET, ph.to + PM_OFFSET,
-              ))
-              .setMeta(snippetKey, { ...ss, activeIndex: nextIndex });
-            view.dispatch(tr);
-          }
+          view.updateState(advanceSnippet(view.state));
           return true;
         }
 
         if (event.key === 'Escape') {
           event.preventDefault();
-          const tr = view.state.tr.setMeta(snippetKey, EMPTY);
-          view.dispatch(tr);
+          view.updateState(exitSnippet(view.state));
           return true;
         }
 

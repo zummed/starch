@@ -11,7 +11,6 @@ import {
   forwardRef,
   type Ref,
 } from 'react';
-import { Schema } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
@@ -19,6 +18,7 @@ import { baseKeymap } from 'prosemirror-commands';
 import { history, undo, redo } from 'prosemirror-history';
 
 import { walkDocument } from '../dsl/schemaWalker';
+import { createDslDoc } from './schema';
 import { syntaxHighlightPlugin } from './plugins/syntaxHighlight';
 import { parseOnChangePlugin } from './plugins/parseOnChange';
 import { completionPlugin } from './plugins/completionPlugin';
@@ -26,24 +26,6 @@ import { clickPopupPlugin } from './plugins/clickPopupPlugin';
 import { snippetPlugin } from './plugins/snippetPlugin';
 
 import './editorStyles.css';
-
-// ---------------------------------------------------------------------------
-// Schema — single code block containing text
-// ---------------------------------------------------------------------------
-
-const schema = new Schema({
-  nodes: {
-    doc: { content: 'code_block' },
-    code_block: {
-      content: 'text*',
-      code: true,
-      defining: true,
-      toDOM: () => ['pre', { class: 'dsl-code' }, ['code', 0]] as const,
-      parseDOM: [{ tag: 'pre', preserveWhitespace: 'full' as const }],
-    },
-    text: { group: 'inline' },
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -73,20 +55,11 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
   const onModelChangeRef = useRef(onModelChange);
   onModelChangeRef.current = onModelChange;
 
-  function createDoc(text: string) {
-    if (!text) {
-      return schema.node('doc', null, [schema.node('code_block')]);
-    }
-    return schema.node('doc', null, [
-      schema.node('code_block', null, [schema.text(text)]),
-    ]);
-  }
-
   // Mount / unmount
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const doc = createDoc(initialDsl);
+    const doc = createDslDoc(initialDsl);
 
     const state = EditorState.create({
       doc,
@@ -130,7 +103,7 @@ export const StructuralEditor = forwardRef(function StructuralEditor(
     loadDsl(text: string) {
       const view = viewRef.current;
       if (!view) return;
-      const doc = createDoc(text);
+      const doc = createDslDoc(text);
       const state = EditorState.create({
         doc,
         plugins: view.state.plugins,
