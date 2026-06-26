@@ -13,6 +13,7 @@ import { StrokeSchema, TransformSchema, DashSchema, LayoutSchema } from '../../t
 import { AnimConfigSchema } from '../../types/animation';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../../templates/registry';
 import { registerBuiltinTemplates } from '../../templates/index';
+import { NAMED_ANCHORS } from '../../types/anchor';
 import type { z } from 'zod';
 
 /**
@@ -200,5 +201,57 @@ describe('coverage: connection targets', () => {
   it('offers node IDs after "->"', () => {
     const dsl = 'a: rect 10x10 at 0,0\nb: rect 10x10 at 100,0\nl: a -> ';
     expectOffers(dsl, ['a', 'b']);
+  });
+});
+
+// ─── @style sigil ────────────────────────────────────────────────
+
+describe('coverage: @style sigil', () => {
+  it('offers defined style names after "@"', () => {
+    expectOffers('style primary\n  fill red\nbox: rect 10x10 @', ['@primary']);
+  });
+});
+
+// ─── anchor kwarg values ─────────────────────────────────────────
+
+describe('coverage: anchor values', () => {
+  it('offers named anchors after "anchor="', () => {
+    expectOffers('box: rect 10x10 at 1,2 anchor=', [...NAMED_ANCHORS]);
+  });
+});
+
+// ─── style block body ────────────────────────────────────────────
+
+describe('coverage: style block properties', () => {
+  it('offers style properties on an indented line in a style block', () => {
+    expectOffers('style primary\n  ', ['fill', 'stroke', 'dash', 'layout']);
+    expectOffers('style primary\n  fill red\n  ', ['fill', 'stroke', 'dash', 'layout']);
+  });
+});
+
+// ─── animate keyframe authoring ──────────────────────────────────
+
+describe('coverage: animate keyframes', () => {
+  const SCENE = 'a: rect 10x10 at 0,0 fill red\nb: ellipse 5x5\n';
+
+  it('offers a time + chapter on a fresh keyframe line', () => {
+    expectOffers(SCENE + 'animate 3s\n  ', ['time', 'chapter']);
+  });
+  it('offers node IDs as the keyframe target path root', () => {
+    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'b']);
+  });
+  it('offers properties when drilling a keyframe path', () => {
+    expectOffers(SCENE + 'animate 3s\n  1 a.', ['opacity', 'fill', 'transform']);
+  });
+  it('offers colors for a color-typed keyframe value', () => {
+    expectOffers(SCENE + 'animate 3s\n  1 a.fill: ', ['steelblue', 'hsl', 'rgb']);
+  });
+  it('offers booleans for a boolean-typed keyframe value', () => {
+    expectOffers(SCENE + 'animate 3s\n  1 a.visible: ', ['true', 'false']);
+  });
+  it('offers per-change easing after a value, then easing names', () => {
+    const easings = getEnumValues(EasingNameSchema) ?? [];
+    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 ', ['easing']);
+    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 easing=', easings);
   });
 });

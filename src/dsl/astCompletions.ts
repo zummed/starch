@@ -14,6 +14,7 @@ import {
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
+import { NAMED_ANCHORS } from '../types/anchor';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
 import {
   getPropertySchema, detectSchemaType, getEnumValues,
@@ -258,6 +259,18 @@ export function completionsAt(
     if (lineItems.length > 0) return lineItems;
   }
 
+  // Indented section-body routing: on a blank/partial indented line, the
+  // enclosing header (style / objects / images) determines the context. Without
+  // this we fall through to document-level keywords, which are invalid inside a
+  // section. (animate is handled above by routeAnimateContext.)
+  if (text !== undefined) {
+    const section = enclosingSectionHeader(text, pos);
+    if (section === 'style') return styleSectionCompletions();
+    // Inside objects/images a fresh line is a free id (then `id:`/`id: "url"`),
+    // which lineTextCompletions handles once typed — suppress doc keywords here.
+    if (section === 'objects' || section === 'images') return [];
+  }
+
   if (!ast) return TOP_LEVEL_KEYWORDS;
 
   // Determine context from line indent (separating the partial word being typed
@@ -319,10 +332,11 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     return kwargValueCompletions(key, modelJson, lineText);
   }
 
-  // After @ sign: style names from model
+  // After @ sign: style names from model. Labels keep the leading '@' so the
+  // editor's prefix filter (which includes '@' in the typed word) matches them.
   if (lineText.match(/@\w*$/) && modelJson?.styles) {
     return Object.keys(modelJson.styles).map(n => ({
-      label: n, type: 'value', detail: 'Style name',
+      label: `@${n}`, type: 'value', detail: 'Style name',
     }));
   }
 
@@ -436,6 +450,10 @@ function kwargValueCompletions(key: string, modelJson?: any, lineText?: string):
         if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
       }
       if (type === 'color') return colorCompletions();
+      if (type === 'anchor') {
+        // Named-anchor arm of the anchor union (N/NE/E/...); tuples are typed by hand.
+        return NAMED_ANCHORS.map(a => ({ label: a, type: 'value', detail: 'anchor' }));
+      }
       if (type === 'pointref' || type === 'string') {
         // String/pointref kwargs may want node IDs or other contextual values
         if (modelJson) return extractNodeIds(modelJson);
@@ -1028,9 +1046,21 @@ function routeAnimateContext(
     return animateKeyframeStartCompletions();
   }
 
+  // Per-keyframe / per-change easing: `1.5 easing=` or `1.5 box.x: 5 easing=`.
+  if (/\beasing=\w*$/.test(lineBeforeCursor)) {
+    const vals = getEnumValues(EasingNameSchema) ?? [];
+    return vals.map(v => ({ label: v, type: 'value' as const, detail: 'Easing function' }));
+  }
+
   // Path or Value context. Find whether a ':' appears on this line before cursor.
   const colonIdx = lineBeforeCursor.lastIndexOf(':');
   if (colonIdx >= 0) {
+    const afterColon = lineBeforeCursor.slice(colonIdx + 1);
+    // A value has been typed and the user is past it (trailing space) → offer
+    // the per-change easing kwarg.
+    if (/\S\s+$/.test(afterColon)) {
+      return [{ label: 'easing=', type: 'keyword', detail: 'Per-change easing', snippetTemplate: 'easing=${1}' }];
+    }
     // Value context: extract the full path from before the colon.
     const beforeColon = lineBeforeCursor.slice(0, colonIdx);
     // The keyframe path is the last dotted token before the colon.
@@ -1044,6 +1074,46 @@ function routeAnimateContext(
   // Path context: extract partial by backward scan.
   const partial = extractPartialPath(lineBeforeCursor);
   return animatePathCompletions(partial, modelJson, (modelJson as any)?.animate);
+}
+
+/**
+ * Find the keyword of the section that encloses an indented cursor line — the
+ * nearest preceding non-blank line at a strictly smaller indent. Returns its
+ * first token (e.g. 'style', 'objects', 'images', or a node id), or null when
+ * the cursor is at document root.
+ */
+function enclosingSectionHeader(text: string, pos: number): string | null {
+  const cursorIndent = indentOf(pos, text);
+  if (cursorIndent === 0) return null;
+  const lines = text.split('\n');
+  const curLine = lineOf(pos, text);
+  for (let ln = curLine - 1; ln >= 0; ln--) {
+    const line = lines[ln];
+    if (line.trim() === '') continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent < cursorIndent) {
+      return line.trim().split(/\s+/)[0] ?? null;
+    }
+  }
+  return null;
+}
+
+/** Property completions inside a `style NAME` block (no geometry, no transform). */
+function styleSectionCompletions(): CompletionItem[] {
+  return NODE_PROPERTY_KEYWORDS
+    .filter(p => p.label !== 'at') // styles are property bags, not positioned
+    .map(p => {
+      const item: CompletionItem = { ...p };
+      const schemaKey = KEYWORD_TO_SCHEMA[p.label];
+      if (schemaKey) {
+        const tmpl = buildSnippetTemplate(schemaKey);
+        if (tmpl) item.snippetTemplate = tmpl;
+      }
+      if (!item.snippetTemplate && COLOR_POSITIONAL_KEYWORDS.has(p.label)) {
+        item.snippetTemplate = `${p.label} \${1:color}`;
+      }
+      return item;
+    });
 }
 
 function findLineStart(text: string, pos: number): number {

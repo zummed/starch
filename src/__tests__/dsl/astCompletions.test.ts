@@ -243,8 +243,10 @@ describe('completionsAt', () => {
     it('returns style names after "@"', () => {
       const model = { styles: { primary: { fill: 'blue' }, dark: { fill: 'black' } } };
       const l = labels(completionsAt(null, 0, 'box: rect 100x100 @', model));
-      expect(l).toContain('primary');
-      expect(l).toContain('dark');
+      // Labels keep the leading '@' so the editor's prefix filter (which
+      // includes '@' in the typed word) matches them.
+      expect(l).toContain('@primary');
+      expect(l).toContain('@dark');
     });
 
     it('returns node IDs after "->"', () => {
