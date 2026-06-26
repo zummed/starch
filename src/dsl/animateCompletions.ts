@@ -149,11 +149,25 @@ export function animateKeyframeStartCompletions(): CompletionItem[] {
       snippetTemplate: '${1:1} ${2:path}: ${3:value}',
     },
     {
+      label: '+',
+      type: 'keyword',
+      detail: 'Relative keyframe (+N after previous)',
+      snippetTemplate: '+${1:1} ${2:path}: ${3:value}',
+    },
+    {
       label: 'chapter',
       type: 'keyword',
       detail: 'Named chapter marker',
       snippetTemplate: 'chapter "${1:name}" at ${2:0}',
     },
+  ];
+}
+
+/** Block-level keyframe modifiers offered alongside the target path (after the time). */
+function keyframeModifierItems(): CompletionItem[] {
+  return [
+    { label: 'easing=', type: 'keyword', detail: 'Block easing', snippetTemplate: 'easing=${1}' },
+    { label: 'delay=', type: 'keyword', detail: 'Delay before keyframe', snippetTemplate: 'delay=${1:0.5}' },
   ];
 }
 
@@ -223,13 +237,15 @@ export function animatePathCompletions(
   const committed = segments.slice(0, -1);
   const prefix = committed.join('.');
 
-  // Empty committed → we're at the root. Return top-level scene node ids.
+  // Empty committed → we're at the root: target node ids, plus the block-level
+  // keyframe modifiers (easing=/delay=) which are also valid right after the time.
   if (committed.length === 0) {
     const ids = sceneNodeIds(modelJson);
-    return ids.map(id => {
+    const idItems = ids.map(id => {
       const tier = tierCandidate(id, '', modelJson, animated);
       return makeCandidateItem(id, tier, 'drill');
     });
+    return [...idItems, ...keyframeModifierItems()];
   }
 
   // Resolve the walk through the committed segments.

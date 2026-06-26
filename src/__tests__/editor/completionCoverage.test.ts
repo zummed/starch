@@ -7,7 +7,7 @@ import {
 } from '../../types/schemaRegistry';
 import { NodeSchema } from '../../types/node';
 import {
-  RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema,
+  RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema, PathGeomSchema,
 } from '../../types/node';
 import { StrokeSchema, TransformSchema, DashSchema, LayoutSchema } from '../../types/properties';
 import { AnimConfigSchema } from '../../types/animation';
@@ -253,5 +253,38 @@ describe('coverage: animate keyframes', () => {
     const easings = getEnumValues(EasingNameSchema) ?? [];
     expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 ', ['easing']);
     expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 easing=', easings);
+  });
+  it('offers + (relative) at keyframe start, and block modifiers after the time', () => {
+    expectOffers(SCENE + 'animate 3s\n  ', ['time', '+', 'chapter']);
+    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'easing', 'delay']);
+  });
+});
+
+// ─── connection route modifiers ──────────────────────────────────
+
+describe('coverage: connection route modifiers', () => {
+  const routeVariant = getDsl(PathGeomSchema)?.variants?.find(v => v.when === 'route')?.hints;
+  const expected = [...(routeVariant?.flags ?? []), ...(routeVariant?.kwargs ?? [])];
+  it(`offers route flags + kwargs after "a -> b ": ${expected.join(', ')}`, () => {
+    expectOffers('a: rect 10x10\nb: rect 10x10\nl: a -> b ', expected);
+  });
+});
+
+// ─── template connector node-id values ───────────────────────────
+
+describe('coverage: template connectors', () => {
+  it('offers node IDs for arrow from=/to=', () => {
+    const scene = 'alpha: rect 10x10\nbeta: rect 10x10\n';
+    expectOffers(scene + 'x: arrow from=', ['alpha', 'beta']);
+    expectOffers(scene + 'x: arrow to=', ['alpha', 'beta']);
+  });
+});
+
+// ─── hex color affordance ────────────────────────────────────────
+
+describe('coverage: hex color', () => {
+  it('keeps a non-empty menu after typing "#" in a color value', () => {
+    const labels = new EditorSession('box: rect 10x10 fill #').availableLabels();
+    expect(labels.length, 'menu went empty after typing # in a color').toBeGreaterThan(0);
   });
 });

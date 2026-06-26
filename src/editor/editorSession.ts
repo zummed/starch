@@ -32,7 +32,12 @@ import {
 } from './plugins/completionPlugin';
 import { snippetPlugin, snippetKey, advanceSnippet, exitSnippet } from './plugins/snippetPlugin';
 import type { CompletionItem } from '../dsl/astCompletions';
-import { resolveEditTarget, serializeLeafValue, type EditTarget } from './popupEdit';
+import {
+  resolveEditTarget, resolvePropertySchema, serializeLeafValue, serializeFieldValue,
+  parseCompoundText, rebuildCompoundText, parseNodeKwargs, rebuildNodeKwargs,
+  type EditTarget,
+} from './popupEdit';
+import { detectSchemaType } from '../types/schemaRegistry';
 import { walkDocument } from '../dsl/schemaWalker';
 import { registerBuiltinTemplates } from '../templates/index';
 
@@ -121,12 +126,16 @@ export class EditorSession {
     return this;
   }
 
-  /** Delete `n` characters before the cursor. */
+  /** Backspace `n` times: deletes a non-empty selection, else one char back. */
   backspace(n = 1): this {
     for (let i = 0; i < n; i++) {
-      const pos = this.state.selection.from;
-      if (pos <= PM_OFFSET) break;
-      this.state = this.state.apply(this.state.tr.delete(pos - 1, pos));
+      const { from, to } = this.state.selection;
+      if (from !== to) {
+        this.state = this.state.apply(this.state.tr.delete(from, to));
+        continue;
+      }
+      if (from <= PM_OFFSET) break;
+      this.state = this.state.apply(this.state.tr.delete(from - 1, from));
     }
     return this;
   }
@@ -233,15 +242,30 @@ export class EditorSession {
     return snippetKey.getState(this.state)?.active ?? false;
   }
 
-  /** Advance to the next snippet placeholder (Tab). */
+  /**
+   * Press Tab. Mirrors the live plugin order (snippet plugin first, then
+   * completion): an active snippet advances to the next placeholder; otherwise
+   * an open completion menu accepts the selected item.
+   */
   tab(): this {
-    this.state = advanceSnippet(this.state);
+    if (this.snippetActive()) {
+      this.state = advanceSnippet(this.state);
+      return this;
+    }
+    if (this.menu()) return this.accept();
     return this;
   }
 
-  /** Exit any active snippet / menu (Escape). */
+  /**
+   * Press Escape. Mirrors live plugin order: an active snippet is exited (and
+   * the menu is left as-is, since the snippet plugin intercepts first);
+   * otherwise the completion menu closes.
+   */
   escape(): this {
-    this.state = exitSnippet(this.state);
+    if (this.snippetActive()) {
+      this.state = exitSnippet(this.state);
+      return this;
+    }
     return this.closeMenu();
   }
 
@@ -253,15 +277,49 @@ export class EditorSession {
   }
 
   /**
-   * Emulate clicking the value at `textPos` and committing `newValue` in the
-   * popup widget — the real text-surgery path the editor uses.
+   * Emulate clicking a LEAF value (color/number/enum/anchor/string) at
+   * `textPos` and committing `newValue` in the popup — the real text-surgery
+   * path. Throws on a compound/object target (use clickEditField for those),
+   * matching the editor, which opens a multi-field CompoundPopup there.
    */
   clickEdit(textPos: number, newValue: unknown): this {
     const target = resolveEditTarget(this.text, textPos);
     if (!target) return this;
+    if (target.schemaType === 'object') {
+      throw new Error(`clickEdit at ${textPos} hit a compound (${target.schemaPath}); use clickEditField`);
+    }
     const replacement = serializeLeafValue(target.schemaType, newValue);
     this.state = this.state.apply(
       this.state.tr.insertText(replacement, target.from + PM_OFFSET, target.to + PM_OFFSET),
+    );
+    return this;
+  }
+
+  /**
+   * Emulate editing one field of a compound/object popup (clicking a keyword
+   * like `rect`/`stroke`, or the node id for `_node` kwargs) and committing a
+   * field value — the real CompoundPopup rebuild path (rebuildCompoundText /
+   * rebuildNodeKwargs), not a raw value splice.
+   */
+  clickEditField(textPos: number, field: string, value: unknown): this {
+    const target = resolveEditTarget(this.text, textPos);
+    if (!target || target.schemaType !== 'object') return this;
+    const currentText = this.text.slice(target.from, target.to);
+    let rebuilt: string;
+    if (target.schemaPath === '_node') {
+      const fields = parseNodeKwargs(currentText);
+      fields[field] = String(value);
+      rebuilt = rebuildNodeKwargs(currentText, fields);
+    } else {
+      const fields = parseCompoundText(currentText, target.schemaPath);
+      const fieldSchema = resolvePropertySchema(`${target.schemaPath}.${field}`);
+      const fieldType = fieldSchema ? detectSchemaType(fieldSchema) : 'string';
+      fields[field] = serializeFieldValue(fieldType, value);
+      const keyword = currentText.split(/\s+/)[0];
+      rebuilt = rebuildCompoundText(keyword, fields, target.schemaPath);
+    }
+    this.state = this.state.apply(
+      this.state.tr.insertText(rebuilt, target.from + PM_OFFSET, target.to + PM_OFFSET),
     );
     return this;
   }

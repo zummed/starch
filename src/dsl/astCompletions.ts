@@ -340,9 +340,15 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     }));
   }
 
-  // After -> : node IDs for connections
+  // After -> : node IDs for the next waypoint, plus connection path modifiers
+  // (smooth/closed/bend=/radius=/…) once a target node has been placed.
   if (lineText.includes('->') && modelJson) {
-    return extractNodeIds(modelJson);
+    const ids = extractNodeIds(modelJson);
+    const afterArrow = lineText.slice(lineText.lastIndexOf('->') + 2);
+    if (/\S\s/.test(afterArrow)) {
+      return [...ids, ...routePathModifierItems(lineText)];
+    }
+    return ids;
   }
 
   // After a shape set prefix + dot: offer shapes in that set.
@@ -387,6 +393,13 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
       });
     }
     return items;
+  }
+
+  // Typing a hex color value after a color keyword (`fill #`, `stroke #ff`):
+  // the partial isn't a \w token, so keep color completions flowing.
+  const hexMatch = lineText.match(/\b(\w+)\s+#[0-9a-fA-F]*$/);
+  if (hexMatch && COLOR_POSITIONAL_KEYWORDS.has(hexMatch[1])) {
+    return colorCompletions();
   }
 
   // Check for a keyword at the end of the line followed by a space.
@@ -480,6 +493,11 @@ function kwargValueCompletions(key: string, modelJson?: any, lineText?: string):
         if (values) return values.map(v => ({ label: v, type: 'value' }));
       }
     }
+  }
+  // Finally, template-instance props (e.g. `arrow from=` → node IDs).
+  if (lineText) {
+    const tpl = templatePropValueCompletions(key, lineText, modelJson);
+    if (tpl.length > 0) return tpl;
   }
   return [];
 }
@@ -839,6 +857,53 @@ function buildKwargSnippet(schemaPath: string, fieldName: string): string | null
   return kwargSnippetFor(fieldName, getPropertySchema(schemaPath + '.' + fieldName) ?? undefined);
 }
 
+/**
+ * Connection path modifiers (flags + kwargs) from PathGeomSchema's route
+ * variant — offered after a target node on a `a -> b ` line. Skips modifiers
+ * already present on the line.
+ */
+function routePathModifierItems(lineText: string): CompletionItem[] {
+  const routeVariant = getDsl(PathGeomSchema)?.variants?.find(v => v.when === 'route')?.hints;
+  if (!routeVariant) return [];
+  const items: CompletionItem[] = [];
+  for (const flag of routeVariant.flags ?? []) {
+    if (lineText.includes(flag)) continue;
+    items.push({ label: flag, type: 'keyword', detail: 'path flag', scope: 'path' });
+  }
+  for (const kw of routeVariant.kwargs ?? []) {
+    if (lineText.includes(kw + '=')) continue;
+    const item: CompletionItem = { label: kw, type: 'property', detail: 'path option', scope: 'path' };
+    const tmpl = buildKwargSnippet('path', kw);
+    if (tmpl) item.snippetTemplate = tmpl;
+    items.push(item);
+  }
+  return items;
+}
+
+/** Extract the template/shape name a node line instantiates (`id: NAME …`). */
+function extractTemplateName(lineText: string): string | null {
+  const m = lineText.match(/^\s*[\w.]+:\s*([\w.]+)/);
+  return m ? m[1] : null;
+}
+
+/** Value completions for a template-instance prop kwarg (e.g. `arrow from=`). */
+function templatePropValueCompletions(key: string, lineText: string, modelJson?: any): CompletionItem[] {
+  const tmplName = extractTemplateName(lineText);
+  if (!tmplName) return [];
+  const propsSchema = getShapePropsSchema(tmplName);
+  if (!propsSchema) return [];
+  const prop = getAvailableProperties('', propsSchema).find(p => p.name === key);
+  if (!prop) return [];
+  const type = detectSchemaType(prop.schema);
+  if (type === 'enum') {
+    const values = getEnumValues(prop.schema);
+    if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
+  }
+  if (type === 'color') return colorCompletions();
+  if ((type === 'string' || type === 'pointref') && modelJson) return extractNodeIds(modelJson);
+  return [];
+}
+
 // ─── Template-instance prop completion ───────────────────────────
 
 /** Find the template name a node-line compound instantiates, if any. */
@@ -954,6 +1019,12 @@ function colorCompletions(): CompletionItem[] {
   const items: CompletionItem[] = names.map(name => ({
     label: name, type: 'value', detail: 'Named color',
   }));
+  // Hex affordance — also keeps the menu non-empty once the user types '#'
+  // (the editor's word-boundary includes '#', so a '#'-prefixed label matches).
+  items.push({
+    label: '#000000', type: 'value', detail: 'Hex color',
+    snippetTemplate: '#${1:000000}',
+  });
   // Add color format keywords from annotated schemas
   for (const colorSchema of [HslColorSchema, RgbColorSchema]) {
     const hints = getDsl(colorSchema);

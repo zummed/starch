@@ -85,4 +85,45 @@ describe('EditorSession: click-to-edit', () => {
     s.clickEdit(s.text.lastIndexOf('red'), 'steelblue');
     expect(s.text).toBe('box: rect 10x10 fill steelblue');
   });
+
+  it('edits a compound field via the rebuild path (not String())', () => {
+    const s = new EditorSession('box: rect 140x80');
+    s.clickEditField(s.text.indexOf('rect'), 'w', 10);
+    expect(s.model().objects[0].rect).toEqual({ w: 10, h: 80 });
+  });
+
+  it('refuses clickEdit on a compound target (would corrupt)', () => {
+    const s = new EditorSession('box: rect 140x80');
+    expect(() => s.clickEdit(s.text.indexOf('rect'), 5)).toThrow();
+  });
+});
+
+describe('EditorSession: key fidelity', () => {
+  it('Tab accepts the selected completion when the menu is open', () => {
+    const s = new EditorSession('na');
+    s.triggerCompletion().tab();
+    expect(s.text.startsWith('name')).toBe(true);
+  });
+
+  it('Tab advances snippet placeholders when a snippet is active', () => {
+    const s = new EditorSession();
+    s.type('box: re').triggerCompletion().accept('rect');
+    expect(s.snippetActive()).toBe(true);
+    s.type('140').tab().type('80');
+    expect(s.text).toBe('box: rect 140x80');
+  });
+
+  it('Backspace deletes a non-empty selection', () => {
+    const s = new EditorSession('box: rect 140x80');
+    const i = s.text.indexOf('140');
+    s.select(i, i + 3).backspace();
+    expect(s.text).toBe('box: rect x80');
+  });
+
+  it('Escape exits an active snippet', () => {
+    const s = new EditorSession();
+    s.type('box: re').triggerCompletion().accept('rect');
+    s.escape();
+    expect(s.snippetActive()).toBe(false);
+  });
 });

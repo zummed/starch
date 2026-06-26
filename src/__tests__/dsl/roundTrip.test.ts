@@ -122,6 +122,7 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   // Styles section
   { name: 'style block', dsl: 'style primary\n  fill hsl 210 70 45\n  stroke darkblue width=2' },
   { name: 'style dash + layout', dsl: 'style boxy\n  dash dashed length=6\n  layout flex column gap=8' },
+  { name: 'style full props', dsl: 'style rich\n  fill red\n  stroke blue width=2\n  dash dashed length=6\n  layout flex column gap=8\n  opacity=0.5\n  depth=3' },
   // Images section
   { name: 'images', dsl: 'images\n  logo: "logo.png"\n  hero: "hero.jpg"' },
   // Metadata

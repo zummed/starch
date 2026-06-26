@@ -3,6 +3,8 @@ import { WalkContext } from './walkContext';
 import { executeSchema, executeInstance, executeColor, parseKeyframesBlock } from './hintExecutors';
 import { getDsl } from './dslMeta';
 import { DocumentSchema } from '../types/schemaRegistry';
+import { NodeSchema } from '../types/node';
+import { resolveFieldSchema } from './schemaIntrospect';
 import type { z } from 'zod';
 
 export interface WalkResult {
@@ -195,8 +197,12 @@ function matchSection(
 }
 
 /**
- * Parse an indented block of `keyword value [kwargs]` lines.
- * Used for style blocks (fill red, stroke darkred width=2).
+ * Parse an indented block of style properties. Driven by NodeSchema's DslHints
+ * so a style accepts the same property set the emitter produces and a node
+ * carries: fill, stroke, dash, layout (compound constructs) plus opacity /
+ * depth (kwargs) and visible (flag). Keeping this schema-driven prevents the
+ * style parse path from drifting from emit (which previously dropped dash /
+ * layout / opacity / depth / visible silently).
  */
 function parsePropertyBlock(ctx: WalkContext, schemaPath: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -204,34 +210,42 @@ function parsePropertyBlock(ctx: WalkContext, schemaPath: string): Record<string
   if (!ctx.is('indent')) return result;
   ctx.next(); // consume indent
 
+  const nodeHints = getDsl(NodeSchema);
+  const compoundProps = new Set(['stroke', 'dash', 'layout']);
+
   while (!ctx.atEnd() && !ctx.is('dedent')) {
     ctx.skipNewlines();
     if (ctx.is('dedent')) break;
     const tok = ctx.peek();
     if (!tok || tok.type !== 'identifier') { ctx.next(); continue; }
+    const name = tok.value;
 
-    if (tok.value === 'fill') {
-      ctx.next(); // consume 'fill'
+    if (name === 'fill') {
+      ctx.next();
       const color = executeColor(ctx, `${schemaPath}.fill`);
       if (color != null) result.fill = color;
-    } else if (tok.value === 'stroke') {
-      // stroke takes color + width=N
-      ctx.next(); // consume 'stroke'
-      const color = executeColor(ctx, `${schemaPath}.stroke.color`);
-      if (color != null) {
-        const stroke: any = { color };
-        // Check for width kwarg
-        if (ctx.is('identifier', 'width') && ctx.peek(1)?.type === 'equals') {
-          ctx.next(); ctx.next();
-          if (ctx.is('number')) {
-            stroke.width = parseFloat(ctx.next()!.value);
-          }
-        }
-        result.stroke = stroke;
+    } else if (compoundProps.has(name)) {
+      const fieldSchema = resolveFieldSchema(NodeSchema, name);
+      const parsed = fieldSchema ? executeSchema(ctx, fieldSchema, `${schemaPath}.${name}`) : null;
+      if (parsed != null && Object.keys(parsed).length > 0) result[name] = parsed;
+      else ctx.skipToNewline();
+    } else if (nodeHints?.kwargs?.includes(name) && ctx.peek(1)?.type === 'equals') {
+      // opacity=, depth=
+      ctx.next(); ctx.next();
+      if (ctx.is('number')) result[name] = parseFloat(ctx.next()!.value);
+      else ctx.skipToNewline();
+    } else if (nodeHints?.flags?.includes(name)) {
+      // visible (bare) or visible=false
+      ctx.next();
+      if (ctx.is('equals')) {
+        ctx.next();
+        const v = ctx.peek();
+        if (v?.type === 'identifier') { ctx.next(); result[name] = v.value === 'true'; }
+      } else {
+        result[name] = true;
       }
     } else {
-      // Unknown — skip to next line
-      ctx.next();
+      ctx.next(); // unknown — skip
     }
     ctx.skipNewlines();
   }

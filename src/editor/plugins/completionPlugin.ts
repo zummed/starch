@@ -64,11 +64,16 @@ function getCompletions(state: EditorState): CompletionState {
     from = selFrom;
     to = selTo;
   } else {
-    // Find the word being typed (for replacement range).
-    // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
+    // Find the word being typed (for replacement range). Walk back through
+    // identifier chars INCLUDING digits (so ids like `a1` are matched), but if
+    // the resulting token starts with a digit it's a number/dimension (e.g.
+    // `100x60`), not a word — treat it as no word so we don't eat it.
     let wordStart = textPos;
-    while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
+    while (wordStart > lineStart && /[a-zA-Z0-9_\-#@]/.test(text[wordStart - 1])) {
       wordStart--;
+    }
+    if (wordStart < textPos && /[0-9]/.test(text[wordStart])) {
+      wordStart = textPos; // number-leading token → not a completable word
     }
     typedWord = text.slice(wordStart, textPos).toLowerCase();
     from = wordStart + PM_OFFSET;
