@@ -288,3 +288,18 @@ describe('coverage: hex color', () => {
     expect(labels.length, 'menu went empty after typing # in a color').toBeGreaterThan(0);
   });
 });
+
+// ─── misc author-experience contexts ─────────────────────────────
+
+describe('coverage: misc contexts', () => {
+  it('offers geometry after a hyphenated node id', () => {
+    expectOffers('my-box: ', ['rect', 'ellipse']);
+  });
+  it('does not offer geometry for an images entry', () => {
+    const labels = new EditorSession('images\n  logo: ').availableLabels();
+    expect(labels).not.toContain('rect');
+  });
+  it('offers colors for the background value', () => {
+    expectOffers('background ', ['steelblue', 'hsl', 'rgb']);
+  });
+});

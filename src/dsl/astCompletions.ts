@@ -253,23 +253,23 @@ export function completionsAt(
     if (animateItems) return animateItems;
   }
 
+  // Indented section-body routing: on an indented line, the enclosing header
+  // (style / objects / images) determines the context. images entries are
+  // `id: "url"` (a free string), so suppress before lineText would offer
+  // geometry for the `id:` pattern. (animate handled above by routeAnimateContext.)
+  const section = text !== undefined ? enclosingSectionHeader(text, pos) : null;
+  if (section === 'images') return [];
+
   // Content-dependent completions from line text (works even without AST context)
   if (lineText) {
     const lineItems = lineTextCompletions(lineText, modelJson);
     if (lineItems.length > 0) return lineItems;
   }
 
-  // Indented section-body routing: on a blank/partial indented line, the
-  // enclosing header (style / objects / images) determines the context. Without
-  // this we fall through to document-level keywords, which are invalid inside a
-  // section. (animate is handled above by routeAnimateContext.)
-  if (text !== undefined) {
-    const section = enclosingSectionHeader(text, pos);
-    if (section === 'style') return styleSectionCompletions();
-    // Inside objects/images a fresh line is a free id (then `id:`/`id: "url"`),
-    // which lineTextCompletions handles once typed — suppress doc keywords here.
-    if (section === 'objects' || section === 'images') return [];
-  }
+  // style → property keywords; objects → suppress doc keywords on a fresh id line
+  // (geometry after `id:` is handled by lineTextCompletions above).
+  if (section === 'style') return styleSectionCompletions();
+  if (section === 'objects') return [];
 
   if (!ast) return TOP_LEVEL_KEYWORDS;
 
@@ -375,7 +375,7 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   // After node ID + colon: offer geometry keywords (derived from NodeSchema.geometry hint)
   // plus shape set prefixes for qualified template references.
   // This handles the case where the user is typing a new node and the AST is stale.
-  if (lineText.match(/^\s*\w+:\s+\w*$/) || lineText.match(/^\s*\w+:\s*$/)) {
+  if (lineText.match(/^\s*[\w-]+:\s+\w*$/) || lineText.match(/^\s*[\w-]+:\s*$/)) {
     const items: CompletionItem[] = GEOMETRY_KEYWORDS.map(g => {
       const item: CompletionItem = { label: g, type: 'keyword', detail: 'Geometry type' };
       const schemaKey = KEYWORD_TO_SCHEMA[g] ?? g;
@@ -408,6 +408,10 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   const keywordMatch = lineText.match(/\b(\w+)\s+\w*$/);
   if (keywordMatch) {
     const kw = keywordMatch[1];
+    // `background <color>` is a top-level CSS color string field.
+    if (kw === 'background' && /^\s*background\s/.test(lineText)) {
+      return colorCompletions();
+    }
     if (COLOR_POSITIONAL_KEYWORDS.has(kw)) {
       return colorCompletions();
     }
