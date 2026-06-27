@@ -3,6 +3,14 @@
   "version": "2.0.0",
   "type": "module",
   "description": "Animated diagram library for documenting application internals",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zummed/starch.git"
+  },
+  "homepage": "https://github.com/zummed/starch#readme",
+  "bugs": {
+    "url": "https://github.com/zummed/starch/issues"
+  },
   "main": "./dist/starch.js",
   "module": "./dist/starch.js",
   "types": "./dist/index.d.ts",
