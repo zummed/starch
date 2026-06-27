@@ -269,35 +269,11 @@ export function executePositional(
     });
     return result;
   }
-  // Identifier with optional suffix (e.g., '3s' when suffix='s')
   if (tok.type === 'identifier') {
     // If the identifier is followed by '=', it is a kwarg, not a positional.
     // Return null so the caller's kwarg loop handles it.
     if (ctx.peek(1)?.type === 'equals') return null;
 
-    if (hint.suffix) {
-      const suffix = hint.suffix;
-      if (tok.value.endsWith(suffix)) {
-        const raw = tok.value.slice(0, -suffix.length);
-        const num = parseFloat(raw);
-        if (!isNaN(num)) {
-          result[k] = num;
-          ctx.next();
-          ctx.emitLeaf({
-            schemaPath: `${schemaPath}.${k}`,
-            from: tok.offset,
-            to: tok.offset + tok.value.length,
-            value: result[k],
-            dslRole: 'value',
-          });
-          return result;
-        }
-      }
-      // Suffix hint signals a numeric field. If the identifier doesn't
-      // form a valid <number><suffix>, don't assign the raw string —
-      // leave duration unset so downstream defaults apply.
-      return null;
-    }
     result[k] = tok.value;
   } else if (tok.type === 'string' || tok.type === 'hexColor') {
     result[k] = tok.value;

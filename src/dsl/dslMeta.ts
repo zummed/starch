@@ -4,7 +4,6 @@ export interface PositionalHint {
   keys: string[];
   format?: 'dimension' | 'spaced' | 'joined' | 'arrow' | 'quoted' | 'tuples' | 'color' | 'bracketList' | 'number';
   separator?: string;
-  suffix?: string;
   keyword?: string;           // intermediate keyword (e.g., 'at' in chapter "name" at 3.5)
   fallbackToKwarg?: boolean;  // when subset of keys present, emit as kwargs
   transform?: 'double';       // value transformation (e.g., radius→diameter for ellipse)
