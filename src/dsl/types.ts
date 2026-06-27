@@ -9,7 +9,6 @@ export type TokenType =
   | 'doubleDot'      // ..
   | 'atSign'         // @ (style reference prefix)
   | 'plus'           // + (relative time prefix)
-  | 'dimensions'     // 160x100 (WxH shorthand, value is "160x100")
   | 'parenOpen'      // (
   | 'parenClose'     // )
   | 'braceOpen'      // { (JSON escape hatch start)

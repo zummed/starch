@@ -80,7 +80,7 @@ describe('coverage: node properties', () => {
   ]));
 
   it(`offers all node properties: ${expected.join(', ')}`, () => {
-    expectOffers('box: rect 10x10 ', expected);
+    expectOffers('box: rect (10,10) ', expected);
   });
 });
 
@@ -88,14 +88,14 @@ describe('coverage: node properties', () => {
 
 interface ConstructCtx { name: string; schema: z.ZodType; prefix: string; }
 const CONSTRUCTS: ConstructCtx[] = [
-  { name: 'rect', schema: RectGeomSchema, prefix: 'b: rect 10x10' },
+  { name: 'rect', schema: RectGeomSchema, prefix: 'b: rect (10,10)' },
   { name: 'text', schema: TextGeomSchema, prefix: 'b: text "hi"' },
-  { name: 'image', schema: ImageGeomSchema, prefix: 'b: image "x" 10x10' },
+  { name: 'image', schema: ImageGeomSchema, prefix: 'b: image "x" (10,10)' },
   { name: 'camera', schema: CameraSchema, prefix: 'c: camera' },
-  { name: 'stroke', schema: StrokeSchema, prefix: 'b: rect 10x10 stroke red' },
-  { name: 'transform', schema: TransformSchema, prefix: 'b: rect 10x10 at 1,2' },
-  { name: 'dash', schema: DashSchema, prefix: 'b: rect 10x10\n  dash dashed' },
-  { name: 'layout', schema: LayoutSchema, prefix: 'b: rect 10x10\n  layout flex row' },
+  { name: 'stroke', schema: StrokeSchema, prefix: 'b: rect (10,10) stroke red' },
+  { name: 'transform', schema: TransformSchema, prefix: 'b: rect (10,10) at (1,2)' },
+  { name: 'dash', schema: DashSchema, prefix: 'b: rect (10,10)\n  dash dashed' },
+  { name: 'layout', schema: LayoutSchema, prefix: 'b: rect (10,10)\n  layout flex row' },
 ];
 
 describe('coverage: construct kwargs + flags', () => {
@@ -127,10 +127,10 @@ describe('coverage: enum kwarg values', () => {
 
 describe('coverage: color values', () => {
   it('offers named colors + hsl/rgb after fill', () => {
-    expectOffers('box: rect 10x10 fill ', ['steelblue', 'hsl', 'rgb']);
+    expectOffers('box: rect (10,10) fill ', ['steelblue', 'hsl', 'rgb']);
   });
   it('offers colors after stroke', () => {
-    expectOffers('box: rect 10x10 stroke ', ['steelblue', 'hsl', 'rgb']);
+    expectOffers('box: rect (10,10) stroke ', ['steelblue', 'hsl', 'rgb']);
   });
 });
 
@@ -186,12 +186,12 @@ describe('coverage: animate', () => {
   const ah = getDsl(AnimConfigSchema)!;
   const headerExpected = [...(ah.flags ?? []), ...(ah.kwargs ?? [])];
   it(`animate header offers: ${headerExpected.join(', ')}`, () => {
-    expectOffers('animate 3s ', headerExpected);
+    expectOffers('animate 3 ', headerExpected);
   });
 
   it('animate easing= offers easing names', () => {
     const easings = getEnumValues(EasingNameSchema) ?? [];
-    expectOffers('animate 3s easing=', easings);
+    expectOffers('animate 3 easing=', easings);
   });
 });
 
@@ -199,7 +199,7 @@ describe('coverage: animate', () => {
 
 describe('coverage: connection targets', () => {
   it('offers node IDs after "->"', () => {
-    const dsl = 'a: rect 10x10 at 0,0\nb: rect 10x10 at 100,0\nl: a -> ';
+    const dsl = 'a: rect (10,10) at (0,0)\nb: rect (10,10) at (100,0)\nl: a -> ';
     expectOffers(dsl, ['a', 'b']);
   });
 });
@@ -208,7 +208,7 @@ describe('coverage: connection targets', () => {
 
 describe('coverage: @style sigil', () => {
   it('offers defined style names after "@"', () => {
-    expectOffers('style primary\n  fill red\nbox: rect 10x10 @', ['@primary']);
+    expectOffers('style primary\n  fill red\nbox: rect (10,10) @', ['@primary']);
   });
 });
 
@@ -216,7 +216,7 @@ describe('coverage: @style sigil', () => {
 
 describe('coverage: anchor values', () => {
   it('offers named anchors after "anchor="', () => {
-    expectOffers('box: rect 10x10 at 1,2 anchor=', [...NAMED_ANCHORS]);
+    expectOffers('box: rect (10,10) at (1,2) anchor=', [...NAMED_ANCHORS]);
   });
 });
 
@@ -232,31 +232,31 @@ describe('coverage: style block properties', () => {
 // ─── animate keyframe authoring ──────────────────────────────────
 
 describe('coverage: animate keyframes', () => {
-  const SCENE = 'a: rect 10x10 at 0,0 fill red\nb: ellipse 5x5\n';
+  const SCENE = 'a: rect (10,10) at (0,0) fill red\nb: ellipse (5,5)\n';
 
   it('offers a time + chapter on a fresh keyframe line', () => {
-    expectOffers(SCENE + 'animate 3s\n  ', ['time', 'chapter']);
+    expectOffers(SCENE + 'animate 3\n  ', ['time', 'chapter']);
   });
   it('offers node IDs as the keyframe target path root', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'b']);
+    expectOffers(SCENE + 'animate 3\n  1 ', ['a', 'b']);
   });
   it('offers properties when drilling a keyframe path', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.', ['opacity', 'fill', 'transform']);
+    expectOffers(SCENE + 'animate 3\n  1 a.', ['opacity', 'fill', 'transform']);
   });
   it('offers colors for a color-typed keyframe value', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.fill: ', ['steelblue', 'hsl', 'rgb']);
+    expectOffers(SCENE + 'animate 3\n  1 a.fill: ', ['steelblue', 'hsl', 'rgb']);
   });
   it('offers booleans for a boolean-typed keyframe value', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.visible: ', ['true', 'false']);
+    expectOffers(SCENE + 'animate 3\n  1 a.visible: ', ['true', 'false']);
   });
   it('offers per-change easing after a value, then easing names', () => {
     const easings = getEnumValues(EasingNameSchema) ?? [];
-    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 ', ['easing']);
-    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 easing=', easings);
+    expectOffers(SCENE + 'animate 3\n  1 a.opacity: 1 ', ['easing']);
+    expectOffers(SCENE + 'animate 3\n  1 a.opacity: 1 easing=', easings);
   });
   it('offers + (relative) at keyframe start, and block modifiers after the time', () => {
-    expectOffers(SCENE + 'animate 3s\n  ', ['time', '+', 'chapter']);
-    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'easing', 'delay']);
+    expectOffers(SCENE + 'animate 3\n  ', ['time', '+', 'chapter']);
+    expectOffers(SCENE + 'animate 3\n  1 ', ['a', 'easing', 'delay']);
   });
 });
 
@@ -266,7 +266,7 @@ describe('coverage: connection route modifiers', () => {
   const routeVariant = getDsl(PathGeomSchema)?.variants?.find(v => v.when === 'route')?.hints;
   const expected = [...(routeVariant?.flags ?? []), ...(routeVariant?.kwargs ?? [])];
   it(`offers route flags + kwargs after "a -> b ": ${expected.join(', ')}`, () => {
-    expectOffers('a: rect 10x10\nb: rect 10x10\nl: a -> b ', expected);
+    expectOffers('a: rect (10,10)\nb: rect (10,10)\nl: a -> b ', expected);
   });
 });
 
@@ -274,7 +274,7 @@ describe('coverage: connection route modifiers', () => {
 
 describe('coverage: template connectors', () => {
   it('offers node IDs for arrow from=/to=', () => {
-    const scene = 'alpha: rect 10x10\nbeta: rect 10x10\n';
+    const scene = 'alpha: rect (10,10)\nbeta: rect (10,10)\n';
     expectOffers(scene + 'x: arrow from=', ['alpha', 'beta']);
     expectOffers(scene + 'x: arrow to=', ['alpha', 'beta']);
   });
@@ -284,7 +284,7 @@ describe('coverage: template connectors', () => {
 
 describe('coverage: hex color', () => {
   it('keeps a non-empty menu after typing "#" in a color value', () => {
-    const labels = new EditorSession('box: rect 10x10 fill #').availableLabels();
+    const labels = new EditorSession('box: rect (10,10) fill #').availableLabels();
     expect(labels.length, 'menu went empty after typing # in a color').toBeGreaterThan(0);
   });
 });
@@ -308,25 +308,25 @@ describe('coverage: misc contexts', () => {
 
 describe('coverage: color alpha', () => {
   it('offers a= after a fill color', () => {
-    expectOffers('box: rect 10x10 fill red ', ['a']);
+    expectOffers('box: rect (10,10) fill red ', ['a']);
   });
   it('offers a= after a stroke color', () => {
-    expectOffers('box: rect 10x10 stroke red ', ['a']);
+    expectOffers('box: rect (10,10) stroke red ', ['a']);
   });
   it('does not duplicate a= once alpha is set', () => {
-    const labels = new EditorSession('box: rect 10x10 fill red a=0.5 ').availableLabels();
+    const labels = new EditorSession('box: rect (10,10) fill red a=0.5 ').availableLabels();
     expect(labels.filter(l => l === 'a' || l === 'a=')).toEqual([]);
   });
 });
 
 describe('coverage: layout direction positional', () => {
   it('offers row/column after "layout <type> "', () => {
-    expectOffers('box: rect 10x10\n  layout flex ', ['row', 'column']);
+    expectOffers('box: rect (10,10)\n  layout flex ', ['row', 'column']);
   });
 });
 
 describe('coverage: camera look union', () => {
-  const scene = 'a: rect 10x10\nb: rect 10x10\n';
+  const scene = 'a: rect (10,10)\nb: rect (10,10)\n';
   it('offers the "all" literal and node ids for bare look=', () => {
     expectOffers(scene + 'c: camera look=', ['all', 'a', 'b']);
   });
@@ -337,19 +337,19 @@ describe('coverage: camera look union', () => {
 
 describe('coverage: connection source', () => {
   it('offers node ids (and geometry) at a fresh id: line', () => {
-    expectOffers('a: rect 10x10\nb: rect 10x10\nl: ', ['a', 'b', 'rect']);
+    expectOffers('a: rect (10,10)\nb: rect (10,10)\nl: ', ['a', 'b', 'rect']);
   });
 });
 
 describe('coverage: keyframe union + multi-change', () => {
-  const scene = 'a: rect 10x10\ncam: camera look=all\n';
+  const scene = 'a: rect (10,10)\ncam: camera look=all\n';
   it('offers all + node ids for a union-typed keyframe value', () => {
-    expectOffers(scene + 'animate 3s\n  1 cam.camera.look: ', ['all', 'a', 'cam']);
+    expectOffers(scene + 'animate 3\n  1 cam.camera.look: ', ['all', 'a', 'cam']);
   });
   it('offers target paths on a deeper continuation line', () => {
-    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n    ', ['a', 'cam']);
+    expectOffers(scene + 'animate 3\n  1 a.x: 5\n    ', ['a', 'cam']);
   });
   it('still offers time/chapter on a same-indent fresh keyframe line', () => {
-    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n  ', ['time', 'chapter']);
+    expectOffers(scene + 'animate 3\n  1 a.x: 5\n  ', ['time', 'chapter']);
   });
 });

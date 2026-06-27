@@ -27,21 +27,53 @@ export function executePositional(
     ctx.next();
   }
 
-  // dimension: "WxH" as a single dimensions token
+  // dimension: a parenthesised pair "(W,H)" — sizes share the universal pair
+  // notation with positions and points.
   if (format === 'dimension') {
-    if (!ctx.is('dimensions')) return null;
-    const tok = ctx.next()!;
-    const [a, b] = tok.value.split('x').map(Number);
-    const [k1, k2] = hint.keys;
+    if (!ctx.is('parenOpen')) return null;
+    ctx.next(); // consume (
+    if (!ctx.is('number')) return null;
+    const aTok = ctx.next()!;
+    if (ctx.is('comma')) ctx.next();
+    if (!ctx.is('number')) return null;
+    const bTok = ctx.next()!;
+    if (ctx.is('parenClose')) ctx.next();
     const transform = (v: number) =>
       hint.transform === 'double' ? v / 2 : v;
-    result[k1] = transform(a);
-    if (k2) result[k2] = transform(b);
+    const [k1, k2] = hint.keys;
+    result[k1] = transform(parseFloat(aTok.value));
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k1}`,
+      from: aTok.offset,
+      to: aTok.offset + aTok.value.length,
+      value: result[k1],
+      dslRole: 'value',
+    });
+    if (k2) {
+      result[k2] = transform(parseFloat(bTok.value));
+      ctx.emitLeaf({
+        schemaPath: `${schemaPath}.${k2}`,
+        from: bTok.offset,
+        to: bTok.offset + bTok.value.length,
+        value: result[k2],
+        dslRole: 'value',
+      });
+    }
+    return result;
+  }
+
+  // number: a single bare numeric token (rejects non-numeric identifiers so
+  // e.g. `animate s` does not assign the string "s" to a numeric field).
+  if (format === 'number') {
+    if (!ctx.is('number')) return null;
+    const tok = ctx.next()!;
+    const [k] = hint.keys;
+    result[k] = parseFloat(tok.value);
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${k}`,
       from: tok.offset,
       to: tok.offset + tok.value.length,
-      value: result[k1],
+      value: result[k],
       dslRole: 'value',
     });
     return result;
@@ -72,16 +104,17 @@ export function executePositional(
     return result;
   }
 
-  // joined: values separated by a specific separator (e.g., X,Y)
+  // joined: a parenthesised pair "(X,Y)" — the same pair notation as
+  // dimensions and points. When no paren follows (e.g. `at rotation=45`),
+  // returns empty so the caller's kwarg loop handles the remaining keys.
   if (format === 'joined') {
-    const sep = hint.separator ?? ',';
+    if (!ctx.is('parenOpen')) return result;
+    ctx.next(); // consume (
     for (let i = 0; i < hint.keys.length; i++) {
       if (i > 0) {
-        // Expect separator token
-        if (sep === ',' && !ctx.is('comma')) return result;
-        ctx.next();
+        if (ctx.is('comma')) ctx.next();
       }
-      if (!ctx.is('number')) return result;
+      if (!ctx.is('number')) break;
       const tok = ctx.next()!;
       const k = hint.keys[i];
       result[k] = parseFloat(tok.value);
@@ -93,6 +126,7 @@ export function executePositional(
         dslRole: 'value',
       });
     }
+    if (ctx.is('parenClose')) ctx.next();
     return result;
   }
 

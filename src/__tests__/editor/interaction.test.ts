@@ -109,7 +109,7 @@ describe('interaction: leaf edits land, persist, and read back', () => {
 
 describe('interaction: harness exercises real edits', () => {
   it('edits multiple leaf values in a representative node', () => {
-    const dsl = 'b: rect 10x10 radius=4 fill steelblue stroke red width=2 opacity=0.5';
+    const dsl = 'b: rect (10,10) radius=4 fill steelblue stroke red width=2 opacity=0.5';
     let edits = 0;
     for (const leaf of walkDocument(dsl).ast.astLeaves()) {
       if (leaf.dslRole !== 'value' && leaf.dslRole !== 'kwarg-value') continue;
@@ -145,17 +145,17 @@ describe('interaction: compound field edits', () => {
   }
 
   it('edits a rect dimension (joined positional)', () => {
-    const m = editCompound('b: rect 140x80', 'rect', 'w', '10');
+    const m = editCompound('b: rect (140,80)', 'rect', 'w', '10');
     expect(m.objects[0].rect).toEqual({ w: 10, h: 80 });
   });
 
   it('edits a stroke width without dropping the color', () => {
-    const m = editCompound('b: rect 10x10 stroke red width=2', 'stroke', 'width', '5');
+    const m = editCompound('b: rect (10,10) stroke red width=2', 'stroke', 'width', '5');
     expect(m.objects[0].stroke).toEqual({ color: 'red', width: 5 });
   });
 
   it('edits a transform coordinate', () => {
-    const m = editCompound('b: rect 10x10 at 200,150', 'at', 'x', '40');
+    const m = editCompound('b: rect (10,10) at (200,150)', 'at', 'x', '40');
     expect(m.objects[0].transform).toEqual({ x: 40, y: 150 });
   });
 });
@@ -164,7 +164,7 @@ describe('interaction: compound field edits', () => {
 
 describe('interaction: node-id popup edits node kwargs', () => {
   it('changes opacity via the node popup, preserving geometry', () => {
-    const dsl = 'b: rect 10x10 opacity=0.5';
+    const dsl = 'b: rect (10,10) opacity=0.5';
     const target = resolveEditTarget(dsl, 0); // click the node id "b"
     expect(target).not.toBeNull();
     expect(target!.schemaPath).toBe('_node');

@@ -19,7 +19,6 @@ const TOKEN_CLASS: Record<string, string> = {
   dot: 'dsl-operator',
   atSign: 'dsl-style-ref',
   plus: 'dsl-operator',
-  dimensions: 'dsl-dimension',
   hexColor: 'dsl-color',
   comma: 'dsl-operator',
 };

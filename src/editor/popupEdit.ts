@@ -311,9 +311,9 @@ export function parseCompoundText(text: string, schemaPath: string): Record<stri
         }
         if (hint.keys.length === 1) fields[hint.keys[0]] = colorTokens.join(' ');
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
+        // Parenthesised pair, e.g. "(140,80)" → w=140, h=80.
         const token = positionalTokens[tokenIdx++];
-        const sep = hint.separator || 'x';
-        const parts = token.split(sep);
+        const parts = token.replace(/^\(|\)$/g, '').split(',');
         for (let k = 0; k < hint.keys.length && k < parts.length; k++) fields[hint.keys[k]] = parts[k];
       } else {
         for (const key of hint.keys) {
@@ -340,10 +340,9 @@ export function rebuildCompoundText(keyword: string, fields: Record<string, stri
         const val = fields[hint.keys[0]];
         if (val) { parts.push(val); emittedKeys.add(hint.keys[0]); }
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
-        const sep = hint.separator || 'x';
         const vals = hint.keys.map(k => fields[k]).filter(Boolean);
         if (vals.length === hint.keys.length) {
-          parts.push(vals.join(sep));
+          parts.push(`(${vals.join(',')})`);
           hint.keys.forEach(k => emittedKeys.add(k));
         }
       } else {

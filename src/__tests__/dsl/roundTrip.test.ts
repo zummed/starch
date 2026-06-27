@@ -74,37 +74,37 @@ describe('round-trip: all showcase samples', () => {
 
 const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   // Geometry
-  { name: 'rect + radius', dsl: 'b: rect 140x80 radius=8' },
-  { name: 'ellipse', dsl: 'e: ellipse 50x40' },
+  { name: 'rect + radius', dsl: 'b: rect (140,80) radius=8' },
+  { name: 'ellipse', dsl: 'e: ellipse (50,40)' },
   { name: 'text full', dsl: 't: text "Hi there" size=14 lineHeight=1.5 align=end bold mono' },
-  { name: 'image full', dsl: 'i: image "photo.png" 200x150 fit=cover padding=4' },
+  { name: 'image full', dsl: 'i: image "photo.png" (200,150) fit=cover padding=4' },
   { name: 'camera all', dsl: 'c: camera look=all zoom=2 ratio=1.78 active' },
   { name: 'camera target id', dsl: 'c: camera look=box zoom=1.5' },
   { name: 'camera xy', dsl: 'c: camera look=(300,200) zoom=1' },
   { name: 'camera offset', dsl: 'c: camera look=(box,10,20)' },
   // Fill color forms
-  { name: 'fill named', dsl: 'b: rect 10x10 fill steelblue' },
-  { name: 'fill hsl', dsl: 'b: rect 10x10 fill hsl 210 70 45' },
-  { name: 'fill hsl alpha', dsl: 'b: rect 10x10 fill hsl 210 70 45 a=0.5' },
-  { name: 'fill bare hsl', dsl: 'b: rect 10x10 fill 210 70 45' },
-  { name: 'fill rgb', dsl: 'b: rect 10x10 fill rgb 12 34 56' },
-  { name: 'fill hex', dsl: 'b: rect 10x10 fill #3a7bd5' },
-  { name: 'fill named alpha', dsl: 'b: rect 10x10 fill black a=0.7' },
+  { name: 'fill named', dsl: 'b: rect (10,10) fill steelblue' },
+  { name: 'fill hsl', dsl: 'b: rect (10,10) fill hsl 210 70 45' },
+  { name: 'fill hsl alpha', dsl: 'b: rect (10,10) fill hsl 210 70 45 a=0.5' },
+  { name: 'fill bare hsl', dsl: 'b: rect (10,10) fill 210 70 45' },
+  { name: 'fill rgb', dsl: 'b: rect (10,10) fill rgb 12 34 56' },
+  { name: 'fill hex', dsl: 'b: rect (10,10) fill #3a7bd5' },
+  { name: 'fill named alpha', dsl: 'b: rect (10,10) fill black a=0.7' },
   // Stroke
-  { name: 'stroke + width', dsl: 'b: rect 10x10 stroke red width=2' },
-  { name: 'stroke hsl alpha', dsl: 'b: rect 10x10 stroke hsl 0 0 60 a=0.5 width=3' },
+  { name: 'stroke + width', dsl: 'b: rect (10,10) stroke red width=2' },
+  { name: 'stroke hsl alpha', dsl: 'b: rect (10,10) stroke hsl 0 0 60 a=0.5 width=3' },
   // Transform
-  { name: 'transform xy', dsl: 'b: rect 10x10 at 200,150' },
-  { name: 'transform x only', dsl: 'b: rect 10x10 at x=50' },
-  { name: 'transform y only', dsl: 'b: rect 10x10 at y=-20' },
-  { name: 'transform full', dsl: 'b: rect 10x10 at 10,20 rotation=45 scale=2 anchor=N pathFollow=p pathProgress=0.5' },
+  { name: 'transform xy', dsl: 'b: rect (10,10) at (200,150)' },
+  { name: 'transform x only', dsl: 'b: rect (10,10) at x=50' },
+  { name: 'transform y only', dsl: 'b: rect (10,10) at y=-20' },
+  { name: 'transform full', dsl: 'b: rect (10,10) at (10,20) rotation=45 scale=2 anchor=N pathFollow=p pathProgress=0.5' },
   // Node-level kwargs/flags
-  { name: 'opacity/visible/depth', dsl: 'b: rect 10x10 opacity=0.5 visible=false depth=3' },
-  { name: 'style sigil', dsl: 'b: rect 10x10 @primary' },
+  { name: 'opacity/visible/depth', dsl: 'b: rect (10,10) opacity=0.5 visible=false depth=3' },
+  { name: 'style sigil', dsl: 'b: rect (10,10) @primary' },
   // Block-only props
-  { name: 'dash full', dsl: 'b: rect 10x10\n  dash dashed length=10 gap=5' },
-  { name: 'layout block', dsl: 'r: rect 400x60\n  layout flex row gap=5 justify=center align=stretch wrap=true padding=10' },
-  { name: 'layout inline hints', dsl: 'r: rect 60x40 layout grow=1 order=2 alignSelf=end slot=left' },
+  { name: 'dash full', dsl: 'b: rect (10,10)\n  dash dashed length=10 gap=5' },
+  { name: 'layout block', dsl: 'r: rect (400,60)\n  layout flex row gap=5 justify=center align=stretch wrap=true padding=10' },
+  { name: 'layout inline hints', dsl: 'r: rect (60,40) layout grow=1 order=2 alignSelf=end slot=left' },
   // Connections
   { name: 'connection simple', dsl: 'l: a -> b' },
   { name: 'connection waypoints', dsl: 'l: a -> (250,100) -> b smooth radius=15' },
@@ -115,10 +115,10 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   { name: 'explicit path', dsl: 'tri: path (0,-40) (40,30) (-40,30) closed smooth fill purple' },
   // Templates
   { name: 'template explicit', dsl: 'conn: template arrow from=a to=b label="sends data" colour=darkgray' },
-  { name: 'template with transform', dsl: 'n: template state.node label="Idle" color=steelblue at 0,100' },
+  { name: 'template with transform', dsl: 'n: template state.node label="Idle" color=steelblue at (0,100)' },
   // Nesting
-  { name: 'nested children', dsl: 'card: rect 160x100 at 200,150\n  title: text "Hello" size=14\n  badge: ellipse 8x8' },
-  { name: 'dotted child ids', dsl: 'g: at 100,100\n  g.bg: rect 100x50 fill blue\n  g.label: text "hi" fill white' },
+  { name: 'nested children', dsl: 'card: rect (160,100) at (200,150)\n  title: text "Hello" size=14\n  badge: ellipse (8,8)' },
+  { name: 'dotted child ids', dsl: 'g: at (100,100)\n  g.bg: rect (100,50) fill blue\n  g.label: text "hi" fill white' },
   // Styles section
   { name: 'style block', dsl: 'style primary\n  fill hsl 210 70 45\n  stroke darkblue width=2' },
   { name: 'style dash + layout', dsl: 'style boxy\n  dash dashed length=6\n  layout flex column gap=8' },
@@ -126,16 +126,16 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   // Images section
   { name: 'images', dsl: 'images\n  logo: "logo.png"\n  hero: "hero.jpg"' },
   // Metadata
-  { name: 'metadata', dsl: 'name "Test"\ndescription "A scene"\nbackground white\nviewport 800x600\nuse [core, state]' },
+  { name: 'metadata', dsl: 'name "Test"\ndescription "A scene"\nbackground white\nviewport (800,600)\nuse [core, state]' },
   // Animation
-  { name: 'animate basic', dsl: 'animate 3s loop autoKey easing=easeInOut' },
-  { name: 'animate keyframes', dsl: 'animate 3s\n  0 box.opacity: 1\n  2 box.opacity: 0' },
-  { name: 'animate block easing', dsl: 'animate 4s\n  1.5 easing=easeInCubic  cam.camera.look: e\n    cam.camera.zoom: 2' },
-  { name: 'animate change easing', dsl: 'animate 3s\n  1.5 box.x: { value: 500, easing: "linear" }' },
-  { name: 'animate boolean/tuple/color', dsl: 'animate 4s\n  0 box.visible: true\n  1 box.fill: blue\n  2 cam.look: (a,b)' },
-  { name: 'animate relative + chapters', dsl: 'animate 6s\n  chapter "Start" at 0\n  chapter "End" at 5\n  0 box.opacity: 0\n  +1 box.opacity: 1' },
-  { name: 'animate keyframe delay', dsl: 'animate 4s\n  1 delay=0.5  box.opacity: 1' },
-  { name: 'animate multi-change', dsl: 'animate 4s\n  2  cam.camera.look: all\n    cam.camera.zoom: 1.5' },
+  { name: 'animate basic', dsl: 'animate 3 loop autoKey easing=easeInOut' },
+  { name: 'animate keyframes', dsl: 'animate 3\n  0 box.opacity: 1\n  2 box.opacity: 0' },
+  { name: 'animate block easing', dsl: 'animate 4\n  1.5 easing=easeInCubic  cam.camera.look: e\n    cam.camera.zoom: 2' },
+  { name: 'animate change easing', dsl: 'animate 3\n  1.5 box.x: { value: 500, easing: "linear" }' },
+  { name: 'animate boolean/tuple/color', dsl: 'animate 4\n  0 box.visible: true\n  1 box.fill: blue\n  2 cam.look: (a,b)' },
+  { name: 'animate relative + chapters', dsl: 'animate 6\n  chapter "Start" at 0\n  chapter "End" at 5\n  0 box.opacity: 0\n  +1 box.opacity: 1' },
+  { name: 'animate keyframe delay', dsl: 'animate 4\n  1 delay=0.5  box.opacity: 1' },
+  { name: 'animate multi-change', dsl: 'animate 4\n  2  cam.camera.look: all\n    cam.camera.zoom: 1.5' },
 ];
 
 describe('round-trip: feature corpus', () => {

@@ -3,6 +3,13 @@
 > Author: design review, 2026‑06‑27
 > Scope: the surface DSL (`src/dsl`, `src/types`, `src/templates`), not the renderer or editor internals.
 
+> **Update (decisions taken & shipped):** Two Phase‑0 items below were decided and implemented.
+> - **One pair notation (§2.1).** Rather than the "keep `WxH`" recommendation, the stronger one‑rule option was chosen: **every number pair is now `(a,b)`** — sizes, positions, points, waypoints, and `look`. `WxH` and bare `at x,y` are retired (`rect (140,80) ... at (200,150)`). Rationale: `(x,y)` is the only form that stays unambiguous in lists, kwarg values, and after `->`, so it can be the *single* notation; bare `x,y` cannot. The dedicated `dimensions` token is removed from the tokenizer.
+> - **No time suffix (§2.3).** The `s` suffix is **removed**, not made optional — durations are bare numbers (`animate 3`). Making it optional was judged to add complexity for no gain.
+>
+> The remaining recommendations below stand as written.
+
+
 ## TL;DR opinions
 
 1. **The architecture is excellent; the surface has drift.** The schema‑driven walker (one annotated Zod tree drives parsing, emit, completion, and popups) is the right backbone and should not be touched. The inconsistencies are all at the *notation* layer sitting on top of it.

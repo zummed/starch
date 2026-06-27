@@ -12,8 +12,8 @@ function labels(items: { label: string }[]): string[] {
 
 describe('animateHeaderCompletions', () => {
   it('returns flags and kwarg snippets when cursor is after duration', () => {
-    // Simulating cursor after "animate 10s "
-    const items = animateHeaderCompletions('animate 10s ');
+    // Simulating cursor after "animate 10 "
+    const items = animateHeaderCompletions('animate 10 ');
     const l = labels(items);
     expect(l).toContain('loop');
     expect(l).toContain('autoKey');
@@ -21,14 +21,14 @@ describe('animateHeaderCompletions', () => {
   });
 
   it('kwarg snippet includes value placeholder', () => {
-    const items = animateHeaderCompletions('animate 10s ');
+    const items = animateHeaderCompletions('animate 10 ');
     const easing = items.find(i => i.label === 'easing=');
     expect(easing!.snippetTemplate).toBeDefined();
     expect(easing!.snippetTemplate).toContain('${1}');
   });
 
   it('omits flags already present in the header', () => {
-    const items = animateHeaderCompletions('animate 10s loop ');
+    const items = animateHeaderCompletions('animate 10 loop ');
     const l = labels(items);
     expect(l).not.toContain('loop');
     expect(l).toContain('autoKey');
@@ -36,7 +36,7 @@ describe('animateHeaderCompletions', () => {
   });
 
   it('returns easing enum values when cursor is after "easing="', () => {
-    const items = animateHeaderCompletions('animate 10s easing=');
+    const items = animateHeaderCompletions('animate 10 easing=');
     const l = labels(items);
     expect(l).toContain('linear');
     expect(l).toContain('easeIn');
@@ -47,7 +47,7 @@ describe('animateHeaderCompletions', () => {
   });
 
   it('returns easing enum values mid-typing after "easing="', () => {
-    const items = animateHeaderCompletions('animate 10s easing=ea');
+    const items = animateHeaderCompletions('animate 10 easing=ea');
     const l = labels(items);
     // Handler returns full list; caller filters by prefix.
     expect(l).toContain('easeIn');
@@ -325,22 +325,22 @@ describe('animateValueCompletions', () => {
 
 describe('animate completions end-to-end', () => {
   const dsl = `objects
-  card: at 100,100
-    bg: rect 160x100 fill midnightblue stroke steelblue width=2
-    badge: ellipse 8x8 fill limegreen
+  card: at (100,100)
+    bg: rect (160,100) fill midnightblue stroke steelblue width=2
+    badge: ellipse (8,8) fill limegreen
 
-animate 3s loop
+animate 3 loop
   1 card.bg.fill: crimson
   `;
 
-  it('header offers flags/kwargs after "animate 3s loop "', () => {
+  it('header offers flags/kwargs after "animate 3 loop "', () => {
     // Position on the animate header line after "loop".
-    // The header line is "animate 3s loop" — find it and place cursor at end.
-    const headerLine = 'animate 3s loop';
+    // The header line is "animate 3 loop" — find it and place cursor at end.
+    const headerLine = 'animate 3 loop';
     const headerStart = dsl.indexOf(headerLine);
     const idx = headerStart + headerLine.length;
     // lineText as it would appear to the editor (the text before cursor on the line)
-    const lineText = 'animate 3s loop ';
+    const lineText = 'animate 3 loop ';
     const { ast: ctx } = walkDocument(dsl);
     const ast = leavesToAst(ctx.astLeaves(), dsl.length);
     const { model } = walkDocument(dsl);

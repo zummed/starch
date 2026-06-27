@@ -99,7 +99,7 @@ function detectAt(text: string, textPos: number) {
 }
 
 describe('click popup detection', () => {
-  const dsl = 'box: rect 140x80 radius=8 fill steelblue stroke darkblue width=2 at 200,150';
+  const dsl = 'box: rect (140,80) radius=8 fill steelblue stroke darkblue width=2 at (200,150)';
 
   describe('clicking on values (existing behavior)', () => {
     it('clicking on "steelblue" detects color type', () => {
@@ -157,7 +157,7 @@ describe('click popup detection', () => {
       const result = detectAt(dsl, pos);
       expect(result).not.toBeNull();
       expect(result!.compoundFrom).toBeDefined();
-      // The compound should start at "rect" and include "140x80"
+      // The compound should start at "rect" and include "(140,80)"
       expect(result!.compoundFrom).toBeLessThanOrEqual(pos);
     });
 
@@ -172,10 +172,10 @@ describe('click popup detection', () => {
   describe('multi-line DSL', () => {
     const multiLine = `objects
   box:
-    rect 140x80
+    rect (140,80)
     fill steelblue
     stroke darkblue width=2
-    at 200,150`;
+    at (200,150)`;
 
     it('clicking "fill" on its own line detects color', () => {
       const pos = multiLine.indexOf('fill');

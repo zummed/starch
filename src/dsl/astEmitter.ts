@@ -220,11 +220,13 @@ function emitPositional(
     if (value?.[k1] === undefined) return;
     const mult = p.transform === 'double' ? 2 : 1;
     sep();
+    b.write('(');
     b.writeNode(String(value[k1] * mult), 'value', sp(k1), mp(k1), value[k1]);
     if (k2 !== undefined && value[k2] !== undefined) {
-      b.write('x');
+      b.write(',');
       b.writeNode(String(value[k2] * mult), 'value', sp(k2), mp(k2), value[k2]);
     }
+    b.write(')');
     return;
   }
 
@@ -250,11 +252,13 @@ function emitPositional(
     if (present.length === p.keys.length) {
       const t = p.separator ?? ',';
       sep();
+      b.write('(');
       for (let i = 0; i < p.keys.length; i++) {
         if (i > 0) b.write(t);
         const k = p.keys[i];
         b.writeNode(String(value[k]), 'value', sp(k), mp(k), value[k]);
       }
+      b.write(')');
     } else if (p.fallbackToKwarg) {
       for (const k of present) {
         sep();
@@ -479,7 +483,7 @@ function renderMetadata(scene: any): SectionResult | null {
   if (scene.name) metaLines.push(`name "${scene.name}"`);
   if (scene.description) metaLines.push(`description "${scene.description}"`);
   if (scene.background) metaLines.push(`background "${scene.background}"`);
-  if (scene.viewport) metaLines.push(`viewport ${scene.viewport.width}x${scene.viewport.height}`);
+  if (scene.viewport) metaLines.push(`viewport (${scene.viewport.width},${scene.viewport.height})`);
   if (Array.isArray(scene.use) && scene.use.length > 0) metaLines.push(`use [${scene.use.join(', ')}]`);
   if (metaLines.length === 0) return null;
 
@@ -1117,7 +1121,7 @@ function renderAnimate(animate: any): SectionResult {
 
   // Header line
   b.write('animate ');
-  b.writeNode(`${animate.duration}s`, 'value', 'duration', 'animate.duration', animate.duration);
+  b.writeNode(`${animate.duration}`, 'value', 'duration', 'animate.duration', animate.duration);
   if (animate.loop) b.write(' loop');
   if (animate.autoKey) b.write(' autoKey');
   if (animate.easing) {

@@ -32,7 +32,7 @@ export const snippetKey = new PluginKey<SnippetState>('snippet');
 
 /**
  * Parse a snippet template string and extract placeholder definitions.
- * Template format: "rect ${1:W}x${2:H}"
+ * Template format: "rect (${1:W},${2:H})"
  * Returns placeholders with positions relative to the expanded text,
  * plus the total length of the expanded text.
  */

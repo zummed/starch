@@ -10,22 +10,22 @@ import { EditorSession } from '../../editor/editorSession';
 describe('EditorSession: typing', () => {
   it('types text and parses it into the model', () => {
     const s = new EditorSession();
-    s.type('box: rect 140x80');
-    expect(s.text).toBe('box: rect 140x80');
-    expect(s.cursor).toBe(16);
+    s.type('box: rect (140,80)');
+    expect(s.text).toBe('box: rect (140,80)');
+    expect(s.cursor).toBe(18);
     expect(s.model().objects[0]).toMatchObject({ id: 'box', rect: { w: 140, h: 80 } });
   });
 
   it('types over a multi-line document', () => {
     const s = new EditorSession();
-    s.type('a: rect 10x10\nb: rect 20x20');
+    s.type('a: rect (10,10)\nb: rect (20,20)');
     expect(s.model().objects.map((o: any) => o.id)).toEqual(['a', 'b']);
   });
 
   it('backspaces characters', () => {
-    const s = new EditorSession('box: rect 140x80');
+    const s = new EditorSession('box: rect (140,80)');
     s.moveToEnd().backspace(2);
-    expect(s.text).toBe('box: rect 140x');
+    expect(s.text).toBe('box: rect (140,8');
   });
 });
 
@@ -49,7 +49,7 @@ describe('EditorSession: completion menu', () => {
   });
 
   it('offers colors after fill', () => {
-    const s = new EditorSession('box: rect 10x10 fill ');
+    const s = new EditorSession('box: rect (10,10) fill ');
     expect(s.availableLabels()).toEqual(expect.arrayContaining(['steelblue', 'hsl', 'rgb']));
   });
 });
@@ -58,11 +58,11 @@ describe('EditorSession: accepting completions + snippets', () => {
   it('accepts a snippet and fills placeholders via Tab', () => {
     const s = new EditorSession();
     s.type('box: re').triggerCompletion().accept('rect');
-    expect(s.text).toBe('box: rect WxH');
+    expect(s.text).toBe('box: rect (W,H)');
     expect(s.snippetActive()).toBe(true);
     // First placeholder (W) is selected — typing replaces it.
     s.type('140').tab().type('80').tab();
-    expect(s.text).toBe('box: rect 140x80 ');
+    expect(s.text).toBe('box: rect (140,80) ');
     expect(s.model().objects[0]).toMatchObject({ rect: { w: 140, h: 80 } });
   });
 
@@ -75,25 +75,25 @@ describe('EditorSession: accepting completions + snippets', () => {
 
 describe('EditorSession: click-to-edit', () => {
   it('edits a number value in place', () => {
-    const s = new EditorSession('box: rect 10x10 radius=4');
+    const s = new EditorSession('box: rect (10,10) radius=4');
     s.clickEdit(s.text.lastIndexOf('4'), 9);
     expect(s.model().objects[0].rect.radius).toBe(9);
   });
 
   it('edits a color value, keeping the keyword', () => {
-    const s = new EditorSession('box: rect 10x10 fill red');
+    const s = new EditorSession('box: rect (10,10) fill red');
     s.clickEdit(s.text.lastIndexOf('red'), 'steelblue');
-    expect(s.text).toBe('box: rect 10x10 fill steelblue');
+    expect(s.text).toBe('box: rect (10,10) fill steelblue');
   });
 
   it('edits a compound field via the rebuild path (not String())', () => {
-    const s = new EditorSession('box: rect 140x80');
+    const s = new EditorSession('box: rect (140,80)');
     s.clickEditField(s.text.indexOf('rect'), 'w', 10);
     expect(s.model().objects[0].rect).toEqual({ w: 10, h: 80 });
   });
 
   it('refuses clickEdit on a compound target (would corrupt)', () => {
-    const s = new EditorSession('box: rect 140x80');
+    const s = new EditorSession('box: rect (140,80)');
     expect(() => s.clickEdit(s.text.indexOf('rect'), 5)).toThrow();
   });
 });
@@ -110,14 +110,14 @@ describe('EditorSession: key fidelity', () => {
     s.type('box: re').triggerCompletion().accept('rect');
     expect(s.snippetActive()).toBe(true);
     s.type('140').tab().type('80');
-    expect(s.text).toBe('box: rect 140x80');
+    expect(s.text).toBe('box: rect (140,80)');
   });
 
   it('Backspace deletes a non-empty selection', () => {
-    const s = new EditorSession('box: rect 140x80');
+    const s = new EditorSession('box: rect (140,80)');
     const i = s.text.indexOf('140');
     s.select(i, i + 3).backspace();
-    expect(s.text).toBe('box: rect x80');
+    expect(s.text).toBe('box: rect (,80)');
   });
 
   it('Escape exits an active snippet', () => {

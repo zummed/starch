@@ -4,20 +4,21 @@ import { tokenize } from '../../dsl/tokenizer';
 
 describe('WalkContext', () => {
   it('wraps tokens with a cursor', () => {
-    const tokens = tokenize('rect 100x200');
-    const ctx = new WalkContext(tokens, 'rect 100x200');
+    const tokens = tokenize('rect (100,200)');
+    const ctx = new WalkContext(tokens, 'rect (100,200)');
 
     expect(ctx.peek()?.type).toBe('identifier');
     expect(ctx.peek()?.value).toBe('rect');
   });
 
   it('advances through tokens', () => {
-    const tokens = tokenize('rect 100x200');
-    const ctx = new WalkContext(tokens, 'rect 100x200');
+    const tokens = tokenize('rect (100,200)');
+    const ctx = new WalkContext(tokens, 'rect (100,200)');
     const t1 = ctx.next();
     const t2 = ctx.next();
     expect(t1?.value).toBe('rect');
-    expect(t2?.value).toBe('100x200');
+    // A parenthesised pair is separate tokens; the second token is the '('.
+    expect(t2?.value).toBe('(');
   });
 
   it('peek with offset looks ahead', () => {
@@ -29,8 +30,8 @@ describe('WalkContext', () => {
   });
 
   it('is() checks current token type and value', () => {
-    const tokens = tokenize('rect 100x200');
-    const ctx = new WalkContext(tokens, 'rect 100x200');
+    const tokens = tokenize('rect (100,200)');
+    const ctx = new WalkContext(tokens, 'rect (100,200)');
     expect(ctx.is('identifier')).toBe(true);
     expect(ctx.is('identifier', 'rect')).toBe(true);
     expect(ctx.is('identifier', 'other')).toBe(false);

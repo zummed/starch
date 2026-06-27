@@ -127,24 +127,24 @@ describe('completion integration', () => {
 
   describe('insert after space (no word to replace)', () => {
     it('"fill " + complete "red" → "fill red"', () => {
-      const e = editor('box: rect 100x60 fill ', 22);
+      const e = editor('box: rect (100,60) fill ', 24);
       const result = applyCompletion(e.state, 'red');
-      expect(result.text).toBe('box: rect 100x60 fill red');
+      expect(result.text).toBe('box: rect (100,60) fill red');
     });
 
     it('"fill " + complete "steelblue" → cursor after steelblue', () => {
-      const e = editor('box: rect 100x60 fill ', 22);
+      const e = editor('box: rect (100,60) fill ', 24);
       const result = applyCompletion(e.state, 'steelblue');
-      expect(result.text).toBe('box: rect 100x60 fill steelblue');
-      expect(result.cursorTextOffset).toBe(31);
+      expect(result.text).toBe('box: rect (100,60) fill steelblue');
+      expect(result.cursorTextOffset).toBe(33);
     });
   });
 
   describe('replace partial word', () => {
     it('"fi" → "fill color"', () => {
-      const e = editor('box: rect 100x60 fi', 19);
+      const e = editor('box: rect (100,60) fi', 21);
       const result = applyCompletion(e.state, 'fill', 'fill ${1:color}');
-      expect(result.text).toBe('box: rect 100x60 fill color');
+      expect(result.text).toBe('box: rect (100,60) fill color');
     });
 
     it('"re" → "rect WxH"', () => {
@@ -170,32 +170,32 @@ describe('completion integration', () => {
     });
 
     it('cursor at color placeholder in "fill ${1:color}"', () => {
-      const e = editor('box: rect 100x60 fi', 19);
+      const e = editor('box: rect (100,60) fi', 21);
       const result = applyCompletion(e.state, 'fill', 'fill ${1:color}');
-      // "fi" starts at textOffset 17. "fill " has ${1:color} at offset 5.
-      expect(result.cursorTextOffset).toBe(17 + 5); // 22
+      // "fi" starts at textOffset 19. "fill " has ${1:color} at offset 5.
+      expect(result.cursorTextOffset).toBe(19 + 5); // 24
     });
   });
 
   describe('does not eat adjacent values', () => {
     it('does not eat dimension when completing after space', () => {
-      const e = editor('box: rect 100x60 ', 17);
+      const e = editor('box: rect (100,60) ', 19);
       const result = applyCompletion(e.state, 'fill');
-      expect(result.text).toBe('box: rect 100x60 fill');
+      expect(result.text).toBe('box: rect (100,60) fill');
     });
 
     it('preserves text after cursor when replacing partial word', () => {
-      const e = editor('box: rect 100x60 fi at 200,150', 19);
+      const e = editor('box: rect (100,60) fi at (200,150)', 21);
       const result = applyCompletion(e.state, 'fill', 'fill ${1:color}');
-      expect(result.text).toBe('box: rect 100x60 fill color at 200,150');
+      expect(result.text).toBe('box: rect (100,60) fill color at (200,150)');
     });
   });
 
   describe('empty/edge cases', () => {
     it('insert at start of empty second line', () => {
-      const e = editor('box: rect 100x60\n', 17);
+      const e = editor('box: rect (100,60)\n', 19);
       const result = applyCompletion(e.state, 'fill', 'fill ${1:color}');
-      expect(result.text).toBe('box: rect 100x60\nfill color');
+      expect(result.text).toBe('box: rect (100,60)\nfill color');
     });
 
     it('insert on indented line', () => {

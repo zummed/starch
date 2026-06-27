@@ -17,16 +17,22 @@ function types(tokens: Token[]): TokenType[] {
 describe('tokenizer', () => {
   // ── Simple node ───────────────────────────────────────────────
   it('tokenizes a simple node declaration', () => {
-    const tokens = tokenize('box: rect 160x100 at 200,150');
+    const tokens = tokenize('box: rect (160,100) at (200,150)');
     expect(tv(tokens)).toEqual([
       ['identifier', 'box'],
       ['colon', ':'],
       ['identifier', 'rect'],
-      ['dimensions', '160x100'],
+      ['parenOpen', '('],
+      ['number', '160'],
+      ['comma', ','],
+      ['number', '100'],
+      ['parenClose', ')'],
       ['identifier', 'at'],
+      ['parenOpen', '('],
       ['number', '200'],
       ['comma', ','],
       ['number', '150'],
+      ['parenClose', ')'],
     ]);
   });
 
@@ -194,18 +200,26 @@ describe('tokenizer', () => {
     ]);
   });
 
-  // ── Dimensions ────────────────────────────────────────────────
-  it('tokenizes dimensions as a single token', () => {
-    const tokens = tokenize('160x100');
-    expect(tokens.length).toBe(2); // dimensions + eof
-    expect(tokens[0].type).toBe('dimensions');
-    expect(tokens[0].value).toBe('160x100');
+  // ── Pairs ─────────────────────────────────────────────────────
+  // Sizes, positions and points all use the universal "(a,b)" notation,
+  // which tokenizes as separate paren/number/comma tokens. There is no
+  // dedicated WxH dimensions token.
+  it('tokenizes a parenthesised pair as separate tokens', () => {
+    const tokens = tokenize('(160,100)');
+    expect(tv(tokens)).toEqual([
+      ['parenOpen', '('],
+      ['number', '160'],
+      ['comma', ','],
+      ['number', '100'],
+      ['parenClose', ')'],
+    ]);
   });
 
-  it('does not treat identifier-x-number as dimensions', () => {
-    // 'ax100' should be identifier, not dimensions
-    const tokens = tokenize('ax100');
+  it('treats a bare number-x-number as a single identifier (WxH removed)', () => {
+    // '160x100' is no longer a dimensions token; it lexes as an identifier.
+    const tokens = tokenize('160x100');
     expect(tokens[0].type).toBe('identifier');
+    expect(tokens[0].value).toBe('160x100');
   });
 
   // ── Negative numbers ──────────────────────────────────────────
@@ -299,7 +313,7 @@ describe('tokenizer', () => {
   it('tokenizes a realistic DSL snippet', () => {
     const input = [
       'name "My Diagram"',
-      'viewport 600x400',
+      'viewport (600,400)',
       '',
       'style primary',
       '  fill 210 70 45',
@@ -315,9 +329,13 @@ describe('tokenizer', () => {
     // Newline
     expect(t[2]).toEqual(['newline', '\n']);
 
-    // Second line: viewport 600x400
+    // Second line: viewport (600,400)
     expect(t[3]).toEqual(['identifier', 'viewport']);
-    expect(t[4]).toEqual(['dimensions', '600x400']);
+    expect(t[4]).toEqual(['parenOpen', '(']);
+    expect(t[5]).toEqual(['number', '600']);
+    expect(t[6]).toEqual(['comma', ',']);
+    expect(t[7]).toEqual(['number', '400']);
+    expect(t[8]).toEqual(['parenClose', ')']);
 
     // After blank line and "style primary", then indent
     // Find 'style' token
@@ -343,17 +361,17 @@ describe('tokenizer', () => {
   // ── Animate block ─────────────────────────────────────────────
   it('tokenizes animate block with property paths', () => {
     const input = [
-      'animate 3s loop easing=easeInOut',
+      'animate 3 loop easing=easeInOut',
       '  card.badge:',
       '    0.0  fill.h: 120',
     ].join('\n');
     const tokens = tokenize(input);
     const t = tv(tokens);
 
-    // Should contain identifier 'animate', identifier '3s', etc.
+    // Should contain identifier 'animate', number '3' (durations are bare
+    // numbers — the 's' suffix has been removed from the language).
     expect(t[0]).toEqual(['identifier', 'animate']);
-    // '3s' is an identifier (not a number because of the 's' suffix)
-    expect(t[1]).toEqual(['identifier', '3s']);
+    expect(t[1]).toEqual(['number', '3']);
   });
 
   // ── Negative number after comma (not standalone minus) ────────

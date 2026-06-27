@@ -59,7 +59,7 @@ export const AnimConfigSchema = dsl(z.object({
   chapters: z.array(ChapterSchema).describe('Named chapter markers for timeline navigation').optional(),
 }), {
   keyword: 'animate',
-  positional: [{ keys: ['duration'], suffix: 's' }],
+  positional: [{ keys: ['duration'], format: 'number' }],
   flags: ['loop', 'autoKey'],
   kwargs: ['easing'],
   children: { keyframes: 'block', chapters: 'block' },

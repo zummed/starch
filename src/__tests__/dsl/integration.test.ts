@@ -3,7 +3,7 @@ import { parseScene } from '../../parser/parser';
 
 describe('parseScene DSL integration', () => {
   it('parses DSL input', () => {
-    const dslInput = `box1: rect 100x60`;
+    const dslInput = `box1: rect (100,60)`;
     const scene = parseScene(dslInput);
     expect(scene.nodes).toHaveLength(1);
     expect(scene.nodes[0].id).toBe('box1');
@@ -16,13 +16,13 @@ name "Integration Test"
 style primary
   fill 210 70 45
 
-box1: rect 200x120 @primary at 100,100
+box1: rect (200,120) @primary at (100,100)
 
-box2: rect 200x120 at 400,100
+box2: rect (200,120) at (400,100)
 
 conn: box1 -> box2
 
-animate 4s
+animate 4
   0 box1.transform.x: 100
   2 box1.transform.x: 300
 `;

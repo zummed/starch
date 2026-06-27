@@ -90,14 +90,14 @@ describe('AST tree queries', () => {
 
 describe('lineOf', () => {
   it('returns 0 for position on first line', () => {
-    const text = 'animate 10s\n  1 box.fill: red';
+    const text = 'animate 100\n  1 box.fill: red';
     expect(lineOf(0, text)).toBe(0);
     expect(lineOf(5, text)).toBe(0);
     expect(lineOf(11, text)).toBe(0); // before newline
   });
 
   it('returns 1 for position on second line', () => {
-    const text = 'animate 10s\n  1 box.fill: red';
+    const text = 'animate 100\n  1 box.fill: red';
     expect(lineOf(12, text)).toBe(1); // just after newline
     expect(lineOf(text.length, text)).toBe(1);
   });
@@ -117,13 +117,13 @@ describe('lineOf', () => {
 
 describe('indentOf', () => {
   it('returns 0 for unindented line', () => {
-    const text = 'animate 10s\n  1 box.fill: red';
+    const text = 'animate 100\n  1 box.fill: red';
     expect(indentOf(0, text)).toBe(0);
     expect(indentOf(5, text)).toBe(0);
   });
 
   it('returns leading-space count on indented line', () => {
-    const text = 'animate 10s\n  1 box.fill: red';
+    const text = 'animate 100\n  1 box.fill: red';
     expect(indentOf(12, text)).toBe(2); // start of "  1..."
     expect(indentOf(14, text)).toBe(2); // mid-line
     expect(indentOf(text.length, text)).toBe(2);

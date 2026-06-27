@@ -11,25 +11,25 @@ describe('animate block always has keyframes array', () => {
     expect(model.animate?.keyframes).toEqual([]);
   });
 
-  it('"animate 3s" produces keyframes: []', () => {
-    const { model } = walkDocument('animate 3s');
+  it('"animate 3" produces keyframes: []', () => {
+    const { model } = walkDocument('animate 3');
     expect(model.animate?.keyframes).toEqual([]);
   });
 
-  it('"animate 3s loop" produces keyframes: []', () => {
-    const { model } = walkDocument('animate 3s loop');
+  it('"animate 3 loop" produces keyframes: []', () => {
+    const { model } = walkDocument('animate 3 loop');
     expect(model.animate?.keyframes).toEqual([]);
   });
 
   it('animate with actual keyframes preserves them', () => {
-    const dsl = `animate 3s
+    const dsl = `animate 3
   1 box.opacity: 1`;
     const { model } = walkDocument(dsl);
     expect(model.animate?.keyframes).toHaveLength(1);
   });
 
   it('"animate s" does not assign a string to duration', () => {
-    // Regression: after autocompleting `animate 3s` and deleting the `3`,
+    // Regression: after autocompleting `animate 3` and deleting the `3`,
     // the parser previously assigned the raw string "s" to duration, which
     // crashed V2Diagram's numeric timeline code.
     const { model } = walkDocument('animate s');

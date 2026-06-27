@@ -53,15 +53,15 @@ describe('click coverage: no widget-backed value is unclickable (samples)', () =
 
 describe('click coverage: widget per context', () => {
   it('top-level node values', () => {
-    const dsl = 'box: rect 140x88 fill red opacity=0.5 depth=7';
+    const dsl = 'box: rect (140,88) fill red opacity=0.5 depth=7';
     expect(typeAt(dsl, 'red')).toBe('color');
     expect(typeAt(dsl, '0.5')).toBe('number');     // opacity value
     expect(typeAt(dsl, '7')).toBe('number');       // depth value
-    expect(typeAt(dsl, '140x88')).toBe('object');  // joined dimension → rect compound
+    expect(typeAt(dsl, '(140,88)')).toBe('object');  // joined dimension → rect compound
   });
 
   it('nested child values (previously unclickable)', () => {
-    const dsl = 'card: rect 200x90 at 11,22\n  title: text "Hello" size=13\n  dot: ellipse 6x6 fill teal';
+    const dsl = 'card: rect (200,90) at (11,22)\n  title: text "Hello" size=13\n  dot: ellipse (6,6) fill teal';
     expect(typeAt(dsl, '"Hello"')).toBe('string'); // child text.content
     expect(typeAt(dsl, '13')).toBe('number');       // child text.size
     expect(typeAt(dsl, 'teal')).toBe('color');      // child fill
@@ -77,8 +77,8 @@ describe('click coverage: widget per context', () => {
 
   it('animate values (previously unclickable)', () => {
     const dsl = [
-      'box: rect 10x10 fill red',
-      'animate 4s',
+      'box: rect (10,10) fill red',
+      'animate 4',
       '  chapter "Intro" at 7',
       '  1.5 easing=easeIn  box.opacity: 0.25',
       '  3 box.fill: blue',
@@ -96,7 +96,7 @@ describe('click coverage: widget per context', () => {
 
 describe('click coverage: edits round-trip', () => {
   it('edits a nested child value', () => {
-    const s = new EditorSession('card: rect 200x90\n  title: text "Hi" size=13');
+    const s = new EditorSession('card: rect (200,90)\n  title: text "Hi" size=13');
     s.clickEdit(s.text.indexOf('13'), 20);
     expect(s.model().objects[0].children[0].text.size).toBe(20);
   });
@@ -108,25 +108,25 @@ describe('click coverage: edits round-trip', () => {
   });
 
   it('edits a keyframe number value', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  1.5 box.opacity: 0.25');
+    const s = new EditorSession('box: rect (10,10)\nanimate 4\n  1.5 box.opacity: 0.25');
     s.clickEdit(s.text.indexOf('0.25'), 0.8);
     expect(s.model().animate.keyframes[0].changes['box.opacity']).toBe(0.8);
   });
 
   it('edits a keyframe color value', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  2 box.fill: blue');
+    const s = new EditorSession('box: rect (10,10)\nanimate 4\n  2 box.fill: blue');
     s.clickEdit(s.text.indexOf('blue'), 'crimson');
     expect(s.model().animate.keyframes[0].changes['box.fill']).toBe('crimson');
   });
 
   it('edits a keyframe time', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  1.5 box.opacity: 1');
+    const s = new EditorSession('box: rect (10,10)\nanimate 4\n  1.5 box.opacity: 1');
     s.clickEdit(s.text.indexOf('1.5'), 2.5);
     expect(s.model().animate.keyframes[0].time).toBe(2.5);
   });
 
   it('edits a chapter name', () => {
-    const s = new EditorSession('animate 4s\n  chapter "Intro" at 0\n  1 box.opacity: 1');
+    const s = new EditorSession('animate 4\n  chapter "Intro" at 0\n  1 box.opacity: 1');
     s.clickEdit(s.text.indexOf('Intro'), 'Start');
     expect(s.model().animate.chapters[0].name).toBe('Start');
   });

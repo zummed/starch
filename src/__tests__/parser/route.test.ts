@@ -5,8 +5,8 @@ describe('unified route model', () => {
   it('parses route array directly', () => {
     const scene = parseScene(`\
 objects
-  a: rect 50x50
-  b: rect 50x50
+  a: rect (50,50)
+  b: rect (50,50)
   line: a -> b`);
     const line = scene.nodes.find(n => n.id === 'line');
     expect(line?.path?.route).toEqual(['a', 'b']);
@@ -15,8 +15,8 @@ objects
   it('parses route with waypoints', () => {
     const scene = parseScene(`\
 objects
-  a: rect 50x50
-  b: rect 50x50
+  a: rect (50,50)
+  b: rect (50,50)
   line: a -> (250,100) -> (250,200) -> b`);
     const line = scene.nodes.find(n => n.id === 'line');
     expect(line?.path?.route).toEqual(['a', [250, 100], [250, 200], 'b']);
@@ -25,8 +25,8 @@ objects
   it('parses route with node+offset PointRefs', () => {
     const scene = parseScene(`\
 objects
-  a: rect 50x50
-  b: rect 50x50
+  a: rect (50,50)
+  b: rect (50,50)
   line: (a,10,20) -> (b,-5,0)`);
     const line = scene.nodes.find(n => n.id === 'line');
     expect(line?.path?.route).toEqual([['a', 10, 20], ['b', -5, 0]]);
@@ -42,8 +42,8 @@ objects
   it('parses route with path modifiers', () => {
     const scene = parseScene(`\
 objects
-  a: rect 50x50
-  b: rect 50x50
+  a: rect (50,50)
+  b: rect (50,50)
   line: a -> b smooth radius=15 gap=4`);
     const line = scene.nodes.find(n => n.id === 'line');
     expect(line?.path?.smooth).toBe(true);

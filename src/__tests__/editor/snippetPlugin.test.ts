@@ -185,9 +185,10 @@ describe('Tab navigation', () => {
     expect(getCursor(exited)).toBe(10);
   });
 
-  it('trailing space goes after suffix text, not after placeholder (animate Ns)', () => {
-    // Template "animate ${1:3}s" → expanded "animate 3s"
-    // The "s" is a suffix after the placeholder, space must go after it
+  it('trailing space goes after literal suffix text, not after placeholder', () => {
+    // Synthetic template exercising the engine's handling of literal text
+    // AFTER a placeholder (the trailing "s"). This is not real animate syntax
+    // — durations are bare numbers — it just drives the suffix code path.
     const state = createEditor('animate 3s', 0);
     const withSnippet = activateSnippet(state, 0, 'animate ${1:3}s');
 

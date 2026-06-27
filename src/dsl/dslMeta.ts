@@ -2,7 +2,7 @@ import type { z } from 'zod';
 
 export interface PositionalHint {
   keys: string[];
-  format?: 'dimension' | 'spaced' | 'joined' | 'arrow' | 'quoted' | 'tuples' | 'color' | 'bracketList';
+  format?: 'dimension' | 'spaced' | 'joined' | 'arrow' | 'quoted' | 'tuples' | 'color' | 'bracketList' | 'number';
   separator?: string;
   suffix?: string;
   keyword?: string;           // intermediate keyword (e.g., 'at' in chapter "name" at 3.5)

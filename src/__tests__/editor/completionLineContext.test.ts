@@ -20,7 +20,7 @@ function getCompletions(text: string, cursorPos: number) {
 
 describe('completion respects line indent', () => {
   it('cursor at col 0 on blank line after a box shows top-level keywords', () => {
-    const text = 'box: rect 100x60 fill steelblue at 200,150\n';
+    const text = 'box: rect (100,60) fill steelblue at (200,150)\n';
     const completions = getCompletions(text, text.length);
     const labels = completions.map(c => c.label);
     // Should show top-level keywords, NOT node/transform-specific
@@ -33,7 +33,7 @@ describe('completion respects line indent', () => {
   });
 
   it('cursor at col 0 after multi-line content shows top-level', () => {
-    const text = 'name "Test"\nbox: rect 100x60\n';
+    const text = 'name "Test"\nbox: rect (100,60)\n';
     const completions = getCompletions(text, text.length);
     const labels = completions.map(c => c.label);
     expect(labels).toContain('animate');

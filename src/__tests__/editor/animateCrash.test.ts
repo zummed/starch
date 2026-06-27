@@ -25,13 +25,13 @@ describe('animate completion application', () => {
     state = state.apply(state.tr.setSelection(TextSelection.create(doc, 8)));
 
     // Completion selects "animate" with snippetTemplate 'animate ${1:3}s'
-    // applyCompletion strips placeholders → 'animate 3s', inserts at from=1, to=8
-    const insertText = 'animate 3s';
+    // applyCompletion strips placeholders → 'animate 3', inserts at from=1, to=8
+    const insertText = 'animate 3';
     const from = 1, to = 8;
     const tr = state.tr.insertText(insertText, from, to);
     state = state.apply(tr);
 
-    expect(state.doc.textContent).toBe('animate 3s');
+    expect(state.doc.textContent).toBe('animate 3');
 
     // Then activates snippet
     const insertFrom = 0; // from - PM_OFFSET (1)
@@ -41,7 +41,7 @@ describe('animate completion application', () => {
   });
 
   it('snippet placeholder positioned correctly', () => {
-    const text = 'animate 3s';
+    const text = 'animate 3';
     const doc = schema.node('doc', null, [
       schema.node('code_block', null, [schema.text(text)]),
     ]);
