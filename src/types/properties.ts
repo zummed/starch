@@ -6,7 +6,7 @@ import { dsl } from '../dsl/dslMeta';
 
 export const AnchorSchema = z.union([
   z.enum(NAMED_ANCHORS).describe('Named anchor position (compass direction)'),
-  z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1)]).describe('Relative anchor [x, y] where 0,0 is center and -1..1 maps to bounding box edges'),
+  z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1)]).describe('Relative anchor (x, y) where 0,0 is center and -1..1 maps to bounding box edges'),
 ]);
 
 // ─── Color Schemas ──────────────────────────────────────────────
@@ -73,7 +73,7 @@ export const TransformSchema = dsl(z.object({
   y: z.number().describe('Y position in pixels (number)').default(0),
   rotation: z.number().describe('Rotation angle in degrees (number)').default(0),
   scale: z.number().min(0).max(10).describe('Uniform scale factor (number, 0-10, default 1)').default(1),
-  anchor: AnchorSchema.describe('Pivot point — named anchor string or [x, y] tuple').optional(),
+  anchor: AnchorSchema.describe('Pivot point — named anchor string or (x, y) tuple').optional(),
   pathFollow: z.string().describe('ID of a path node to follow (string)').optional(),
   pathProgress: z.number().min(0).max(1).describe('Position along followed path (number, 0-1)').optional(),
 }), {

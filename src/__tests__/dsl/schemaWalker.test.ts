@@ -259,14 +259,14 @@ describe('walkDocument - dotted IDs', () => {
 
 describe('walkDocument - keyframe value formats', () => {
   it('parses braced keyframe value with easing', () => {
-    const dsl = `animate 3s loop
+    const dsl = `animate 3 loop
   1.5 box.x: { value: 500, easing: "linear" }`;
     const { model } = walkDocument(dsl);
     expect(model.animate?.keyframes[0].changes['box.x']).toEqual({ value: 500, easing: 'linear' });
   });
 
   it('parses boolean keyframe values', () => {
-    const dsl = `animate 4s loop
+    const dsl = `animate 4 loop
   2 cam.active: false
   4 cam.active: true`;
     const { model } = walkDocument(dsl);
@@ -275,7 +275,7 @@ describe('walkDocument - keyframe value formats', () => {
   });
 
   it('parses tuple keyframe value (camera look)', () => {
-    const dsl = `animate 4s
+    const dsl = `animate 4
   2 cam.look: (a,b)`;
     const { model } = walkDocument(dsl);
     expect(model.animate?.keyframes[0].changes['cam.look']).toEqual(['a', 'b']);
@@ -307,20 +307,20 @@ describe('walkDocument - camera geometry', () => {
 
 describe('walkDocument - animate block', () => {
   it('parses basic animate duration', () => {
-    const dsl = 'animate 3s';
+    const dsl = 'animate 3';
     const { model } = walkDocument(dsl);
     expect(model.animate?.duration).toBe(3);
   });
 
   it('parses animate with loop flag', () => {
-    const dsl = 'animate 3s loop';
+    const dsl = 'animate 3 loop';
     const { model } = walkDocument(dsl);
     expect(model.animate?.duration).toBe(3);
     expect(model.animate?.loop).toBe(true);
   });
 
   it('parses animate with keyframes', () => {
-    const dsl = `animate 3s loop
+    const dsl = `animate 3 loop
   1 box.opacity: 1
   2 box.opacity: 0`;
     const { model } = walkDocument(dsl);
@@ -332,7 +332,7 @@ describe('walkDocument - animate block', () => {
   });
 
   it('parses keyframe with multi-part change path', () => {
-    const dsl = `animate 2s
+    const dsl = `animate 2
   1 box.transform.x: 100`;
     const { model } = walkDocument(dsl);
     expect(model.animate?.keyframes[0].changes['box.transform.x']).toBe(100);

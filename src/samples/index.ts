@@ -51,7 +51,7 @@ function buildEasingSample(): V2Sample {
     dsl: `objects
 ${objectLines.join('\n')}
 
-animate 3s loop
+animate 3 loop
   1.5
 ${moveLines.join('\n')}
   3
@@ -281,7 +281,7 @@ objects
     badge: ellipse 8x8 fill limegreen at 55,-30
     body: text "Some description text" size=11 fill darkgray at 0,15
 
-animate 3s loop
+animate 3 loop
   1.5
     card.bg.fill: midnightblue
     card.badge.fill: crimson
@@ -301,7 +301,7 @@ b: rect 80x80 radius=8 fill #3366ff at 170,100
 c: rect 80x80 radius=8 fill rgb 60 200 80 at 280,100
 d: rect 80x80 radius=8 fill hsl 60 80 50 at 390,100
 
-animate 6s loop
+animate 6 loop
   3 a.fill: blue
   3 b.fill: #ff6633
   3 c.fill: rgb 200 60 180
@@ -343,7 +343,7 @@ a: rect 80x80 radius=8 @theme at 120,140
 b: rect 80x80 radius=8 @theme at 230,140
 c: rect 80x80 radius=8 @theme at 340,140
 
-animate 4s loop
+animate 4 loop
   2 theme.fill: crimson
   4 theme.fill: steelblue`,
   },
@@ -357,7 +357,7 @@ animate 4s loop
     dsl: `\
 mover: rect 50x50 radius=25 fill darkorchid at 100,150
 
-animate 4s loop easing=easeInOut
+animate 4 loop easing=easeInOut
   1
     mover.transform.x: 400
     mover.transform.y: 100
@@ -378,7 +378,7 @@ animate 4s loop easing=easeInOut
     dsl: `\
 box: rect 100x100 radius=8 fill dodgerblue opacity 0 at 200,140
 
-animate 3s loop
+animate 3 loop
   1.5 box.opacity: 1
   3 box.opacity: 0`,
   },
@@ -416,7 +416,7 @@ a: rect 60x40 radius=6 fill darkslateblue stroke dodgerblue width=2 at 120,150
 b: rect 60x40 radius=6 fill firebrick stroke crimson width=2 at 380,150
 line: a -> b bend=0 gap=4 stroke darkgray width=2
 
-animate 4s loop
+animate 4 loop
   1 line.path.bend: 1.5
   2 line.path.bend: 0
   3 line.path.bend: -1.5
@@ -510,7 +510,7 @@ objects
   mover: rect 120x30 radius=4 fill goldenrod
     layout slot=left
 
-animate 4s loop easing=easeInOut
+animate 4 loop easing=easeInOut
   2 mover.layout.slot: right
   4 mover.layout.slot: left`,
   },
@@ -528,7 +528,7 @@ objects
   label_a: text "A" size=14 fill gainsboro at 100,200
   label_b: text "B" size=14 fill gainsboro at 500,200
 
-animate 6s loop easing=easeInOut
+animate 6 loop easing=easeInOut
   1.5 cam.camera.look: a
   3 cam.camera.look: b
   4.5 cam.camera.look: (b,0,-100)
@@ -545,7 +545,7 @@ objects
   inner: rect 120x80 radius=8 fill mediumseagreen at 300,200
   dot: ellipse 10x10 fill goldenrod at 300,200
 
-animate 4s loop easing=easeInOutCubic
+animate 4 loop easing=easeInOutCubic
   2 cam.camera.zoom: 4
   4 cam.camera.zoom: 1`,
   },
@@ -560,7 +560,7 @@ objects
   b: rect 60x60 radius=6 fill limegreen at 300,50
   c: rect 60x60 radius=6 fill royalblue at 550,300
 
-animate 8s loop easing=easeInOut
+animate 8 loop easing=easeInOut
   2 cam.camera.look: (a)
   4 cam.camera.look: (a,b)
   6 cam.camera.look: (c)
@@ -579,7 +579,7 @@ objects
   post2: rect 4x30 fill dimgray at 300,200
   post3: rect 4x30 fill dimgray at 500,200
 
-animate 4s loop easing=easeInOut
+animate 4 loop easing=easeInOut
   2 mover.transform.x: 550
   4 mover.transform.x: 50`,
   },
@@ -602,7 +602,7 @@ objects
   h: rect 80x80 radius=6 fill indianred at 300,340
   i: rect 80x80 radius=6 fill yellowgreen at 500,340
 
-animate 8s loop easing=easeInOutCubic
+animate 8 loop easing=easeInOutCubic
   2
     cam.camera.look: (200,130)
     cam.camera.zoom: 2.5
@@ -633,7 +633,7 @@ objects
   s: rect 30x30 radius=4 fill darkturquoise at 300,300
   w: rect 30x30 radius=4 fill darkorchid at 200,200
 
-animate 6s loop easing=easeInOutCubic
+animate 6 loop easing=easeInOutCubic
   3 cam.transform.rotation: 180
   6 cam.transform.rotation: 360`,
   },
@@ -650,7 +650,7 @@ objects
   la: text "Cam 1" size=10 fill silver at 100,250
   lb: text "Cam 2" size=10 fill silver at 500,250
 
-animate 4s loop
+animate 4 loop
   2
     cam1.camera.active: false
     cam2.camera.active: true
@@ -675,7 +675,7 @@ objects
   h: rect 70x70 radius=6 fill indianred at 250,420
   i: rect 70x70 radius=6 fill yellowgreen at 420,420
 
-animate 14s loop
+animate 14 loop
   1.5 easing=easeInCubic
     cam.camera.look: e
     cam.camera.zoom: 5

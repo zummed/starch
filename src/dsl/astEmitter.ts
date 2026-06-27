@@ -186,7 +186,7 @@ function positionalHasOutput(p: PositionalHint, value: any): boolean {
     return Array.isArray(v) && v.length > 0;
   }
   if (fmt === 'joined' || fmt === 'spaced') return p.keys.some(k => value?.[k] !== undefined);
-  return value?.[p.keys[0]] !== undefined; // dimension/quoted/color/default/suffix
+  return value?.[p.keys[0]] !== undefined; // dimension/quoted/color/number/default
 }
 
 /** Pick the matching variant hints by inspecting the value (mirrors selectVariantHints). */
@@ -318,12 +318,11 @@ function emitPositional(
     return;
   }
 
-  // Default: single scalar value, optionally with a unit suffix (e.g. 3s).
+  // Default: single scalar value.
   const k = p.keys[0];
   if (value?.[k] === undefined) return;
   sep();
-  const text = p.suffix ? `${value[k]}${p.suffix}` : String(value[k]);
-  b.writeNode(text, 'value', sp(k), mp(k), value[k]);
+  b.writeNode(String(value[k]), 'value', sp(k), mp(k), value[k]);
 }
 
 /**
@@ -1117,7 +1116,7 @@ function renderAnimate(animate: any): SectionResult {
 
   // Header line
   b.write('animate ');
-  b.writeNode(`${animate.duration}s`, 'value', 'duration', 'animate.duration', animate.duration);
+  b.writeNode(`${animate.duration}`, 'value', 'duration', 'animate.duration', animate.duration);
   if (animate.loop) b.write(' loop');
   if (animate.autoKey) b.write(' autoKey');
   if (animate.easing) {

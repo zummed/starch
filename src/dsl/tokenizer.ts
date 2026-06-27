@@ -103,16 +103,6 @@ export function tokenize(input: string): Token[] {
       }
     }
 
-    // Check for dimension pattern: NUMBERxNUMBER
-    if (peek() === 'x' && isDigit(peek(1))) {
-      value += advance(); // 'x'
-      while (pos < len && isDigit(peek())) {
-        value += advance();
-      }
-      emit('dimensions', value, startLine, startCol, startOffset);
-      return;
-    }
-
     // Check if immediately followed by alpha chars (like '3s' for "3 seconds")
     // This makes it an identifier instead of a number
     if (isAlpha(peek())) {

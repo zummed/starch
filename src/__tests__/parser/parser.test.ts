@@ -50,7 +50,7 @@ a: rect 10x10`;
 objects
   n1: rect 100x60
 
-animate 4s
+animate 4
   0 n1.rect.w: 100
   2 n1.rect.w: 200`;
     const scene = parseScene(input);

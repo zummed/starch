@@ -22,7 +22,7 @@ describe('tokenizer', () => {
       ['identifier', 'box'],
       ['colon', ':'],
       ['identifier', 'rect'],
-      ['dimensions', '160x100'],
+      ['identifier', '160x100'],
       ['identifier', 'at'],
       ['number', '200'],
       ['comma', ','],
@@ -194,16 +194,18 @@ describe('tokenizer', () => {
     ]);
   });
 
-  // ── Dimensions ────────────────────────────────────────────────
-  it('tokenizes dimensions as a single token', () => {
+  // ── Dimensions (WxH) ──────────────────────────────────────────
+  // A size like 160x100 lexes as a single identifier (number-followed-by-alpha);
+  // there is no dedicated dimensions token. The `dimension` format reads this
+  // identifier and splits on 'x'.
+  it('tokenizes WxH as a single identifier token', () => {
     const tokens = tokenize('160x100');
-    expect(tokens.length).toBe(2); // dimensions + eof
-    expect(tokens[0].type).toBe('dimensions');
+    expect(tokens.length).toBe(2); // identifier + eof
+    expect(tokens[0].type).toBe('identifier');
     expect(tokens[0].value).toBe('160x100');
   });
 
-  it('does not treat identifier-x-number as dimensions', () => {
-    // 'ax100' should be identifier, not dimensions
+  it('also lexes identifier-x-number as a single identifier', () => {
     const tokens = tokenize('ax100');
     expect(tokens[0].type).toBe('identifier');
   });
@@ -315,9 +317,9 @@ describe('tokenizer', () => {
     // Newline
     expect(t[2]).toEqual(['newline', '\n']);
 
-    // Second line: viewport 600x400
+    // Second line: viewport 600x400 (WxH lexes as one identifier)
     expect(t[3]).toEqual(['identifier', 'viewport']);
-    expect(t[4]).toEqual(['dimensions', '600x400']);
+    expect(t[4]).toEqual(['identifier', '600x400']);
 
     // After blank line and "style primary", then indent
     // Find 'style' token
@@ -343,17 +345,16 @@ describe('tokenizer', () => {
   // ── Animate block ─────────────────────────────────────────────
   it('tokenizes animate block with property paths', () => {
     const input = [
-      'animate 3s loop easing=easeInOut',
+      'animate 3 loop easing=easeInOut',
       '  card.badge:',
       '    0.0  fill.h: 120',
     ].join('\n');
     const tokens = tokenize(input);
     const t = tv(tokens);
 
-    // Should contain identifier 'animate', identifier '3s', etc.
+    // 'animate' keyword, then the bare numeric duration (no 's' suffix).
     expect(t[0]).toEqual(['identifier', 'animate']);
-    // '3s' is an identifier (not a number because of the 's' suffix)
-    expect(t[1]).toEqual(['identifier', '3s']);
+    expect(t[1]).toEqual(['number', '3']);
   });
 
   // ── Negative number after comma (not standalone minus) ────────

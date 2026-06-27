@@ -186,12 +186,12 @@ describe('coverage: animate', () => {
   const ah = getDsl(AnimConfigSchema)!;
   const headerExpected = [...(ah.flags ?? []), ...(ah.kwargs ?? [])];
   it(`animate header offers: ${headerExpected.join(', ')}`, () => {
-    expectOffers('animate 3s ', headerExpected);
+    expectOffers('animate 3 ', headerExpected);
   });
 
   it('animate easing= offers easing names', () => {
     const easings = getEnumValues(EasingNameSchema) ?? [];
-    expectOffers('animate 3s easing=', easings);
+    expectOffers('animate 3 easing=', easings);
   });
 });
 
@@ -235,28 +235,28 @@ describe('coverage: animate keyframes', () => {
   const SCENE = 'a: rect 10x10 at 0,0 fill red\nb: ellipse 5x5\n';
 
   it('offers a time + chapter on a fresh keyframe line', () => {
-    expectOffers(SCENE + 'animate 3s\n  ', ['time', 'chapter']);
+    expectOffers(SCENE + 'animate 3\n  ', ['time', 'chapter']);
   });
   it('offers node IDs as the keyframe target path root', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'b']);
+    expectOffers(SCENE + 'animate 3\n  1 ', ['a', 'b']);
   });
   it('offers properties when drilling a keyframe path', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.', ['opacity', 'fill', 'transform']);
+    expectOffers(SCENE + 'animate 3\n  1 a.', ['opacity', 'fill', 'transform']);
   });
   it('offers colors for a color-typed keyframe value', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.fill: ', ['steelblue', 'hsl', 'rgb']);
+    expectOffers(SCENE + 'animate 3\n  1 a.fill: ', ['steelblue', 'hsl', 'rgb']);
   });
   it('offers booleans for a boolean-typed keyframe value', () => {
-    expectOffers(SCENE + 'animate 3s\n  1 a.visible: ', ['true', 'false']);
+    expectOffers(SCENE + 'animate 3\n  1 a.visible: ', ['true', 'false']);
   });
   it('offers per-change easing after a value, then easing names', () => {
     const easings = getEnumValues(EasingNameSchema) ?? [];
-    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 ', ['easing']);
-    expectOffers(SCENE + 'animate 3s\n  1 a.opacity: 1 easing=', easings);
+    expectOffers(SCENE + 'animate 3\n  1 a.opacity: 1 ', ['easing']);
+    expectOffers(SCENE + 'animate 3\n  1 a.opacity: 1 easing=', easings);
   });
   it('offers + (relative) at keyframe start, and block modifiers after the time', () => {
-    expectOffers(SCENE + 'animate 3s\n  ', ['time', '+', 'chapter']);
-    expectOffers(SCENE + 'animate 3s\n  1 ', ['a', 'easing', 'delay']);
+    expectOffers(SCENE + 'animate 3\n  ', ['time', '+', 'chapter']);
+    expectOffers(SCENE + 'animate 3\n  1 ', ['a', 'easing', 'delay']);
   });
 });
 
@@ -344,12 +344,12 @@ describe('coverage: connection source', () => {
 describe('coverage: keyframe union + multi-change', () => {
   const scene = 'a: rect 10x10\ncam: camera look=all\n';
   it('offers all + node ids for a union-typed keyframe value', () => {
-    expectOffers(scene + 'animate 3s\n  1 cam.camera.look: ', ['all', 'a', 'cam']);
+    expectOffers(scene + 'animate 3\n  1 cam.camera.look: ', ['all', 'a', 'cam']);
   });
   it('offers target paths on a deeper continuation line', () => {
-    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n    ', ['a', 'cam']);
+    expectOffers(scene + 'animate 3\n  1 a.x: 5\n    ', ['a', 'cam']);
   });
   it('still offers time/chapter on a same-indent fresh keyframe line', () => {
-    expectOffers(scene + 'animate 3s\n  1 a.x: 5\n  ', ['time', 'chapter']);
+    expectOffers(scene + 'animate 3\n  1 a.x: 5\n  ', ['time', 'chapter']);
   });
 });

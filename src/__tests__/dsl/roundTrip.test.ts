@@ -128,14 +128,14 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   // Metadata
   { name: 'metadata', dsl: 'name "Test"\ndescription "A scene"\nbackground white\nviewport 800x600\nuse [core, state]' },
   // Animation
-  { name: 'animate basic', dsl: 'animate 3s loop autoKey easing=easeInOut' },
-  { name: 'animate keyframes', dsl: 'animate 3s\n  0 box.opacity: 1\n  2 box.opacity: 0' },
-  { name: 'animate block easing', dsl: 'animate 4s\n  1.5 easing=easeInCubic  cam.camera.look: e\n    cam.camera.zoom: 2' },
-  { name: 'animate change easing', dsl: 'animate 3s\n  1.5 box.x: { value: 500, easing: "linear" }' },
-  { name: 'animate boolean/tuple/color', dsl: 'animate 4s\n  0 box.visible: true\n  1 box.fill: blue\n  2 cam.look: (a,b)' },
-  { name: 'animate relative + chapters', dsl: 'animate 6s\n  chapter "Start" at 0\n  chapter "End" at 5\n  0 box.opacity: 0\n  +1 box.opacity: 1' },
-  { name: 'animate keyframe delay', dsl: 'animate 4s\n  1 delay=0.5  box.opacity: 1' },
-  { name: 'animate multi-change', dsl: 'animate 4s\n  2  cam.camera.look: all\n    cam.camera.zoom: 1.5' },
+  { name: 'animate basic', dsl: 'animate 3 loop autoKey easing=easeInOut' },
+  { name: 'animate keyframes', dsl: 'animate 3\n  0 box.opacity: 1\n  2 box.opacity: 0' },
+  { name: 'animate block easing', dsl: 'animate 4\n  1.5 easing=easeInCubic  cam.camera.look: e\n    cam.camera.zoom: 2' },
+  { name: 'animate change easing', dsl: 'animate 3\n  1.5 box.x: { value: 500, easing: "linear" }' },
+  { name: 'animate boolean/tuple/color', dsl: 'animate 4\n  0 box.visible: true\n  1 box.fill: blue\n  2 cam.look: (a,b)' },
+  { name: 'animate relative + chapters', dsl: 'animate 6\n  chapter "Start" at 0\n  chapter "End" at 5\n  0 box.opacity: 0\n  +1 box.opacity: 1' },
+  { name: 'animate keyframe delay', dsl: 'animate 4\n  1 delay=0.5  box.opacity: 1' },
+  { name: 'animate multi-change', dsl: 'animate 4\n  2  cam.camera.look: all\n    cam.camera.zoom: 1.5' },
 ];
 
 describe('round-trip: feature corpus', () => {

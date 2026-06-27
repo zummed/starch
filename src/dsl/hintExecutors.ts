@@ -27,21 +27,42 @@ export function executePositional(
     ctx.next();
   }
 
-  // dimension: "WxH" as a single dimensions token
+  // dimension: "WxH" — a size as a single identifier token (e.g. "140x80").
+  // Keyword-led and never in a list/kwarg/after->, so it stays paren-free and
+  // keeps the domain "by" glyph. Ellipse uses transform:'double' (diameter).
   if (format === 'dimension') {
-    if (!ctx.is('dimensions')) return null;
-    const tok = ctx.next()!;
-    const [a, b] = tok.value.split('x').map(Number);
-    const [k1, k2] = hint.keys;
+    if (!ctx.is('identifier')) return null;
+    const tok = ctx.peek()!;
+    const m = /^(-?\d+(?:\.\d+)?)x(-?\d+(?:\.\d+)?)$/.exec(tok.value);
+    if (!m) return null;
+    ctx.next();
     const transform = (v: number) =>
       hint.transform === 'double' ? v / 2 : v;
-    result[k1] = transform(a);
-    if (k2) result[k2] = transform(b);
+    const [k1, k2] = hint.keys;
+    result[k1] = transform(parseFloat(m[1]));
+    if (k2) result[k2] = transform(parseFloat(m[2]));
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k1}`,
       from: tok.offset,
       to: tok.offset + tok.value.length,
       value: result[k1],
+      dslRole: 'value',
+    });
+    return result;
+  }
+
+  // number: a single bare numeric token (rejects non-numeric identifiers so
+  // e.g. `animate s` does not assign the string "s" to a numeric field).
+  if (format === 'number') {
+    if (!ctx.is('number')) return null;
+    const tok = ctx.next()!;
+    const [k] = hint.keys;
+    result[k] = parseFloat(tok.value);
+    ctx.emitLeaf({
+      schemaPath: `${schemaPath}.${k}`,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
+      value: result[k],
       dslRole: 'value',
     });
     return result;
@@ -72,12 +93,13 @@ export function executePositional(
     return result;
   }
 
-  // joined: values separated by a specific separator (e.g., X,Y)
+  // joined: a bare comma pair "X,Y" — keyword-led (e.g. `at 200,150`), so it
+  // stays paren-free. When no number follows (e.g. `at rotation=45`), returns
+  // the partial result so the caller's kwarg loop handles the remaining keys.
   if (format === 'joined') {
     const sep = hint.separator ?? ',';
     for (let i = 0; i < hint.keys.length; i++) {
       if (i > 0) {
-        // Expect separator token
         if (sep === ',' && !ctx.is('comma')) return result;
         ctx.next();
       }
@@ -235,35 +257,11 @@ export function executePositional(
     });
     return result;
   }
-  // Identifier with optional suffix (e.g., '3s' when suffix='s')
   if (tok.type === 'identifier') {
     // If the identifier is followed by '=', it is a kwarg, not a positional.
     // Return null so the caller's kwarg loop handles it.
     if (ctx.peek(1)?.type === 'equals') return null;
 
-    if (hint.suffix) {
-      const suffix = hint.suffix;
-      if (tok.value.endsWith(suffix)) {
-        const raw = tok.value.slice(0, -suffix.length);
-        const num = parseFloat(raw);
-        if (!isNaN(num)) {
-          result[k] = num;
-          ctx.next();
-          ctx.emitLeaf({
-            schemaPath: `${schemaPath}.${k}`,
-            from: tok.offset,
-            to: tok.offset + tok.value.length,
-            value: result[k],
-            dslRole: 'value',
-          });
-          return result;
-        }
-      }
-      // Suffix hint signals a numeric field. If the identifier doesn't
-      // form a valid <number><suffix>, don't assign the raw string —
-      // leave duration unset so downstream defaults apply.
-      return null;
-    }
     result[k] = tok.value;
   } else if (tok.type === 'string' || tok.type === 'hexColor') {
     result[k] = tok.value;

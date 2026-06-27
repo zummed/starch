@@ -78,7 +78,7 @@ describe('click coverage: widget per context', () => {
   it('animate values (previously unclickable)', () => {
     const dsl = [
       'box: rect 10x10 fill red',
-      'animate 4s',
+      'animate 4',
       '  chapter "Intro" at 7',
       '  1.5 easing=easeIn  box.opacity: 0.25',
       '  3 box.fill: blue',
@@ -108,25 +108,25 @@ describe('click coverage: edits round-trip', () => {
   });
 
   it('edits a keyframe number value', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  1.5 box.opacity: 0.25');
+    const s = new EditorSession('box: rect 10x10\nanimate 4\n  1.5 box.opacity: 0.25');
     s.clickEdit(s.text.indexOf('0.25'), 0.8);
     expect(s.model().animate.keyframes[0].changes['box.opacity']).toBe(0.8);
   });
 
   it('edits a keyframe color value', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  2 box.fill: blue');
+    const s = new EditorSession('box: rect 10x10\nanimate 4\n  2 box.fill: blue');
     s.clickEdit(s.text.indexOf('blue'), 'crimson');
     expect(s.model().animate.keyframes[0].changes['box.fill']).toBe('crimson');
   });
 
   it('edits a keyframe time', () => {
-    const s = new EditorSession('box: rect 10x10\nanimate 4s\n  1.5 box.opacity: 1');
+    const s = new EditorSession('box: rect 10x10\nanimate 4\n  1.5 box.opacity: 1');
     s.clickEdit(s.text.indexOf('1.5'), 2.5);
     expect(s.model().animate.keyframes[0].time).toBe(2.5);
   });
 
   it('edits a chapter name', () => {
-    const s = new EditorSession('animate 4s\n  chapter "Intro" at 0\n  1 box.opacity: 1');
+    const s = new EditorSession('animate 4\n  chapter "Intro" at 0\n  1 box.opacity: 1');
     s.clickEdit(s.text.indexOf('Intro'), 'Start');
     expect(s.model().animate.chapters[0].name).toBe('Start');
   });

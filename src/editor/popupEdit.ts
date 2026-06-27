@@ -311,8 +311,9 @@ export function parseCompoundText(text: string, schemaPath: string): Record<stri
         }
         if (hint.keys.length === 1) fields[hint.keys[0]] = colorTokens.join(' ');
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
+        // Keyword-led pair: "140x80" (size, split on x) or "200,150" (position).
         const token = positionalTokens[tokenIdx++];
-        const sep = hint.separator || 'x';
+        const sep = hint.format === 'dimension' ? 'x' : (hint.separator ?? ',');
         const parts = token.split(sep);
         for (let k = 0; k < hint.keys.length && k < parts.length; k++) fields[hint.keys[k]] = parts[k];
       } else {
@@ -340,9 +341,9 @@ export function rebuildCompoundText(keyword: string, fields: Record<string, stri
         const val = fields[hint.keys[0]];
         if (val) { parts.push(val); emittedKeys.add(hint.keys[0]); }
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
-        const sep = hint.separator || 'x';
         const vals = hint.keys.map(k => fields[k]).filter(Boolean);
         if (vals.length === hint.keys.length) {
+          const sep = hint.format === 'dimension' ? 'x' : (hint.separator ?? ',');
           parts.push(vals.join(sep));
           hint.keys.forEach(k => emittedKeys.add(k));
         }

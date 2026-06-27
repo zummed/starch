@@ -31,7 +31,7 @@ client: rect 140x46 radius=8 fill #22d3ee at 200,250
 req: arrow client server stroke #fbbf24 label "request"
   draw 0
 
-animate 3s loop
+animate 3 loop
   1.5
     req.draw: { value: 1, easing: "easeInOut" }
 </starch-diagram>
@@ -104,7 +104,7 @@ Properties: `direction`, `gap`, `padding`, `justify`, `align`, `wrap`
 ### Animation
 
 ```
-animate 6s loop easing=easeInOut
+animate 6 loop easing=easeInOut
   1
     req.draw: 1
     server.opacity: 1
@@ -125,7 +125,7 @@ animate 6s loop easing=easeInOut
 ```
 cam: camera target=server zoom=1 ratio=16:9
 
-animate 4s
+animate 4
   2 cam.camera.target: db
      cam.camera.zoom: 2
   4 cam.camera.fit: all
@@ -155,7 +155,7 @@ Styles compose via `style` references. Object properties override style properti
 Named time markers that pause playback for step-through presentations:
 
 ```
-animate 10s
+animate 10
   chapters
     chapter "Start" at 0
     chapter "Handshake" at 3

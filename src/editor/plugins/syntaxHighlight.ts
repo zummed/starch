@@ -19,7 +19,6 @@ const TOKEN_CLASS: Record<string, string> = {
   dot: 'dsl-operator',
   atSign: 'dsl-style-ref',
   plus: 'dsl-operator',
-  dimensions: 'dsl-dimension',
   hexColor: 'dsl-color',
   comma: 'dsl-operator',
 };
@@ -73,6 +72,9 @@ function buildDecorations(doc: any): DecorationSet {
         cls = 'dsl-keyword dsl-geometry';
       } else if (KEYWORDS.has(tok.value)) {
         cls = 'dsl-keyword';
+      } else if (/^-?\d+(\.\d+)?x-?\d+(\.\d+)?$/.test(tok.value)) {
+        // A WxH size lexes as an identifier; colour it as a dimension.
+        cls = 'dsl-dimension';
       } else {
         // Check if this identifier is followed by a colon (node ID)
         const next = tokens[i + 1];

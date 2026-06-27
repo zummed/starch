@@ -22,7 +22,7 @@ box2: rect 200x120 at 400,100
 
 conn: box1 -> box2
 
-animate 4s
+animate 4
   0 box1.transform.x: 100
   2 box1.transform.x: 300
 `;

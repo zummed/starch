@@ -42,14 +42,14 @@ export const TextGeomSchema = dsl(z.object({
 
 export const PointRefSchema = z.union([
   z.string().describe('Node ID to use as point reference'),
-  z.tuple([z.number(), z.number()]).describe('Absolute [x, y] coordinate'),
-  z.tuple([z.string(), z.number(), z.number()]).describe('Node ID with offset [id, dx, dy]'),
+  z.tuple([z.number(), z.number()]).describe('Absolute (x, y) coordinate'),
+  z.tuple([z.string(), z.number(), z.number()]).describe('Node ID with offset (id, dx, dy)'),
 ]);
 
 export const PathGeomSchema = dsl(z.object({
-  points: z.array(z.tuple([z.number(), z.number()])).describe('Ordered path vertices — array of [x, y] coordinate tuples').optional(),
-  fromAnchor: AnchorSchema.describe('Anchor on start node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
-  toAnchor: AnchorSchema.describe('Anchor on end node — named ("N","E","S","W",...) or [-1..1, -1..1] tuple where 0,0 is center').optional(),
+  points: z.array(z.tuple([z.number(), z.number()])).describe('Ordered path vertices — list of (x, y) coordinate tuples').optional(),
+  fromAnchor: AnchorSchema.describe('Anchor on start node — named ("N","E","S","W",...) or (-1..1, -1..1) tuple where 0,0 is center').optional(),
+  toAnchor: AnchorSchema.describe('Anchor on end node — named ("N","E","S","W",...) or (-1..1, -1..1) tuple where 0,0 is center').optional(),
   closed: z.boolean().describe('Close the path into a loop (boolean, default false)').optional(),
   smooth: z.boolean().describe('Use Catmull-Rom spline interpolation (boolean, default false)').optional(),
   bend: z.number().min(-5).max(5).describe('Quadratic curve bend factor (number, -5 to 5, 0 = straight)').optional(),
@@ -97,13 +97,13 @@ export const ImageGeomSchema = dsl(z.object({
 export const CameraLookSchema = z.union([
   z.literal('all').describe('Fit all non-camera objects into view'),
   z.string().describe('Target a single node by its ID (string)'),
-  z.tuple([z.number(), z.number()]).describe('Target absolute coordinates [x, y]'),
-  z.tuple([z.string(), z.number(), z.number()]).describe('Target node with pixel offset [id, dx, dy]'),
-  z.array(z.string()).describe('Fit to a set of node IDs (string[])'),
+  z.tuple([z.number(), z.number()]).describe('Target absolute coordinates (x, y)'),
+  z.tuple([z.string(), z.number(), z.number()]).describe('Target node with pixel offset (id, dx, dy)'),
+  z.array(z.string()).describe('Fit to a set of node IDs — (id, id, ...)'),
 ]);
 
 export const CameraSchema = dsl(z.object({
-  look: CameraLookSchema.describe('Camera look target — "all", node ID, [x,y], [id,dx,dy], or string[] of IDs').optional(),
+  look: CameraLookSchema.describe('Camera look target — "all", node ID, (x,y), (id,dx,dy), or (id, id, ...) for a set of IDs').optional(),
   zoom: z.number().min(0).describe('Zoom level multiplier (number, > 0, default 1)').optional(),
   ratio: z.number().min(0).describe('Viewport aspect ratio width/height (number, > 0)').optional(),
   active: z.boolean().describe('Whether this camera is the active viewport (boolean, default false)').optional(),

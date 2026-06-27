@@ -137,8 +137,8 @@ describe('completionsAt', () => {
     it('geometry keywords have snippet templates', () => {
       const items = completionsAt(null, 0, 'box: ');
       const s = snippets(items);
-      expect(s['rect']).toContain('${1:W}x${2:H}');
-      expect(s['ellipse']).toContain('${1:RX}x${2:RY}');
+      expect(s['rect']).toContain('${1:w}x${2:h}');
+      expect(s['ellipse']).toContain('${1:rx}x${2:ry}');
       expect(s['text']).toContain('"${1:content}"');
     });
   });
@@ -170,8 +170,8 @@ describe('completionsAt', () => {
     it('hsl/rgb have snippet templates in color list', () => {
       const items = completionsAt(null, 0, 'fill ');
       const s = snippets(items);
-      expect(s['hsl']).toContain('${1:H} ${2:S} ${3:L}');
-      expect(s['rgb']).toContain('${1:R} ${2:G} ${3:B}');
+      expect(s['hsl']).toContain('${1:h} ${2:s} ${3:l}');
+      expect(s['rgb']).toContain('${1:r} ${2:g} ${3:b}');
     });
   });
 
@@ -183,10 +183,12 @@ describe('completionsAt', () => {
       const l = labels(items);
       expect(l).not.toContain('fill');  // not node-level
       expect(l).not.toContain('w');     // not positional field names
-      // Should offer dimension snippet
+      // Should offer the dimension snippet: label reads "w×h", but the
+      // inserted template uses ASCII 'x' so the parser can split on it.
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('x');
+        expect(items[0].label).toBe('w×h');
+        expect(items[0].snippetTemplate).toBe('${1:w}x${2:h}');
       }
     });
 
@@ -197,7 +199,7 @@ describe('completionsAt', () => {
       expect(l).not.toContain('x');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:X}');
+        expect(items[0].snippetTemplate).toContain('${1:x}');
       }
     });
 
@@ -205,7 +207,7 @@ describe('completionsAt', () => {
       const items = completionsAt(null, 0, 'fill hsl ');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:H}');
+        expect(items[0].snippetTemplate).toContain('${1:h}');
       }
     });
 
@@ -213,7 +215,7 @@ describe('completionsAt', () => {
       const items = completionsAt(null, 0, 'fill rgb ');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:R}');
+        expect(items[0].snippetTemplate).toContain('${1:r}');
       }
     });
 
@@ -365,7 +367,7 @@ describe('completionsAt', () => {
       const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
       const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const at = items.find(i => i.label === 'at');
-      expect(at?.snippetTemplate).toContain('${1:X},${2:Y}');
+      expect(at?.snippetTemplate).toContain('${1:x},${2:y}');
     });
 
     it('kwarg completions have value snippets', () => {
@@ -464,8 +466,8 @@ describe('completionsAt', () => {
   // ─── Animate Header Context ───────────────────────────────────
 
   describe('animate header context', () => {
-    it('offers loop, autoKey, easing= after "animate 10s "', () => {
-      const text = 'animate 10s ';
+    it('offers loop, autoKey, easing= after "animate 10 "', () => {
+      const text = 'animate 10 ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, text, undefined, text);
@@ -476,7 +478,7 @@ describe('completionsAt', () => {
     });
 
     it('omits loop when already present in header', () => {
-      const text = 'animate 10s loop ';
+      const text = 'animate 10 loop ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, text, undefined, text);
@@ -490,7 +492,7 @@ describe('completionsAt', () => {
 
   describe('animate keyframe-start context', () => {
     it('offers timestamp snippet and chapter keyword on fresh indented line', () => {
-      const text = 'animate 5s loop\n  ';
+      const text = 'animate 5 loop\n  ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  ', undefined, text);
@@ -502,7 +504,7 @@ describe('completionsAt', () => {
     it('offers keyframe-start completions on a blank line between keyframes', () => {
       // Blank line (no whitespace) BETWEEN existing keyframes in an
       // unindented animate block. Cursor is on the blank line at column 0.
-      const text = 'animate 5s\n  1 box.fill: red\n\n  2 box.fill: blue';
+      const text = 'animate 5\n  1 box.fill: red\n\n  2 box.fill: blue';
       // Position of the blank line (line 2, col 0): after 'red\n' newline
       const pos = text.indexOf('red') + 'red\n'.length;
       const { ast: ctx } = walkDocument(text);
@@ -537,7 +539,7 @@ describe('completionsAt', () => {
     };
 
     it('offers scene nodes on inline-change after timestamp', () => {
-      const text = 'animate 5s\n  1 ';
+      const text = 'animate 5\n  1 ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  1 ', sceneModel, text);
@@ -546,7 +548,7 @@ describe('completionsAt', () => {
     });
 
     it('offers children and props after "card." on inline change', () => {
-      const text = 'animate 5s\n  1 card.';
+      const text = 'animate 5\n  1 card.';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  1 card.', sceneModel, text);
@@ -556,7 +558,7 @@ describe('completionsAt', () => {
     });
 
     it('offers tiered completions after "card.bg." on block change', () => {
-      const text = 'animate 5s\n  1\n    card.bg.';
+      const text = 'animate 5\n  1\n    card.bg.';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '    card.bg.', sceneModel, text);
@@ -584,7 +586,7 @@ describe('completionsAt', () => {
     };
 
     it('offers colors after "box.fill: " on inline change', () => {
-      const text = 'animate 3s\n  1 box.fill: ';
+      const text = 'animate 3\n  1 box.fill: ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
@@ -594,7 +596,7 @@ describe('completionsAt', () => {
     });
 
     it('ranks current value first for colors', () => {
-      const text = 'animate 3s\n  1 box.fill: ';
+      const text = 'animate 3\n  1 box.fill: ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  1 box.fill: ', valueSceneModel, text);
@@ -602,7 +604,7 @@ describe('completionsAt', () => {
     });
 
     it('offers only current-value for a number property', () => {
-      const text = 'animate 3s\n  1 box.opacity: ';
+      const text = 'animate 3\n  1 box.opacity: ';
       const { ast: ctx } = walkDocument(text);
       const ast = leavesToAst(ctx.astLeaves(), text.length);
       const items = completionsAt(ast, text.length, '  1 box.opacity: ', valueSceneModel, text);

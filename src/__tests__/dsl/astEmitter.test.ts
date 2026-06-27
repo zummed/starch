@@ -564,7 +564,7 @@ describe('astEmitter - animation', () => {
       objects: [],
       animate: { duration: 3, keyframes: [] },
     }, hints);
-    expect(text).toContain('animate 3s');
+    expect(text).toContain('animate 3');
   });
 
   it('renders animate with loop', () => {
@@ -572,7 +572,7 @@ describe('astEmitter - animation', () => {
       objects: [],
       animate: { duration: 3, loop: true, keyframes: [] },
     }, hints);
-    expect(text).toContain('animate 3s loop');
+    expect(text).toContain('animate 3 loop');
   });
 
   it('renders animate with easing', () => {
@@ -580,7 +580,7 @@ describe('astEmitter - animation', () => {
       objects: [],
       animate: { duration: 3, easing: 'easeInOut', keyframes: [] },
     }, hints);
-    expect(text).toContain('animate 3s easing=easeInOut');
+    expect(text).toContain('animate 3 easing=easeInOut');
   });
 
   it('renders animate with autoKey', () => {
@@ -588,7 +588,7 @@ describe('astEmitter - animation', () => {
       objects: [],
       animate: { duration: 3, autoKey: true, keyframes: [] },
     }, hints);
-    expect(text).toContain('animate 3s autoKey');
+    expect(text).toContain('animate 3 autoKey');
   });
 
   it('renders chapters', () => {
