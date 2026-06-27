@@ -8,6 +8,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -24,6 +25,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      # npm Trusted Publishing (OIDC) requires npm >= 11.5.1; Node 22 ships npm 10.
+      - name: Update npm for Trusted Publishing
+        run: npm install -g npm@latest
+
       - run: npm ci
 
       - name: Test
@@ -32,8 +37,10 @@ jobs:
       - name: Build library and embed
         run: npm run build && npm run build:embed
 
+      # No NPM_TOKEN: publishing authenticates via OIDC Trusted Publishing.
+      # Requires a trusted publisher for @bitsnbobs/starch configured on npmjs.org
+      # pointing at this repo and the Release workflow.
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
