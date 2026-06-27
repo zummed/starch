@@ -1195,26 +1195,35 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): Keyfr
   if (!ctx.is('indent' as any)) return { keyframes, chapters };
   ctx.next();
 
+  // `schemaPath` is "<name>.keyframes"; chapters live alongside under "<name>.chapters".
+  const chaptersBase = schemaPath.replace(/\.keyframes$/, '.chapters');
+
   while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
     ctx.skipNewlines();
     if (ctx.is('dedent' as any)) break;
 
-    // Chapter marker line: `chapter "Name" at <time>`
+    // Chapter marker line: `chapter "Name" at <time>`. Emit under the resolvable
+    // "<name>.chapters.<i>" path so name/time are clickable.
     if (ctx.is('identifier', 'chapter')) {
-      const ch = executeSchema(ctx, ChapterSchema, `${schemaPath}.chapter`);
+      const ch = executeSchema(ctx, ChapterSchema, `${chaptersBase}.${chapters.length}`);
       if (ch && ch.name !== undefined) chapters.push(ch);
       ctx.skipNewlines();
       continue;
     }
 
     // Keyframe time: absolute `<number>` or relative `+<number>`.
+    const kfPath = `${schemaPath}.${keyframes.length}`;
     const kf: any = { changes: {} };
     if (ctx.is('plus' as any)) {
       ctx.next(); // consume '+'
       if (!ctx.is('number')) { ctx.next(); continue; }
-      kf.plus = parseFloat(ctx.next()!.value);
+      const t = ctx.next()!;
+      kf.plus = parseFloat(t.value);
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.plus, dslRole: 'value' });
     } else if (ctx.is('number')) {
-      kf.time = parseFloat(ctx.next()!.value);
+      const t = ctx.next()!;
+      kf.time = parseFloat(t.value);
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.time, dslRole: 'value' });
     } else {
       ctx.next();
       continue;
@@ -1225,10 +1234,18 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): Keyfr
       const key = ctx.peek()!.value;
       if (key === 'easing') {
         ctx.next(); ctx.next();
-        if (ctx.is('identifier')) kf.easing = ctx.next()!.value;
+        if (ctx.is('identifier')) {
+          const e = ctx.next()!;
+          kf.easing = e.value;
+          ctx.emitLeaf({ schemaPath: `${kfPath}.easing`, from: e.offset, to: e.offset + e.value.length, value: e.value, dslRole: 'value' });
+        }
       } else if (key === 'delay') {
         ctx.next(); ctx.next();
-        if (ctx.is('number')) kf.delay = parseFloat(ctx.next()!.value);
+        if (ctx.is('number')) {
+          const d = ctx.next()!;
+          kf.delay = parseFloat(d.value);
+          ctx.emitLeaf({ schemaPath: `${kfPath}.delay`, from: d.offset, to: d.offset + d.value.length, value: kf.delay, dslRole: 'value' });
+        }
       } else {
         break;
       }
@@ -1275,58 +1292,63 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
   if (!ctx.is('colon')) return { key: null, value: null };
   ctx.next();
 
+  const key = parts.join('.');
+  // The value leaf is tagged `track:<path>` so the click resolver can type it by
+  // walking the scene model (e.g. `a.fill` → color, `a.opacity` → number).
+  const valSchemaPath = `track:${key}`;
+
   const valTok = ctx.peek();
-  if (!valTok) return { key: parts.join('.'), value: null };
+  if (!valTok) return { key, value: null };
 
   // Braced object: { value: N, easing: "name" } — used in easing-comparison
   if (valTok.type === 'braceOpen') {
     const obj = parseKeyframeValueObject(ctx);
-    return { key: parts.join('.'), value: obj };
+    return { key, value: obj };
   }
 
   // Parenthesized tuple: (a) or (a,b) → string[] array (used in camera-look-fit)
   if (valTok.type === 'parenOpen') {
     const arr = parseKeyframeTuple(ctx);
-    return { key: parts.join('.'), value: arr };
+    return { key, value: arr };
   }
 
   // Boolean literals
-  if (valTok.type === 'identifier' && valTok.value === 'true') {
+  if (valTok.type === 'identifier' && (valTok.value === 'true' || valTok.value === 'false')) {
+    const b = valTok.value === 'true';
     ctx.next();
-    return { key: parts.join('.'), value: true };
-  }
-  if (valTok.type === 'identifier' && valTok.value === 'false') {
-    ctx.next();
-    return { key: parts.join('.'), value: false };
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value: b, dslRole: 'value' });
+    return { key, value: b };
   }
 
   // Attempt color parsing first — handles named, hex, hsl, rgb forms
-  const colorValue = executeColor(ctx, parts.join('.'));
+  const colorValue = executeColor(ctx, valSchemaPath);
   if (colorValue != null) {
     // Check for inline easing: value easing=name
     if (ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
       ctx.next(); ctx.next();
       const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
-      if (easing) return { key: parts.join('.'), value: { value: colorValue, easing } };
+      if (easing) return { key, value: { value: colorValue, easing } };
     }
-    return { key: parts.join('.'), value: colorValue };
+    return { key, value: colorValue };
   }
 
   let value: unknown;
-  if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
-  else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
-    value = valTok.value;
-    ctx.next();
+  if (valTok.type === 'number') {
+    value = parseFloat(valTok.value); ctx.next();
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
+  } else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
+    value = valTok.value; ctx.next();
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
   }
 
   // Check for inline easing after value: `box.x: 500 easing=linear`
   if (value != null && ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
     ctx.next(); ctx.next();
     const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
-    if (easing) return { key: parts.join('.'), value: { value, easing } };
+    if (easing) return { key, value: { value, easing } };
   }
 
-  return { key: parts.join('.'), value };
+  return { key, value };
 }
 
 /**

@@ -7,8 +7,13 @@ import type { AstLeaf } from './walkContext';
  * Document-level paths (e.g. "name", "background") are unchanged.
  */
 function localSchemaPath(path: string): string {
-  if (path.startsWith('objects.')) return path.slice('objects.'.length);
-  return path;
+  // Normalize a walker schemaPath to a node-relative one resolvable against
+  // NodeSchema: strip the `objects.` prefix plus any `children.` nesting markers
+  // (so a nested child's `rect.w` resolves like a top-level one), and strip the
+  // `styles.<name>.` prefix (style props are node-like: fill/stroke/dash/layout).
+  let p = path.replace(/^objects\.(children\.)*/, '');
+  p = p.replace(/^styles\.[^.]+\./, '');
+  return p;
 }
 
 /**

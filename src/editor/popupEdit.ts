@@ -9,6 +9,7 @@
  */
 import { walkDocument } from '../dsl/schemaWalker';
 import { leavesToAst } from '../dsl/astAdapter';
+import { resolvePath } from '../dsl/modelPathWalker';
 import { type AstNode, nodeAt, findCompound } from '../dsl/astTypes';
 import {
   getPropertySchema,
@@ -166,12 +167,24 @@ export function resolveEditTarget(text: string, textPos: number): EditTarget | n
   if (textPos < 0 || textPos >= text.length) return null;
 
   let ast: AstNode;
+  let model: any;
   try {
-    const { ast: ctx } = walkDocument(text);
-    ast = leavesToAst(ctx.astLeaves(), text.length);
+    const walked = walkDocument(text);
+    model = walked.model;
+    ast = leavesToAst(walked.ast.astLeaves(), text.length);
   } catch {
     return null;
   }
+
+  // Resolve a schema path, including `track:<dotted-path>` keyframe-value leaves,
+  // whose type depends on the animated property (walked through the scene model).
+  const schemaForPath = (p: string): z.ZodType | null => {
+    if (p.startsWith('track:')) {
+      const loc = resolvePath(model, p.slice('track:'.length).split('.'));
+      return (loc?.schema as z.ZodType) ?? null;
+    }
+    return resolvePropertySchema(p);
+  };
 
   const node = nodeAt(ast, textPos);
   if (!node) return null;
@@ -184,7 +197,7 @@ export function resolveEditTarget(text: string, textPos: number): EditTarget | n
   if (node.dslRole === 'keyword' || node.dslRole === 'compound') {
     schemaPath = node.schemaPath;
     const compound = node.dslRole === 'compound' ? node : findCompound(node);
-    const compSchema = schemaPath ? resolvePropertySchema(schemaPath) : null;
+    const compSchema = schemaPath ? schemaForPath(schemaPath) : null;
     const compType = compSchema ? detectSchemaType(compSchema) : 'unknown';
     const valueChild = compound && LEAF_WIDGET_TYPES.includes(compType)
       ? findDirectValue(compound, schemaPath)
@@ -204,7 +217,7 @@ export function resolveEditTarget(text: string, textPos: number): EditTarget | n
       rangeFrom = compound.from;
       rangeTo = compound.to;
     } else {
-      const ownSchema = node.schemaPath ? resolvePropertySchema(node.schemaPath) : null;
+      const ownSchema = node.schemaPath ? schemaForPath(node.schemaPath) : null;
       const ownType = ownSchema ? detectSchemaType(ownSchema) : 'unknown';
       if (ownType !== 'unknown' && LEAF_WIDGET_TYPES.includes(ownType)) {
         schemaPath = node.schemaPath;
@@ -248,7 +261,7 @@ export function resolveEditTarget(text: string, textPos: number): EditTarget | n
     }
   }
 
-  const schema = resolvePropertySchema(schemaPath);
+  const schema = schemaForPath(schemaPath);
   if (!schema) return null;
   const schemaType = detectSchemaType(schema);
   if (!WIDGET_TYPES.includes(schemaType)) return null;
