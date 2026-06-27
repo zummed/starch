@@ -66,7 +66,7 @@ export const PathGeomSchema = dsl(z.object({
       hints: {
         positional: [{ keys: ['route'], format: 'arrow' }],
         flags: ['smooth', 'closed'],
-        kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress'],
+        kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress', 'fromAnchor', 'toAnchor'],
       },
     },
     {
@@ -79,7 +79,7 @@ export const PathGeomSchema = dsl(z.object({
     },
   ],
   flags: ['smooth', 'closed'],
-  kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress'],
+  kwargs: ['bend', 'radius', 'gap', 'fromGap', 'toGap', 'drawProgress', 'fromAnchor', 'toAnchor'],
 });
 
 export const ImageGeomSchema = dsl(z.object({
@@ -91,7 +91,7 @@ export const ImageGeomSchema = dsl(z.object({
 }), {
   keyword: 'image',
   positional: [{ keys: ['src'], format: 'quoted' }, { keys: ['w', 'h'], format: 'dimension' }],
-  kwargs: ['fit'],
+  kwargs: ['fit', 'padding'],
 });
 
 export const CameraLookSchema = z.union([

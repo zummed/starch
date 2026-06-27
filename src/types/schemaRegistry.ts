@@ -236,6 +236,25 @@ export function getEnumValues(schema: z.ZodType): string[] | null {
 }
 
 /**
+ * Extract string-literal arms from a (possibly wrapped) Zod union — e.g. the
+ * `all` in CameraLookSchema's `z.literal('all') | …`. Used for completion.
+ */
+export function getUnionLiterals(schema: z.ZodType): string[] {
+  const options = (unwrap(schema) as any)?._def?.options;
+  if (!options) return [];
+  const out: string[] = [];
+  for (const opt of options) {
+    const d = (opt as any)?._def;
+    if (!d) continue;
+    if (typeof d.value === 'string') out.push(d.value);
+    const vals = d.values;
+    if (Array.isArray(vals)) for (const v of vals) { if (typeof v === 'string') out.push(v); }
+    else if (vals instanceof Set) for (const v of vals) { if (typeof v === 'string') out.push(v); }
+  }
+  return out;
+}
+
+/**
  * Get number constraints from a schema using validation probes.
  * Uses binary search to find the actual min/max boundaries.
  */

@@ -243,8 +243,10 @@ describe('completionsAt', () => {
     it('returns style names after "@"', () => {
       const model = { styles: { primary: { fill: 'blue' }, dark: { fill: 'black' } } };
       const l = labels(completionsAt(null, 0, 'box: rect 100x100 @', model));
-      expect(l).toContain('primary');
-      expect(l).toContain('dark');
+      // Labels keep the leading '@' so the editor's prefix filter (which
+      // includes '@' in the typed word) matches them.
+      expect(l).toContain('@primary');
+      expect(l).toContain('@dark');
     });
 
     it('returns node IDs after "->"', () => {
@@ -276,12 +278,13 @@ describe('completionsAt', () => {
       expect(scoped(items, 'node')).toContain('stroke');
     });
 
-    it('after "fill red ": no scope tags (color is a leaf type)', () => {
+    it('after "fill red ": only the alpha (a=) is fill-scoped', () => {
       const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
       const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
       const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
+      // The only fill-scoped completion after a color is its alpha (`a=`).
       const scopedItems = items.filter(i => i.scope !== undefined);
-      expect(scopedItems).toHaveLength(0);
+      expect(scopedItems.map(i => i.label)).toEqual(['a']);
     });
 
     it('after "rect 140x80 radius=8 ": rect scope empty, node scope only', () => {
@@ -294,11 +297,12 @@ describe('completionsAt', () => {
       expect(l).toContain('fill');
     });
 
-    it('after "stroke red width=2 ": stroke scope empty, node scope only', () => {
+    it('after "stroke red width=2 ": only alpha is stroke-scoped (width already set)', () => {
       const { ast: _ctx } = walkDocument('box: rect 100x100 stroke red width=2 ');
       const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 stroke red width=2 '.length);
       const items = completionsAt(ast, 37, 'box: rect 100x100 stroke red width=2 ');
-      expect(scoped(items, 'stroke')).toHaveLength(0);
+      // width is set, so the only remaining stroke-scoped completion is alpha.
+      expect(scoped(items, 'stroke')).toEqual(['a']);
     });
   });
 

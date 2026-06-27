@@ -3,7 +3,9 @@ import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
 import type { z } from 'zod';
 import { HslColorSchema, RgbColorSchema } from '../types/properties';
+import { ChapterSchema } from '../types/animation';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
+import { unwrap, findDslSchema, resolveFieldSchema } from './schemaIntrospect';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -17,6 +19,13 @@ export function executePositional(
 ): Record<string, unknown> | null {
   const result: Record<string, unknown> = {};
   const format = hint.format;
+
+  // Intermediate keyword (e.g. `at` between name and time in
+  // `chapter "Intro" at 3.5`). Consume it before reading the value.
+  if (hint.keyword) {
+    if (!ctx.is('identifier', hint.keyword)) return null;
+    ctx.next();
+  }
 
   // dimension: "WxH" as a single dimensions token
   if (format === 'dimension') {
@@ -831,6 +840,22 @@ export function executeNodeBody(
     // Skip geometry keyword 'path' if we already parsed a route above
     if (result.path && tok.value === 'path') break;
 
+    // Inline layout hints: `layout grow=1 slot=container` on the node's own
+    // line (e.g. a flex child). The emitter produces these for layout objects
+    // that carry only inline hint keys (grow/order/alignSelf/slot), so the
+    // walker must accept them symmetrically. Block layout (`layout flex row`
+    // on an indented line) is handled later in the indented-block loop.
+    if (tok.value === 'layout' && ctx.peek(1)?.type !== 'colon' && ctx.peek(1)?.type !== ('dot' as any)) {
+      const layoutSchema = resolveFieldSchema(schema, 'layout');
+      if (layoutSchema) {
+        const parsed = executeSchema(ctx, layoutSchema, `${schemaPath}.layout`);
+        if (parsed != null && Object.keys(parsed).length > 0) {
+          result.layout = { ...((result.layout as Record<string, unknown>) ?? {}), ...parsed };
+          continue;
+        }
+      }
+    }
+
     // Try geometry keywords (rect, ellipse, path, etc.)
     if (geometry.includes(tok.value)) {
       const geomSchema = resolveFieldSchema(schema, tok.value);
@@ -949,6 +974,27 @@ export function executeNodeBody(
       const kw = executeKwargs(ctx, hints.kwargs, schemaPath);
       Object.assign(result, kw);
       continue;
+    }
+    // Flag fields accept an explicit boolean assignment too (`visible=false`),
+    // which is the only way to express a non-default flag value. The emitter
+    // produces this form, so the walker must accept it symmetrically.
+    if (isKwarg && hints.flags?.includes(tok.value)) {
+      const keyTok = ctx.next()!; // key
+      ctx.next();                 // '='
+      const valTok = ctx.peek();
+      if (valTok?.type === 'identifier' && (valTok.value === 'true' || valTok.value === 'false')) {
+        ctx.next();
+        result[keyTok.value] = valTok.value === 'true';
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.${keyTok.value}`,
+          from: valTok.offset,
+          to: valTok.offset + valTok.value.length,
+          value: result[keyTok.value],
+          dslRole: 'kwarg-value',
+        });
+        continue;
+      }
+      break;
     }
     if (!isKwarg && hints.flags?.includes(tok.value)) {
       const fl = executeFlags(ctx, hints.flags, schemaPath);
@@ -1098,39 +1144,6 @@ function isBlockPropertyToken(
   return true;
 }
 
-/** Unwrap Zod optional/default wrappers to get the inner schema. */
-function unwrap(schema: z.ZodType): z.ZodType {
-  let s: any = schema;
-  while (s?._def?.innerType) {
-    s = s._def.innerType;
-  }
-  return s as z.ZodType;
-}
-
-/**
- * Walk the schema chain (including Zod v4 `_zod.parent`) to find a version
- * that has DSL hints registered. `.describe()` in Zod v4 creates a new schema
- * object while keeping the original in `_zod.parent`, so the DSL WeakMap
- * entry is on the original.
- */
-function findDslSchema(schema: z.ZodType): z.ZodType {
-  let s: any = schema;
-  while (s) {
-    if (getDsl(s as z.ZodType)) return s as z.ZodType;
-    s = s?._zod?.parent ?? null;
-  }
-  return schema;
-}
-
-/** Look up a field schema within an object schema, unwrapping wrappers. */
-function resolveFieldSchema(schema: z.ZodType, fieldName: string): z.ZodType | null {
-  const unwrapped = unwrap(schema);
-  const shape = (unwrapped as any).shape;
-  if (!shape?.[fieldName]) return null;
-  // Find the DSL-registered version of the schema (surviving .describe() wrapping)
-  return findDslSchema(unwrap(shape[fieldName]));
-}
-
 /**
  * Find which inline prop field matches the current token value.
  * First checks if the token matches a field name directly (e.g. 'fill', 'stroke').
@@ -1158,33 +1171,83 @@ function findInlinePropField(
   return null;
 }
 
+export interface KeyframesBlockResult {
+  keyframes: any[];
+  chapters: any[];
+}
+
 /**
- * Parse an indented block of keyframe entries:
- *   <time> [easing=name]
+ * Parse an indented block under `animate`, which interleaves chapter markers
+ * and keyframe entries:
+ *   chapter "Name" at <time>
+ *   <time | +relative> [easing=name] [delay=n]
  *       target.property: value
  *       target.property: value
  * OR on single line:
  *   <time> target.property: value
+ *
+ * Chapters and keyframes are routed into separate arrays.
  */
-export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): any[] {
+export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): KeyframesBlockResult {
   const keyframes: any[] = [];
+  const chapters: any[] = [];
   ctx.skipNewlines();
-  if (!ctx.is('indent' as any)) return keyframes;
+  if (!ctx.is('indent' as any)) return { keyframes, chapters };
   ctx.next();
+
+  // `schemaPath` is "<name>.keyframes"; chapters live alongside under "<name>.chapters".
+  const chaptersBase = schemaPath.replace(/\.keyframes$/, '.chapters');
 
   while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
     ctx.skipNewlines();
     if (ctx.is('dedent' as any)) break;
-    if (!ctx.is('number')) { ctx.next(); continue; }
 
-    const timeTok = ctx.next()!;
-    const kf: any = { time: parseFloat(timeTok.value), changes: {} };
+    // Chapter marker line: `chapter "Name" at <time>`. Emit under the resolvable
+    // "<name>.chapters.<i>" path so name/time are clickable.
+    if (ctx.is('identifier', 'chapter')) {
+      const ch = executeSchema(ctx, ChapterSchema, `${chaptersBase}.${chapters.length}`);
+      if (ch && ch.name !== undefined) chapters.push(ch);
+      ctx.skipNewlines();
+      continue;
+    }
 
-    // Optional easing on timestamp line: "1.5 easing=easeIn"
-    if (ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
-      ctx.next(); ctx.next();
-      if (ctx.is('identifier')) {
-        kf.easing = ctx.next()!.value;
+    // Keyframe time: absolute `<number>` or relative `+<number>`.
+    const kfPath = `${schemaPath}.${keyframes.length}`;
+    const kf: any = { changes: {} };
+    if (ctx.is('plus' as any)) {
+      ctx.next(); // consume '+'
+      if (!ctx.is('number')) { ctx.next(); continue; }
+      const t = ctx.next()!;
+      kf.plus = parseFloat(t.value);
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.plus, dslRole: 'value' });
+    } else if (ctx.is('number')) {
+      const t = ctx.next()!;
+      kf.time = parseFloat(t.value);
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.time, dslRole: 'value' });
+    } else {
+      ctx.next();
+      continue;
+    }
+
+    // Optional `easing=` / `delay=` on the time line, in any order.
+    while (ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
+      const key = ctx.peek()!.value;
+      if (key === 'easing') {
+        ctx.next(); ctx.next();
+        if (ctx.is('identifier')) {
+          const e = ctx.next()!;
+          kf.easing = e.value;
+          ctx.emitLeaf({ schemaPath: `${kfPath}.easing`, from: e.offset, to: e.offset + e.value.length, value: e.value, dslRole: 'value' });
+        }
+      } else if (key === 'delay') {
+        ctx.next(); ctx.next();
+        if (ctx.is('number')) {
+          const d = ctx.next()!;
+          kf.delay = parseFloat(d.value);
+          ctx.emitLeaf({ schemaPath: `${kfPath}.delay`, from: d.offset, to: d.offset + d.value.length, value: kf.delay, dslRole: 'value' });
+        }
+      } else {
+        break;
       }
     }
 
@@ -1215,7 +1278,7 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): any[]
   }
 
   if (ctx.is('dedent' as any)) ctx.next();
-  return keyframes;
+  return { keyframes, chapters };
 }
 
 function parseChangeInline(ctx: WalkContext): { key: string | null; value: unknown } {
@@ -1229,58 +1292,63 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
   if (!ctx.is('colon')) return { key: null, value: null };
   ctx.next();
 
+  const key = parts.join('.');
+  // The value leaf is tagged `track:<path>` so the click resolver can type it by
+  // walking the scene model (e.g. `a.fill` → color, `a.opacity` → number).
+  const valSchemaPath = `track:${key}`;
+
   const valTok = ctx.peek();
-  if (!valTok) return { key: parts.join('.'), value: null };
+  if (!valTok) return { key, value: null };
 
   // Braced object: { value: N, easing: "name" } — used in easing-comparison
   if (valTok.type === 'braceOpen') {
     const obj = parseKeyframeValueObject(ctx);
-    return { key: parts.join('.'), value: obj };
+    return { key, value: obj };
   }
 
   // Parenthesized tuple: (a) or (a,b) → string[] array (used in camera-look-fit)
   if (valTok.type === 'parenOpen') {
     const arr = parseKeyframeTuple(ctx);
-    return { key: parts.join('.'), value: arr };
+    return { key, value: arr };
   }
 
   // Boolean literals
-  if (valTok.type === 'identifier' && valTok.value === 'true') {
+  if (valTok.type === 'identifier' && (valTok.value === 'true' || valTok.value === 'false')) {
+    const b = valTok.value === 'true';
     ctx.next();
-    return { key: parts.join('.'), value: true };
-  }
-  if (valTok.type === 'identifier' && valTok.value === 'false') {
-    ctx.next();
-    return { key: parts.join('.'), value: false };
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value: b, dslRole: 'value' });
+    return { key, value: b };
   }
 
   // Attempt color parsing first — handles named, hex, hsl, rgb forms
-  const colorValue = executeColor(ctx, parts.join('.'));
+  const colorValue = executeColor(ctx, valSchemaPath);
   if (colorValue != null) {
     // Check for inline easing: value easing=name
     if (ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
       ctx.next(); ctx.next();
       const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
-      if (easing) return { key: parts.join('.'), value: { value: colorValue, easing } };
+      if (easing) return { key, value: { value: colorValue, easing } };
     }
-    return { key: parts.join('.'), value: colorValue };
+    return { key, value: colorValue };
   }
 
   let value: unknown;
-  if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
-  else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
-    value = valTok.value;
-    ctx.next();
+  if (valTok.type === 'number') {
+    value = parseFloat(valTok.value); ctx.next();
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
+  } else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
+    value = valTok.value; ctx.next();
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
   }
 
   // Check for inline easing after value: `box.x: 500 easing=linear`
   if (value != null && ctx.is('identifier', 'easing') && ctx.peek(1)?.type === 'equals') {
     ctx.next(); ctx.next();
     const easing = ctx.is('identifier') ? ctx.next()!.value : undefined;
-    if (easing) return { key: parts.join('.'), value: { value, easing } };
+    if (easing) return { key, value: { value, easing } };
   }
 
-  return { key: parts.join('.'), value };
+  return { key, value };
 }
 
 /**

@@ -2,6 +2,13 @@ import { hslToName, rgbToName, isColor } from '../types/color';
 import type { FormatHints } from './formatHints';
 import type { AstNode } from './astTypes';
 import { createAstNode } from './astTypes';
+import type { z } from 'zod';
+import type { PositionalHint } from './dslMeta';
+import { getConstructHints } from './schemaIntrospect';
+import {
+  RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema, PathGeomSchema,
+} from '../types/node';
+import { StrokeSchema, TransformSchema, DashSchema, LayoutSchema } from '../types/properties';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -143,6 +150,235 @@ class AstTextBuilder {
   }
 }
 
+// ─── Schema-Driven Construct Emission ───────────────────────────
+// The inverse of executeSchema/executePositional in hintExecutors. A single
+// engine emits `keyword positional… kwargs… flags…` for any value object,
+// deriving the entire surface syntax from the schema's DslHints. This keeps
+// emit in lock-step with parse: both read the same object definitions.
+
+/** Whether a value string is safe to emit unquoted as a DSL token. */
+function isSimpleToken(s: string): boolean {
+  return /^-?[A-Za-z_][A-Za-z0-9_-]*$/.test(s) || /^-?\d+(\.\d+)?$/.test(s);
+}
+
+/** Quote and escape a string for DSL (inverse of the tokenizer's readString). */
+function quoteString(s: string): string {
+  return '"' + s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\t/g, '\\t') + '"';
+}
+
+/** Format an arbitrary scalar/array value as DSL text (quoting when needed). */
+function formatScalar(v: unknown): string {
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return `(${v.map(x => (typeof x === 'string' && !isSimpleToken(x) ? quoteString(x) : String(x))).join(',')})`;
+  if (typeof v === 'string') return isSimpleToken(v) ? v : quoteString(v);
+  return String(v);
+}
+
+/** Whether a positional hint would produce any output for this value. */
+function positionalHasOutput(p: PositionalHint, value: any): boolean {
+  const fmt = p.format;
+  if (fmt === 'tuples' || fmt === 'arrow' || fmt === 'bracketList') {
+    const v = value?.[p.keys[0]];
+    return Array.isArray(v) && v.length > 0;
+  }
+  if (fmt === 'joined' || fmt === 'spaced') return p.keys.some(k => value?.[k] !== undefined);
+  return value?.[p.keys[0]] !== undefined; // dimension/quoted/color/default/suffix
+}
+
+/** Pick the matching variant hints by inspecting the value (mirrors selectVariantHints). */
+function selectVariantForValue(hints: any, value: any): any {
+  if (!hints?.variants?.length) return hints;
+  for (const variant of hints.variants) {
+    const when = variant.when;
+    if (when && value?.[when] !== undefined) return variant.hints;
+  }
+  // Fall back to the first no-keyword variant, else the first.
+  for (const variant of hints.variants) {
+    if (!variant.hints.keyword) return variant.hints;
+  }
+  return hints.variants[0].hints;
+}
+
+function emitPositional(
+  b: AstTextBuilder,
+  p: PositionalHint,
+  value: any,
+  schemaPath: string,
+  modelPath: string,
+  sep: () => void,
+): void {
+  const fmt = p.format;
+  const sp = (k: string) => `${schemaPath}.${k}`;
+  const mp = (k: string) => `${modelPath}.${k}`;
+
+  if (fmt === 'dimension') {
+    const [k1, k2] = p.keys;
+    if (value?.[k1] === undefined) return;
+    const mult = p.transform === 'double' ? 2 : 1;
+    sep();
+    b.writeNode(String(value[k1] * mult), 'value', sp(k1), mp(k1), value[k1]);
+    if (k2 !== undefined && value[k2] !== undefined) {
+      b.write('x');
+      b.writeNode(String(value[k2] * mult), 'value', sp(k2), mp(k2), value[k2]);
+    }
+    return;
+  }
+
+  if (fmt === 'color') {
+    const k = p.keys[0];
+    if (value?.[k] === undefined) return;
+    sep();
+    emitColor(b, value[k], sp(k), mp(k));
+    return;
+  }
+
+  if (fmt === 'quoted') {
+    const k = p.keys[0];
+    if (value?.[k] === undefined) return;
+    sep();
+    b.writeNode(quoteString(String(value[k])), 'value', sp(k), mp(k), value[k]);
+    return;
+  }
+
+  if (fmt === 'joined') {
+    const present = p.keys.filter(k => value?.[k] !== undefined);
+    if (present.length === 0) return;
+    if (present.length === p.keys.length) {
+      const t = p.separator ?? ',';
+      sep();
+      for (let i = 0; i < p.keys.length; i++) {
+        if (i > 0) b.write(t);
+        const k = p.keys[i];
+        b.writeNode(String(value[k]), 'value', sp(k), mp(k), value[k]);
+      }
+    } else if (p.fallbackToKwarg) {
+      for (const k of present) {
+        sep();
+        b.write(`${k}=`);
+        b.writeNode(String(value[k]), 'value', sp(k), mp(k), value[k]);
+      }
+    }
+    return;
+  }
+
+  if (fmt === 'spaced') {
+    if (!p.keys.some(k => value?.[k] !== undefined)) return;
+    sep();
+    let first = true;
+    for (const k of p.keys) {
+      if (value?.[k] === undefined) continue;
+      if (!first) b.write(' ');
+      first = false;
+      b.writeNode(String(value[k]), 'value', sp(k), mp(k), value[k]);
+    }
+    return;
+  }
+
+  if (fmt === 'tuples') {
+    const pts = value?.[p.keys[0]];
+    if (!Array.isArray(pts) || pts.length === 0) return;
+    sep();
+    for (let i = 0; i < pts.length; i++) {
+      if (i > 0) b.write(' ');
+      const pt = pts[i];
+      b.write('(');
+      b.writeNode(String(pt[0]), 'value', `${sp(p.keys[0])}.${i}.0`, `${mp(p.keys[0])}.${i}.0`, pt[0]);
+      b.write(',');
+      b.writeNode(String(pt[1]), 'value', `${sp(p.keys[0])}.${i}.1`, `${mp(p.keys[0])}.${i}.1`, pt[1]);
+      b.write(')');
+    }
+    return;
+  }
+
+  if (fmt === 'arrow') {
+    const route = value?.[p.keys[0]];
+    if (!Array.isArray(route) || route.length === 0) return;
+    sep();
+    for (let i = 0; i < route.length; i++) {
+      if (i > 0) b.write(' -> ');
+      emitPointRef(b, route[i], `${sp(p.keys[0])}.${i}`, `${mp(p.keys[0])}.${i}`);
+    }
+    return;
+  }
+
+  if (fmt === 'bracketList') {
+    const items = value?.[p.keys[0]];
+    if (!Array.isArray(items)) return;
+    sep();
+    b.write('[');
+    for (let i = 0; i < items.length; i++) {
+      if (i > 0) b.write(',');
+      b.writeNode(String(items[i]), 'value', sp(p.keys[0]), mp(p.keys[0]), items[i]);
+    }
+    b.write(']');
+    return;
+  }
+
+  // Default: single scalar value, optionally with a unit suffix (e.g. 3s).
+  const k = p.keys[0];
+  if (value?.[k] === undefined) return;
+  sep();
+  const text = p.suffix ? `${value[k]}${p.suffix}` : String(value[k]);
+  b.writeNode(text, 'value', sp(k), mp(k), value[k]);
+}
+
+/**
+ * Emit a construct (geometry/property/etc.) from its schema's DslHints.
+ * `schemaPath` is the local schema path (e.g. 'rect', 'stroke', 'transform');
+ * `modelPath` is the full model path (e.g. 'objects.box.rect').
+ */
+function emitConstruct(
+  b: AstTextBuilder,
+  schema: z.ZodType,
+  value: any,
+  schemaPath: string,
+  modelPath: string,
+): void {
+  const base = getConstructHints(schema);
+  if (!base) return;
+  const hints = base.variants ? selectVariantForValue(base, value) : base;
+  if (!hints) return;
+
+  let wrote = false;
+  const sep = () => { if (wrote) b.write(' '); wrote = true; };
+
+  const positionals: PositionalHint[] = hints.positional ?? [];
+  const keywordVisible = !hints.keyword
+    ? false
+    : positionals.length === 0
+      ? true
+      : positionals.some((p: PositionalHint) => positionalHasOutput(p, value))
+        ? true
+        : !(hints.keywordOmittable ?? base.keywordOmittable);
+
+  if (hints.keyword && keywordVisible) {
+    sep();
+    b.writeNode(hints.keyword, 'keyword', schemaPath, modelPath, hints.keyword);
+  }
+
+  for (const p of positionals) {
+    emitPositional(b, p, value, schemaPath, modelPath, sep);
+  }
+
+  for (const key of (hints.kwargs ?? [])) {
+    if (value?.[key] === undefined) continue;
+    sep();
+    b.writeNode(key, 'kwarg-key', `${schemaPath}.${key}`, `${modelPath}.${key}`, key);
+    b.write('=');
+    b.writeNode(formatScalar(value[key]), 'kwarg-value', `${schemaPath}.${key}`, `${modelPath}.${key}`, value[key]);
+  }
+
+  for (const key of (hints.flags ?? [])) {
+    if (!value?.[key]) continue;
+    sep();
+    b.writeNode(key, 'flag', `${schemaPath}.${key}`, `${modelPath}.${key}`, true);
+  }
+}
+
 // ─── Section Builder ─────────────────────────────────────────────
 // Builds one section's text + AST fragment, with offsets starting at 0.
 // The final assembly adjusts offsets.
@@ -244,6 +480,7 @@ function renderMetadata(scene: any): SectionResult | null {
   if (scene.description) metaLines.push(`description "${scene.description}"`);
   if (scene.background) metaLines.push(`background "${scene.background}"`);
   if (scene.viewport) metaLines.push(`viewport ${scene.viewport.width}x${scene.viewport.height}`);
+  if (Array.isArray(scene.use) && scene.use.length > 0) metaLines.push(`use [${scene.use.join(', ')}]`);
   if (metaLines.length === 0) return null;
 
   const text = metaLines.join('\n');
@@ -307,15 +544,13 @@ function renderStyle(name: string, style: any): SectionResult {
   if (style.stroke) {
     b.write('\n  ');
     b.openCompound('stroke', `${modelPrefix}.stroke`);
-    b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
-    b.write(' ');
-    emitStroke(b, style.stroke, modelPrefix);
+    emitConstruct(b, StrokeSchema, style.stroke, 'stroke', `${modelPrefix}.stroke`);
     b.closeCompound();
   }
   if (style.dash) {
     b.write('\n  ');
     b.openCompound('dash', `${modelPrefix}.dash`);
-    emitDashBlock(b, style.dash, modelPrefix);
+    emitConstruct(b, DashSchema, style.dash, 'dash', `${modelPrefix}.dash`);
     b.closeCompound();
   }
 
@@ -332,7 +567,7 @@ function renderStyle(name: string, style: any): SectionResult {
   if (style.layout) {
     b.write('\n  ');
     b.openCompound('layout', `${modelPrefix}.layout`);
-    emitLayout(b, style.layout, modelPrefix);
+    emitConstruct(b, LayoutSchema, style.layout, 'layout', `${modelPrefix}.layout`);
     b.closeCompound();
   }
 
@@ -420,22 +655,21 @@ function renderInlineNode(b: AstTextBuilder, node: any, depth: number, modelPref
   if (indent) b.write(indent);
   b.writeNode(node.id, 'value', '', modelPrefix, node.id);
 
-  const hasGeom = !!(node.rect || node.ellipse || node.text || node.image || node.camera !== undefined);
+  const head = hasHead(node);
+  const opts: PropOpts = { fill: true, stroke: true, layout: true, transform: true };
+  const props = hasNodeProps(node, opts);
 
-  // Check if we have inline props (need to test without actually emitting)
-  const propsStr = buildInlinePropsText(node);
-
-  if (hasGeom && propsStr) {
+  if (head && props) {
     b.write(': ');
-    emitGeometry(b, node, modelPrefix);
+    emitHead(b, node, modelPrefix);
     b.write(' ');
-    emitInlineProps(b, node, modelPrefix);
-  } else if (hasGeom) {
+    emitNodeProps(b, node, modelPrefix, opts);
+  } else if (head) {
     b.write(': ');
-    emitGeometry(b, node, modelPrefix);
-  } else if (propsStr) {
+    emitHead(b, node, modelPrefix);
+  } else if (props) {
     b.write(': ');
-    emitInlineProps(b, node, modelPrefix);
+    emitNodeProps(b, node, modelPrefix, opts);
   } else {
     b.write(':');
   }
@@ -448,31 +682,32 @@ function renderInlineNode(b: AstTextBuilder, node: any, depth: number, modelPref
 function renderBlockNode(b: AstTextBuilder, node: any, depth: number, modelPrefix: string, options: EmitterOptions): void {
   const indent = '  '.repeat(depth);
   const childIndent = '  '.repeat(depth + 1);
-  const hasGeom = !!(node.rect || node.ellipse || node.text || node.image || node.camera !== undefined);
+  const head = hasHead(node);
   const compound = b.openCompound('', modelPrefix);
 
   if (indent) b.write(indent);
   b.writeNode(node.id, 'value', '', modelPrefix, node.id);
 
-  // Build inline-only parts text (no fill/stroke in block mode)
-  const inlineSuffix = buildBlockInlineOnlyPropsText(node);
+  // Inline-only suffix in block mode: fill/stroke move onto their own lines.
+  const suffixOpts: PropOpts = { fill: false, stroke: false, layout: true, transform: true };
+  const inlineSuffix = hasNodeProps(node, suffixOpts);
 
-  if (hasGeom) {
+  if (head) {
     b.write(': ');
-    emitGeometry(b, node, modelPrefix);
+    emitHead(b, node, modelPrefix);
     if (inlineSuffix) {
       b.write(' ');
-      emitBlockInlineOnlyProps(b, node, modelPrefix);
+      emitNodeProps(b, node, modelPrefix, suffixOpts);
     }
   } else if (inlineSuffix) {
     b.write(':');
     b.write(' ');
-    emitBlockInlineOnlyProps(b, node, modelPrefix);
+    emitNodeProps(b, node, modelPrefix, suffixOpts);
   } else {
     b.write(':');
   }
 
-  // Block properties: fill, stroke
+  // Block properties: fill, stroke on their own indented lines.
   if (node.fill && hasOwn(node, 'fill')) {
     b.write(`\n${childIndent}`);
     b.openCompound('fill', `${modelPrefix}.fill`);
@@ -484,9 +719,7 @@ function renderBlockNode(b: AstTextBuilder, node: any, depth: number, modelPrefi
   if (node.stroke && hasOwn(node, 'stroke')) {
     b.write(`\n${childIndent}`);
     b.openCompound('stroke', `${modelPrefix}.stroke`);
-    b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
-    b.write(' ');
-    emitStroke(b, node.stroke, modelPrefix);
+    emitConstruct(b, StrokeSchema, node.stroke, 'stroke', `${modelPrefix}.stroke`);
     b.closeCompound();
   }
 
@@ -497,6 +730,31 @@ function renderBlockNode(b: AstTextBuilder, node: any, depth: number, modelPrefi
 }
 
 // ─── Connection ──────────────────────────────────────────────────
+
+/**
+ * Emit a connection's path flags and kwargs (smooth/closed/bend/radius/…),
+ * driven by the PathGeomSchema route-variant hints. The `route` positional is
+ * emitted separately by the caller; everything else flows from the schema.
+ */
+function emitPathModifiers(b: AstTextBuilder, path: any, modelPrefix: string): void {
+  const hints = getConstructHints(PathGeomSchema);
+  const route = hints?.variants?.find((v: any) => v.when === 'route')?.hints;
+  if (!route) return;
+
+  for (const flag of (route.flags ?? [])) {
+    if (path[flag]) {
+      b.write(' ');
+      b.writeNode(flag, 'flag', `path.${flag}`, `${modelPrefix}.path.${flag}`, true);
+    }
+  }
+  for (const key of (route.kwargs ?? [])) {
+    if (path[key] === undefined) continue;
+    b.write(' ');
+    b.writeNode(key, 'kwarg-key', `path.${key}`, `${modelPrefix}.path.${key}`, key);
+    b.write('=');
+    b.writeNode(formatScalar(path[key]), 'kwarg-value', `path.${key}`, `${modelPrefix}.path.${key}`, path[key]);
+  }
+}
 
 function renderConnection(b: AstTextBuilder, node: any, depth: number, modelPrefix: string, options: EmitterOptions): void {
   const indent = '  '.repeat(depth);
@@ -512,52 +770,15 @@ function renderConnection(b: AstTextBuilder, node: any, depth: number, modelPref
     emitPointRef(b, route[i], `path.route.${i}`, `${modelPrefix}.path.route.${i}`);
   }
 
-  // Path modifiers
-  const pathProps = node.path;
-  if (pathProps.smooth) b.write(' smooth');
-  if (pathProps.closed) b.write(' closed');
-  if (pathProps.bend !== undefined) {
-    b.write(' ');
-    b.writeNode('bend', 'kwarg-key', 'path.bend', `${modelPrefix}.path.bend`, 'bend');
-    b.write('=');
-    b.writeNode(String(pathProps.bend), 'kwarg-value', 'path.bend', `${modelPrefix}.path.bend`, pathProps.bend);
-  }
-  if (pathProps.radius !== undefined) {
-    b.write(' ');
-    b.writeNode('radius', 'kwarg-key', 'path.radius', `${modelPrefix}.path.radius`, 'radius');
-    b.write('=');
-    b.writeNode(String(pathProps.radius), 'kwarg-value', 'path.radius', `${modelPrefix}.path.radius`, pathProps.radius);
-  }
-  if (pathProps.gap !== undefined) {
-    b.write(' ');
-    b.writeNode('gap', 'kwarg-key', 'path.gap', `${modelPrefix}.path.gap`, 'gap');
-    b.write('=');
-    b.writeNode(String(pathProps.gap), 'kwarg-value', 'path.gap', `${modelPrefix}.path.gap`, pathProps.gap);
-  }
-  if (pathProps.fromGap !== undefined) {
-    b.write(' ');
-    b.writeNode('fromGap', 'kwarg-key', 'path.fromGap', `${modelPrefix}.path.fromGap`, 'fromGap');
-    b.write('=');
-    b.writeNode(String(pathProps.fromGap), 'kwarg-value', 'path.fromGap', `${modelPrefix}.path.fromGap`, pathProps.fromGap);
-  }
-  if (pathProps.toGap !== undefined) {
-    b.write(' ');
-    b.writeNode('toGap', 'kwarg-key', 'path.toGap', `${modelPrefix}.path.toGap`, 'toGap');
-    b.write('=');
-    b.writeNode(String(pathProps.toGap), 'kwarg-value', 'path.toGap', `${modelPrefix}.path.toGap`, pathProps.toGap);
-  }
-  if (pathProps.drawProgress !== undefined) {
-    b.write(' ');
-    b.writeNode('drawProgress', 'kwarg-key', 'path.drawProgress', `${modelPrefix}.path.drawProgress`, 'drawProgress');
-    b.write('=');
-    b.writeNode(String(pathProps.drawProgress), 'kwarg-value', 'path.drawProgress', `${modelPrefix}.path.drawProgress`, pathProps.drawProgress);
-  }
+  // Path modifiers (flags + kwargs) are driven by the route variant's hints,
+  // so adding a connection modifier to the schema surfaces it here for free.
+  emitPathModifiers(b, node.path, modelPrefix);
 
   // Inline props (no path, no transform for connections)
-  const inlineProps = buildInlinePropsWithoutPathAndTransformText(node);
-  if (inlineProps) {
+  const connOpts: PropOpts = { fill: true, stroke: true, layout: false, transform: false };
+  if (hasNodeProps(node, connOpts)) {
     b.write(' ');
-    emitInlinePropsWithoutPathAndTransform(b, node, modelPrefix);
+    emitNodeProps(b, node, modelPrefix, connOpts);
   }
 
   // Block-only props (dash, layout) even on connections
@@ -593,10 +814,10 @@ function renderExplicitPath(b: AstTextBuilder, node: any, depth: number, modelPr
   if (node.path.smooth) b.write(' smooth');
 
   // Inline props (no path for explicit paths)
-  const inlineProps = buildInlinePropsWithoutPathText(node);
-  if (inlineProps) {
+  const pathOpts: PropOpts = { fill: true, stroke: true, layout: false, transform: true };
+  if (hasNodeProps(node, pathOpts)) {
     b.write(' ');
-    emitInlinePropsWithoutPath(b, node, modelPrefix);
+    emitNodeProps(b, node, modelPrefix, pathOpts);
   }
 
   // Block-only props
@@ -608,95 +829,48 @@ function renderExplicitPath(b: AstTextBuilder, node: any, depth: number, modelPr
 // ─── Geometry Emission ───────────────────────────────────────────
 
 function emitGeometry(b: AstTextBuilder, node: any, modelPrefix: string): void {
-  if (node.rect) {
-    const geomCompound = b.openCompound('rect', `${modelPrefix}.rect`);
-    b.writeNode('rect', 'keyword', 'rect', `${modelPrefix}.rect`, 'rect');
-    b.write(' ');
-    b.writeNode(String(node.rect.w), 'value', 'rect.w', `${modelPrefix}.rect.w`, node.rect.w);
-    b.write('x');
-    b.writeNode(String(node.rect.h), 'value', 'rect.h', `${modelPrefix}.rect.h`, node.rect.h);
-    if (node.rect.radius !== undefined) {
-      b.write(' ');
-      b.writeNode('radius', 'kwarg-key', 'rect.radius', `${modelPrefix}.rect.radius`, 'radius');
-      b.write('=');
-      b.writeNode(String(node.rect.radius), 'kwarg-value', 'rect.radius', `${modelPrefix}.rect.radius`, node.rect.radius);
-    }
+  const emit = (schema: any, val: any, key: string) => {
+    b.openCompound(key, `${modelPrefix}.${key}`);
+    emitConstruct(b, schema, val, key, `${modelPrefix}.${key}`);
     b.closeCompound();
-  } else if (node.ellipse) {
-    const geomCompound = b.openCompound('ellipse', `${modelPrefix}.ellipse`);
-    b.writeNode('ellipse', 'keyword', 'ellipse', `${modelPrefix}.ellipse`, 'ellipse');
-    b.write(' ');
-    b.writeNode(String(node.ellipse.rx * 2), 'value', 'ellipse.rx', `${modelPrefix}.ellipse.rx`, node.ellipse.rx);
-    b.write('x');
-    b.writeNode(String(node.ellipse.ry * 2), 'value', 'ellipse.ry', `${modelPrefix}.ellipse.ry`, node.ellipse.ry);
-    b.closeCompound();
-  } else if (node.text) {
-    const geomCompound = b.openCompound('text', `${modelPrefix}.text`);
-    b.writeNode('text', 'keyword', 'text', `${modelPrefix}.text`, 'text');
-    b.write(' ');
-    b.writeNode(`"${node.text.content}"`, 'value', 'text.content', `${modelPrefix}.text.content`, node.text.content);
-    if (node.text.size !== undefined) {
+  };
+  if (node.rect) emit(RectGeomSchema, node.rect, 'rect');
+  else if (node.ellipse) emit(EllipseGeomSchema, node.ellipse, 'ellipse');
+  else if (node.text) emit(TextGeomSchema, node.text, 'text');
+  else if (node.image) emit(ImageGeomSchema, node.image, 'image');
+  else if (node.camera !== undefined) emit(CameraSchema, node.camera ?? {}, 'camera');
+}
+
+// ─── Template Emission ───────────────────────────────────────────
+
+function emitTemplate(b: AstTextBuilder, node: any, modelPrefix: string): void {
+  b.openCompound('template', `${modelPrefix}.template`);
+  b.writeNode('template', 'keyword', 'template', `${modelPrefix}.template`, 'template');
+  b.write(' ');
+  b.writeNode(String(node.template), 'value', 'template', `${modelPrefix}.template`, node.template);
+  if (node.props) {
+    for (const [k, v] of Object.entries(node.props)) {
       b.write(' ');
-      b.writeNode('size', 'kwarg-key', 'text.size', `${modelPrefix}.text.size`, 'size');
+      b.writeNode(k, 'kwarg-key', `props.${k}`, `${modelPrefix}.props.${k}`, k);
       b.write('=');
-      b.writeNode(String(node.text.size), 'kwarg-value', 'text.size', `${modelPrefix}.text.size`, node.text.size);
+      b.writeNode(formatScalar(v), 'kwarg-value', `props.${k}`, `${modelPrefix}.props.${k}`, v);
     }
-    if (node.text.lineHeight !== undefined) {
-      b.write(' ');
-      b.writeNode('lineHeight', 'kwarg-key', 'text.lineHeight', `${modelPrefix}.text.lineHeight`, 'lineHeight');
-      b.write('=');
-      b.writeNode(String(node.text.lineHeight), 'kwarg-value', 'text.lineHeight', `${modelPrefix}.text.lineHeight`, node.text.lineHeight);
-    }
-    if (node.text.align !== undefined) {
-      b.write(' ');
-      b.writeNode('align', 'kwarg-key', 'text.align', `${modelPrefix}.text.align`, 'align');
-      b.write('=');
-      b.writeNode(String(node.text.align), 'kwarg-value', 'text.align', `${modelPrefix}.text.align`, node.text.align);
-    }
-    if (node.text.bold) b.write(' bold');
-    if (node.text.mono) b.write(' mono');
-    b.closeCompound();
-  } else if (node.image) {
-    const geomCompound = b.openCompound('image', `${modelPrefix}.image`);
-    b.writeNode('image', 'keyword', 'image', `${modelPrefix}.image`, 'image');
-    b.write(' ');
-    b.writeNode(`"${node.image.src}"`, 'value', 'image.src', `${modelPrefix}.image.src`, node.image.src);
-    b.write(' ');
-    b.writeNode(String(node.image.w), 'value', 'image.w', `${modelPrefix}.image.w`, node.image.w);
-    b.write('x');
-    b.writeNode(String(node.image.h), 'value', 'image.h', `${modelPrefix}.image.h`, node.image.h);
-    if (node.image.fit !== undefined) {
-      b.write(' ');
-      b.writeNode('fit', 'kwarg-key', 'image.fit', `${modelPrefix}.image.fit`, 'fit');
-      b.write('=');
-      b.writeNode(String(node.image.fit), 'kwarg-value', 'image.fit', `${modelPrefix}.image.fit`, node.image.fit);
-    }
-    b.closeCompound();
-  } else if (node.camera !== undefined) {
-    const geomCompound = b.openCompound('camera', `${modelPrefix}.camera`);
-    b.writeNode('camera', 'keyword', 'camera', `${modelPrefix}.camera`, 'camera');
-    const cam = node.camera;
-    if (cam.look !== undefined) {
-      b.write(' ');
-      b.writeNode('look', 'kwarg-key', 'camera.look', `${modelPrefix}.camera.look`, 'look');
-      b.write('=');
-      b.writeNode(formatValueText(cam.look), 'kwarg-value', 'camera.look', `${modelPrefix}.camera.look`, cam.look);
-    }
-    if (cam.zoom !== undefined) {
-      b.write(' ');
-      b.writeNode('zoom', 'kwarg-key', 'camera.zoom', `${modelPrefix}.camera.zoom`, 'zoom');
-      b.write('=');
-      b.writeNode(String(cam.zoom), 'kwarg-value', 'camera.zoom', `${modelPrefix}.camera.zoom`, cam.zoom);
-    }
-    if (cam.ratio !== undefined) {
-      b.write(' ');
-      b.writeNode('ratio', 'kwarg-key', 'camera.ratio', `${modelPrefix}.camera.ratio`, 'ratio');
-      b.write('=');
-      b.writeNode(String(cam.ratio), 'kwarg-value', 'camera.ratio', `${modelPrefix}.camera.ratio`, cam.ratio);
-    }
-    if (cam.active === true) b.write(' active');
-    b.closeCompound();
   }
+  b.closeCompound();
+}
+
+/** Emit the node "head" — geometry or template. Returns true if anything was written. */
+function emitHead(b: AstTextBuilder, node: any, modelPrefix: string): void {
+  if (hasGeometry(node)) emitGeometry(b, node, modelPrefix);
+  else if (node.template) emitTemplate(b, node, modelPrefix);
+}
+
+function hasGeometry(node: any): boolean {
+  return !!(node.rect || node.ellipse || node.text || node.image || node.camera !== undefined);
+}
+
+function hasHead(node: any): boolean {
+  return hasGeometry(node) || !!node.template;
 }
 
 // ─── Color Emission ──────────────────────────────────────────────
@@ -775,51 +949,6 @@ function emitColor(b: AstTextBuilder, color: any, schemaPath: string, modelPath:
   b.writeNode(String(color), 'value', schemaPath, modelPath, color, parent);
 }
 
-// ─── Color Text (no AST nodes) ──────────────────────────────────
-
-function formatColorText(color: any): string {
-  if (typeof color === 'string') return color;
-  if ('name' in color && 'a' in color && !('h' in color) && !('r' in color)) {
-    return `${color.name} a=${color.a}`;
-  }
-  if ('hex' in color && 'a' in color) {
-    return `${color.hex} a=${color.a}`;
-  }
-  if ('r' in color) {
-    const name = rgbToName(color);
-    if (name) {
-      if (color.a !== undefined) return `${name} a=${color.a}`;
-      return name;
-    }
-    let s = `rgb ${color.r} ${color.g} ${color.b}`;
-    if (color.a !== undefined) s += ` a=${color.a}`;
-    return s;
-  }
-  if ('h' in color) {
-    const name = hslToName({ h: color.h, s: color.s, l: color.l });
-    if (name) {
-      if (color.a !== undefined) return `${name} a=${color.a}`;
-      return name;
-    }
-    let s = `hsl ${color.h} ${color.s} ${color.l}`;
-    if (color.a !== undefined) s += ` a=${color.a}`;
-    return s;
-  }
-  return String(color);
-}
-
-// ─── Stroke Emission ─────────────────────────────────────────────
-
-function emitStroke(b: AstTextBuilder, stroke: any, modelPrefix: string): void {
-  emitColor(b, stroke.color, 'stroke.color', `${modelPrefix}.stroke.color`);
-  if (stroke.width !== undefined) {
-    b.write(' ');
-    b.writeNode('width', 'kwarg-key', 'stroke.width', `${modelPrefix}.stroke.width`, 'width');
-    b.write('=');
-    b.writeNode(String(stroke.width), 'kwarg-value', 'stroke.width', `${modelPrefix}.stroke.width`, stroke.width);
-  }
-}
-
 // ─── Value Formatting ────────────────────────────────────────────
 
 function formatValueText(value: any): string {
@@ -867,47 +996,6 @@ function emitPointRef(b: AstTextBuilder, ref: any, schemaPath: string, modelPath
   b.writeNode(String(ref), 'value', schemaPath, modelPath, ref);
 }
 
-// ─── Transform Emission ──────────────────────────────────────────
-
-function emitTransform(b: AstTextBuilder, transform: any, modelPrefix: string): void {
-  const hasX = transform.x !== undefined;
-  const hasY = transform.y !== undefined;
-
-  if (hasX && hasY) {
-    b.writeNode('at', 'keyword', 'transform', `${modelPrefix}.transform`, 'at');
-    b.write(' ');
-    b.writeNode(String(transform.x), 'value', 'transform.x', `${modelPrefix}.transform.x`, transform.x);
-    b.write(',');
-    b.writeNode(String(transform.y), 'value', 'transform.y', `${modelPrefix}.transform.y`, transform.y);
-  } else if (hasX) {
-    b.writeNode('at', 'keyword', 'transform', `${modelPrefix}.transform`, 'at');
-    b.write(' x=');
-    b.writeNode(String(transform.x), 'value', 'transform.x', `${modelPrefix}.transform.x`, transform.x);
-  } else if (hasY) {
-    b.writeNode('at', 'keyword', 'transform', `${modelPrefix}.transform`, 'at');
-    b.write(' y=');
-    b.writeNode(String(transform.y), 'value', 'transform.y', `${modelPrefix}.transform.y`, transform.y);
-  }
-
-  const hasPosition = hasX || hasY;
-
-  // Extras
-  const extras: Array<{ key: string; schemaKey: string }> = [];
-  if (transform.rotation !== undefined) extras.push({ key: 'rotation', schemaKey: 'transform.rotation' });
-  if (transform.scale !== undefined) extras.push({ key: 'scale', schemaKey: 'transform.scale' });
-  if (transform.anchor !== undefined) extras.push({ key: 'anchor', schemaKey: 'transform.anchor' });
-  if (transform.pathFollow !== undefined) extras.push({ key: 'pathFollow', schemaKey: 'transform.pathFollow' });
-  if (transform.pathProgress !== undefined) extras.push({ key: 'pathProgress', schemaKey: 'transform.pathProgress' });
-
-  for (let i = 0; i < extras.length; i++) {
-    const { key, schemaKey } = extras[i];
-    if (hasPosition || i > 0) b.write(' ');
-    b.writeNode(key, 'kwarg-key', schemaKey, `${modelPrefix}.${schemaKey}`, key);
-    b.write('=');
-    b.writeNode(formatValueText(transform[key]), 'kwarg-value', schemaKey, `${modelPrefix}.${schemaKey}`, transform[key]);
-  }
-}
-
 function hasTransformContent(transform: any): boolean {
   return transform.x !== undefined || transform.y !== undefined ||
     transform.rotation !== undefined || transform.scale !== undefined ||
@@ -915,396 +1003,102 @@ function hasTransformContent(transform: any): boolean {
     transform.pathProgress !== undefined;
 }
 
-function formatTransformText(transform: any): string {
-  const hasX = transform.x !== undefined;
-  const hasY = transform.y !== undefined;
+// ─── Unified Node Property Emission ──────────────────────────────
+// One schema-driven emitter for every node property, replacing the four
+// near-identical inline emitters. `opts` selects which properties apply to
+// the current context (block mode pushes fill/stroke onto their own lines;
+// connections drop layout/transform; explicit paths drop layout).
 
-  let s = 'at ';
-
-  if (hasX && hasY) {
-    s += `${transform.x},${transform.y}`;
-  } else if (hasX) {
-    s += `x=${transform.x}`;
-  } else if (hasY) {
-    s += `y=${transform.y}`;
-  } else {
-    s = '';
-  }
-
-  const extras: string[] = [];
-  if (transform.rotation !== undefined) extras.push(`rotation=${transform.rotation}`);
-  if (transform.scale !== undefined) extras.push(`scale=${transform.scale}`);
-  if (transform.anchor !== undefined) extras.push(`anchor=${formatValueText(transform.anchor)}`);
-  if (transform.pathFollow !== undefined) extras.push(`pathFollow=${transform.pathFollow}`);
-  if (transform.pathProgress !== undefined) extras.push(`pathProgress=${transform.pathProgress}`);
-
-  if (s && extras.length > 0) return s + ' ' + extras.join(' ');
-  if (s) return s;
-  if (extras.length > 0) return extras.join(' ');
-  return '';
+interface PropOpts {
+  fill?: boolean;
+  stroke?: boolean;
+  layout?: boolean;
+  transform?: boolean;
 }
 
-// ─── Dash Emission ───────────────────────────────────────────────
-
-function emitDashBlock(b: AstTextBuilder, dash: any, modelPrefix: string): void {
-  b.writeNode('dash', 'keyword', 'dash', `${modelPrefix}.dash`, 'dash');
-  b.write(' ');
-  b.writeNode(dash.pattern, 'value', 'dash.pattern', `${modelPrefix}.dash.pattern`, dash.pattern);
-  if (dash.length !== undefined) {
-    b.write(' ');
-    b.writeNode('length', 'kwarg-key', 'dash.length', `${modelPrefix}.dash.length`, 'length');
-    b.write('=');
-    b.writeNode(String(dash.length), 'kwarg-value', 'dash.length', `${modelPrefix}.dash.length`, dash.length);
-  }
-  if (dash.gap !== undefined) {
-    b.write(' ');
-    b.writeNode('gap', 'kwarg-key', 'dash.gap', `${modelPrefix}.dash.gap`, 'gap');
-    b.write('=');
-    b.writeNode(String(dash.gap), 'kwarg-value', 'dash.gap', `${modelPrefix}.dash.gap`, dash.gap);
-  }
-}
-
-// ─── Layout Emission ─────────────────────────────────────────────
-
-function emitLayout(b: AstTextBuilder, layout: any, modelPrefix: string): void {
-  b.writeNode('layout', 'keyword', 'layout', `${modelPrefix}.layout`, 'layout');
-  if (layout.type) {
-    b.write(' ');
-    b.writeNode(layout.type, 'value', 'layout.type', `${modelPrefix}.layout.type`, layout.type);
-  }
-  if (layout.direction) {
-    b.write(' ');
-    b.writeNode(layout.direction, 'value', 'layout.direction', `${modelPrefix}.layout.direction`, layout.direction);
-  }
-  const skip = new Set(['type', 'direction']);
-  for (const [k, v] of Object.entries(layout)) {
-    if (skip.has(k)) continue;
-    b.write(' ');
-    b.writeNode(k, 'kwarg-key', `layout.${k}`, `${modelPrefix}.layout.${k}`, k);
-    b.write('=');
-    b.writeNode(formatValueText(v), 'kwarg-value', `layout.${k}`, `${modelPrefix}.layout.${k}`, v);
-  }
-}
-
-function emitLayoutHintInline(b: AstTextBuilder, layout: any, modelPrefix: string): boolean {
-  const parts: Array<{ key: string; value: any }> = [];
-  for (const key of LAYOUT_HINT_KEYS) {
-    if (layout[key] !== undefined) parts.push({ key, value: layout[key] });
-  }
-  if (parts.length === 0) return false;
-
-  b.writeNode('layout', 'keyword', 'layout', `${modelPrefix}.layout`, 'layout');
-  for (const { key, value } of parts) {
-    b.write(' ');
-    b.writeNode(key, 'kwarg-key', `layout.${key}`, `${modelPrefix}.layout.${key}`, key);
-    b.write('=');
-    b.writeNode(String(value), 'kwarg-value', `layout.${key}`, `${modelPrefix}.layout.${key}`, value);
-  }
-  return true;
-}
-
-// ─── Inline Properties Emission ──────────────────────────────────
-
-function emitInlineProps(b: AstTextBuilder, node: any, modelPrefix: string): void {
+function emitNodeProps(b: AstTextBuilder, node: any, mp: string, opts: PropOpts): void {
   let first = true;
   const space = () => { if (!first) b.write(' '); first = false; };
 
   if (node.style && hasOwn(node, 'style')) {
     space();
     b.write('@');
-    b.writeNode(node.style, 'sigil', 'style', `${modelPrefix}.style`, node.style);
+    b.writeNode(node.style, 'sigil', 'style', `${mp}.style`, node.style);
   }
-  if (node.fill && hasOwn(node, 'fill')) {
+  if (opts.fill && node.fill && hasOwn(node, 'fill')) {
     space();
-    b.openCompound('fill', `${modelPrefix}.fill`);
-    b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
+    b.openCompound('fill', `${mp}.fill`);
+    b.writeNode('fill', 'keyword', 'fill', `${mp}.fill`, 'fill');
     b.write(' ');
-    emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    emitColor(b, node.fill, 'fill', `${mp}.fill`);
     b.closeCompound();
   }
-  if (node.stroke && hasOwn(node, 'stroke')) {
+  if (opts.stroke && node.stroke && hasOwn(node, 'stroke')) {
     space();
-    b.openCompound('stroke', `${modelPrefix}.stroke`);
-    b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
-    b.write(' ');
-    emitStroke(b, node.stroke, modelPrefix);
+    b.openCompound('stroke', `${mp}.stroke`);
+    emitConstruct(b, StrokeSchema, node.stroke, 'stroke', `${mp}.stroke`);
     b.closeCompound();
   }
   if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
     space();
-    b.writeNode('opacity', 'kwarg-key', 'opacity', `${modelPrefix}.opacity`, 'opacity');
+    b.writeNode('opacity', 'kwarg-key', 'opacity', `${mp}.opacity`, 'opacity');
     b.write('=');
-    b.writeNode(String(node.opacity), 'kwarg-value', 'opacity', `${modelPrefix}.opacity`, node.opacity);
+    b.writeNode(String(node.opacity), 'kwarg-value', 'opacity', `${mp}.opacity`, node.opacity);
   }
   if (hasOwn(node, 'visible') && node.visible === false) {
     space();
-    b.writeNode('visible', 'kwarg-key', 'visible', `${modelPrefix}.visible`, 'visible');
+    b.writeNode('visible', 'kwarg-key', 'visible', `${mp}.visible`, 'visible');
     b.write('=');
-    b.writeNode('false', 'kwarg-value', 'visible', `${modelPrefix}.visible`, false);
+    b.writeNode('false', 'kwarg-value', 'visible', `${mp}.visible`, false);
   }
   if (hasOwn(node, 'depth') && node.depth !== undefined) {
     space();
-    b.writeNode('depth', 'kwarg-key', 'depth', `${modelPrefix}.depth`, 'depth');
+    b.writeNode('depth', 'kwarg-key', 'depth', `${mp}.depth`, 'depth');
     b.write('=');
-    b.writeNode(String(node.depth), 'kwarg-value', 'depth', `${modelPrefix}.depth`, node.depth);
+    b.writeNode(String(node.depth), 'kwarg-value', 'depth', `${mp}.depth`, node.depth);
   }
-  if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
+  if (opts.layout && node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
     space();
-    b.openCompound('layout', `${modelPrefix}.layout`);
-    emitLayoutHintInline(b, node.layout, modelPrefix);
+    b.openCompound('layout', `${mp}.layout`);
+    emitConstruct(b, LayoutSchema, node.layout, 'layout', `${mp}.layout`);
     b.closeCompound();
   }
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) {
-      space();
-      b.openCompound('transform', `${modelPrefix}.transform`);
-      emitTransform(b, node.transform, modelPrefix);
-      b.closeCompound();
-    }
-  }
-}
-
-/** Emit inline-only props for block mode (no fill/stroke) */
-function emitBlockInlineOnlyProps(b: AstTextBuilder, node: any, modelPrefix: string): void {
-  let first = true;
-  const space = () => { if (!first) b.write(' '); first = false; };
-
-  if (node.style && hasOwn(node, 'style')) {
+  if (opts.transform && node.transform && hasOwn(node, 'transform') && hasTransformContent(node.transform)) {
     space();
-    b.write('@');
-    b.writeNode(node.style, 'sigil', 'style', `${modelPrefix}.style`, node.style);
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
-    space();
-    b.writeNode('opacity', 'kwarg-key', 'opacity', `${modelPrefix}.opacity`, 'opacity');
-    b.write('=');
-    b.writeNode(String(node.opacity), 'kwarg-value', 'opacity', `${modelPrefix}.opacity`, node.opacity);
-  }
-  if (hasOwn(node, 'visible') && node.visible === false) {
-    space();
-    b.writeNode('visible', 'kwarg-key', 'visible', `${modelPrefix}.visible`, 'visible');
-    b.write('=');
-    b.writeNode('false', 'kwarg-value', 'visible', `${modelPrefix}.visible`, false);
-  }
-  if (hasOwn(node, 'depth') && node.depth !== undefined) {
-    space();
-    b.writeNode('depth', 'kwarg-key', 'depth', `${modelPrefix}.depth`, 'depth');
-    b.write('=');
-    b.writeNode(String(node.depth), 'kwarg-value', 'depth', `${modelPrefix}.depth`, node.depth);
-  }
-  if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
-    space();
-    emitLayoutHintInline(b, node.layout, modelPrefix);
-  }
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) {
-      space();
-      emitTransform(b, node.transform, modelPrefix);
-    }
-  }
-}
-
-/** Emit inline props excluding path-related props and transform (for connections) */
-function emitInlinePropsWithoutPathAndTransform(b: AstTextBuilder, node: any, modelPrefix: string): void {
-  let first = true;
-  const space = () => { if (!first) b.write(' '); first = false; };
-
-  if (node.style && hasOwn(node, 'style')) {
-    space();
-    b.write('@');
-    b.writeNode(node.style, 'sigil', 'style', `${modelPrefix}.style`, node.style);
-  }
-  if (node.fill && hasOwn(node, 'fill')) {
-    space();
-    b.openCompound('fill', `${modelPrefix}.fill`);
-    b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
-    b.write(' ');
-    emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
+    b.openCompound('transform', `${mp}.transform`);
+    emitConstruct(b, TransformSchema, node.transform, 'transform', `${mp}.transform`);
     b.closeCompound();
   }
-  if (node.stroke && hasOwn(node, 'stroke')) {
-    space();
-    b.openCompound('stroke', `${modelPrefix}.stroke`);
-    b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
-    b.write(' ');
-    emitStroke(b, node.stroke, modelPrefix);
-    b.closeCompound();
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
-    space();
-    b.writeNode('opacity', 'kwarg-key', 'opacity', `${modelPrefix}.opacity`, 'opacity');
-    b.write('=');
-    b.writeNode(String(node.opacity), 'kwarg-value', 'opacity', `${modelPrefix}.opacity`, node.opacity);
-  }
-  if (hasOwn(node, 'visible') && node.visible === false) {
-    space();
-    b.writeNode('visible', 'kwarg-key', 'visible', `${modelPrefix}.visible`, 'visible');
-    b.write('=');
-    b.writeNode('false', 'kwarg-value', 'visible', `${modelPrefix}.visible`, false);
-  }
-  if (hasOwn(node, 'depth') && node.depth !== undefined) {
-    space();
-    b.writeNode('depth', 'kwarg-key', 'depth', `${modelPrefix}.depth`, 'depth');
-    b.write('=');
-    b.writeNode(String(node.depth), 'kwarg-value', 'depth', `${modelPrefix}.depth`, node.depth);
-  }
 }
 
-/** Emit inline props excluding path-related props (for explicit paths) */
-function emitInlinePropsWithoutPath(b: AstTextBuilder, node: any, modelPrefix: string): void {
-  let first = true;
-  const space = () => { if (!first) b.write(' '); first = false; };
-
-  if (node.style && hasOwn(node, 'style')) {
-    space();
-    b.write('@');
-    b.writeNode(node.style, 'sigil', 'style', `${modelPrefix}.style`, node.style);
-  }
-  if (node.fill && hasOwn(node, 'fill')) {
-    space();
-    b.openCompound('fill', `${modelPrefix}.fill`);
-    b.writeNode('fill', 'keyword', 'fill', `${modelPrefix}.fill`, 'fill');
-    b.write(' ');
-    emitColor(b, node.fill, 'fill', `${modelPrefix}.fill`);
-    b.closeCompound();
-  }
-  if (node.stroke && hasOwn(node, 'stroke')) {
-    space();
-    b.openCompound('stroke', `${modelPrefix}.stroke`);
-    b.writeNode('stroke', 'keyword', 'stroke', `${modelPrefix}.stroke`, 'stroke');
-    b.write(' ');
-    emitStroke(b, node.stroke, modelPrefix);
-    b.closeCompound();
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) {
-    space();
-    b.writeNode('opacity', 'kwarg-key', 'opacity', `${modelPrefix}.opacity`, 'opacity');
-    b.write('=');
-    b.writeNode(String(node.opacity), 'kwarg-value', 'opacity', `${modelPrefix}.opacity`, node.opacity);
-  }
-  if (hasOwn(node, 'visible') && node.visible === false) {
-    space();
-    b.writeNode('visible', 'kwarg-key', 'visible', `${modelPrefix}.visible`, 'visible');
-    b.write('=');
-    b.writeNode('false', 'kwarg-value', 'visible', `${modelPrefix}.visible`, false);
-  }
-  if (hasOwn(node, 'depth') && node.depth !== undefined) {
-    space();
-    b.writeNode('depth', 'kwarg-key', 'depth', `${modelPrefix}.depth`, 'depth');
-    b.write('=');
-    b.writeNode(String(node.depth), 'kwarg-value', 'depth', `${modelPrefix}.depth`, node.depth);
-  }
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) {
-      space();
-      b.openCompound('transform', `${modelPrefix}.transform`);
-      emitTransform(b, node.transform, modelPrefix);
-      b.closeCompound();
-    }
-  }
-}
-
-// ─── Plain Text Builders (for checking emptiness) ────────────────
-
-function buildInlinePropsText(node: any): string {
-  const parts: string[] = [];
-  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
-  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColorText(node.fill)}`);
-  if (node.stroke && hasOwn(node, 'stroke')) {
-    let result = formatColorText(node.stroke.color);
-    if (node.stroke.width !== undefined) result += ` width=${node.stroke.width}`;
-    parts.push(`stroke ${result}`);
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (hasOwn(node, 'visible') && node.visible === false) parts.push('visible=false');
-  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
-    const hint = formatLayoutHintInlineText(node.layout);
-    if (hint) parts.push(hint);
-  }
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) parts.push(t);
-  }
-  return parts.join(' ');
-}
-
-function buildBlockInlineOnlyPropsText(node: any): string {
-  const parts: string[] = [];
-  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (hasOwn(node, 'visible') && node.visible === false) parts.push('visible=false');
-  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) {
-    const hint = formatLayoutHintInlineText(node.layout);
-    if (hint) parts.push(hint);
-  }
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) parts.push(t);
-  }
-  return parts.join(' ');
-}
-
-function buildInlinePropsWithoutPathAndTransformText(node: any): string {
-  const parts: string[] = [];
-  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
-  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColorText(node.fill)}`);
-  if (node.stroke && hasOwn(node, 'stroke')) {
-    let result = formatColorText(node.stroke.color);
-    if (node.stroke.width !== undefined) result += ` width=${node.stroke.width}`;
-    parts.push(`stroke ${result}`);
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (hasOwn(node, 'visible') && node.visible === false) parts.push('visible=false');
-  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  return parts.join(' ');
-}
-
-function buildInlinePropsWithoutPathText(node: any): string {
-  const parts: string[] = [];
-  if (node.style && hasOwn(node, 'style')) parts.push(`@${node.style}`);
-  if (node.fill && hasOwn(node, 'fill')) parts.push(`fill ${formatColorText(node.fill)}`);
-  if (node.stroke && hasOwn(node, 'stroke')) {
-    let result = formatColorText(node.stroke.color);
-    if (node.stroke.width !== undefined) result += ` width=${node.stroke.width}`;
-    parts.push(`stroke ${result}`);
-  }
-  if (hasOwn(node, 'opacity') && node.opacity !== undefined) parts.push(`opacity=${node.opacity}`);
-  if (hasOwn(node, 'visible') && node.visible === false) parts.push('visible=false');
-  if (hasOwn(node, 'depth') && node.depth !== undefined) parts.push(`depth=${node.depth}`);
-  if (node.transform && hasOwn(node, 'transform')) {
-    const t = formatTransformText(node.transform);
-    if (t) parts.push(t);
-  }
-  return parts.join(' ');
-}
-
-function formatLayoutHintInlineText(layout: any): string | null {
-  const parts: string[] = [];
-  for (const key of LAYOUT_HINT_KEYS) {
-    if (layout[key] !== undefined) parts.push(`${key}=${layout[key]}`);
-  }
-  return parts.length > 0 ? `layout ${parts.join(' ')}` : null;
+/** Whether emitNodeProps would emit anything for the given options. */
+function hasNodeProps(node: any, opts: PropOpts): boolean {
+  if (node.style && hasOwn(node, 'style')) return true;
+  if (opts.fill && node.fill && hasOwn(node, 'fill')) return true;
+  if (opts.stroke && node.stroke && hasOwn(node, 'stroke')) return true;
+  if (hasOwn(node, 'opacity') && node.opacity !== undefined) return true;
+  if (hasOwn(node, 'visible') && node.visible === false) return true;
+  if (hasOwn(node, 'depth') && node.depth !== undefined) return true;
+  if (opts.layout && node.layout && hasOwn(node, 'layout') && !isBlockLayout(node.layout)) return true;
+  if (opts.transform && node.transform && hasOwn(node, 'transform') && hasTransformContent(node.transform)) return true;
+  return false;
 }
 
 // ─── Block-Only Props Emission ───────────────────────────────────
+// dash and block-layout always live on their own indented lines.
 
 function emitBlockOnlyProps(b: AstTextBuilder, node: any, depth: number, modelPrefix: string): void {
   const indent = '  '.repeat(depth);
   if (node.dash && hasOwn(node, 'dash')) {
     b.write(`\n${indent}`);
     b.openCompound('dash', `${modelPrefix}.dash`);
-    emitDashBlock(b, node.dash, modelPrefix);
+    emitConstruct(b, DashSchema, node.dash, 'dash', `${modelPrefix}.dash`);
     b.closeCompound();
   }
   if (node.layout && hasOwn(node, 'layout') && isBlockLayout(node.layout)) {
     b.write(`\n${indent}`);
     b.openCompound('layout', `${modelPrefix}.layout`);
-    emitLayout(b, node.layout, modelPrefix);
+    emitConstruct(b, LayoutSchema, node.layout, 'layout', `${modelPrefix}.layout`);
     b.closeCompound();
   }
 }
@@ -1351,32 +1145,27 @@ function renderAnimate(animate: any): SectionResult {
 
       if (changeEntries.length === 0) continue;
 
-      if (changeEntries.length === 1) {
-        const [path, val] = changeEntries[0];
-        b.write(`\n  `);
-        b.writeNode(timeStr, 'value', `keyframes.${kfIdx}.time`, `animate.keyframes.${kfIdx}.time`, kf.time);
-        b.write('  ');
-        emitKeyframeChange(b, path, val, kfIdx, 0);
-        if (kf.easing) {
-          b.write(' easing=');
-          b.writeNode(kf.easing, 'kwarg-value', `keyframes.${kfIdx}.easing`, `animate.keyframes.${kfIdx}.easing`, kf.easing);
-        }
-      } else {
-        // Multiple changes: first on the time line, rest as continuation
-        const [firstPath, firstVal] = changeEntries[0];
-        b.write(`\n  `);
-        b.writeNode(timeStr, 'value', `keyframes.${kfIdx}.time`, `animate.keyframes.${kfIdx}.time`, kf.time);
-        b.write('  ');
-        emitKeyframeChange(b, firstPath, firstVal, kfIdx, 0);
-        if (kf.easing) {
-          b.write(' easing=');
-          b.writeNode(kf.easing, 'kwarg-value', `keyframes.${kfIdx}.easing`, `animate.keyframes.${kfIdx}.easing`, kf.easing);
-        }
-        for (let i = 1; i < changeEntries.length; i++) {
-          const [path, val] = changeEntries[i];
-          b.write('\n    ');
-          emitKeyframeChange(b, path, val, kfIdx, i);
-        }
+      // Block-level easing is emitted right after the time token —
+      // `1.5 easing=easeInCubic  path: value`. Emitting it after the change
+      // instead would be re-parsed as a change-level easing ({ value, easing }),
+      // corrupting the round-trip.
+      b.write(`\n  `);
+      b.writeNode(timeStr, 'value', `keyframes.${kfIdx}.time`, `animate.keyframes.${kfIdx}.time`, kf.time);
+      if (kf.easing) {
+        b.write(' easing=');
+        b.writeNode(kf.easing, 'kwarg-value', `keyframes.${kfIdx}.easing`, `animate.keyframes.${kfIdx}.easing`, kf.easing);
+      }
+      if (kf.delay !== undefined) {
+        b.write(' delay=');
+        b.writeNode(String(kf.delay), 'kwarg-value', `keyframes.${kfIdx}.delay`, `animate.keyframes.${kfIdx}.delay`, kf.delay);
+      }
+      b.write('  ');
+      const [firstPath, firstVal] = changeEntries[0];
+      emitKeyframeChange(b, firstPath, firstVal, kfIdx, 0);
+      for (let i = 1; i < changeEntries.length; i++) {
+        const [path, val] = changeEntries[i];
+        b.write('\n    ');
+        emitKeyframeChange(b, path, val, kfIdx, i);
       }
     }
   }

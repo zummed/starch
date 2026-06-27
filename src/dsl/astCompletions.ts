@@ -14,9 +14,10 @@ import {
   extractPartialPath,
 } from './animateCompletions';
 import { getAllColorNames } from '../types/color';
-import { getSetNames, getShapeNames } from '../templates/registry';
+import { NAMED_ANCHORS } from '../types/anchor';
+import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
 import {
-  getPropertySchema, detectSchemaType, getEnumValues,
+  getPropertySchema, detectSchemaType, getEnumValues, getUnionLiterals,
   getAvailableProperties, getSchemaDefault, EasingNameSchema,
   DocumentSchema,
 } from '../types/schemaRegistry';
@@ -252,11 +253,23 @@ export function completionsAt(
     if (animateItems) return animateItems;
   }
 
+  // Indented section-body routing: on an indented line, the enclosing header
+  // (style / objects / images) determines the context. images entries are
+  // `id: "url"` (a free string), so suppress before lineText would offer
+  // geometry for the `id:` pattern. (animate handled above by routeAnimateContext.)
+  const section = text !== undefined ? enclosingSectionHeader(text, pos) : null;
+  if (section === 'images') return [];
+
   // Content-dependent completions from line text (works even without AST context)
   if (lineText) {
     const lineItems = lineTextCompletions(lineText, modelJson);
     if (lineItems.length > 0) return lineItems;
   }
+
+  // style → property keywords; objects → suppress doc keywords on a fresh id line
+  // (geometry after `id:` is handled by lineTextCompletions above).
+  if (section === 'style') return styleSectionCompletions();
+  if (section === 'objects') return [];
 
   if (!ast) return TOP_LEVEL_KEYWORDS;
 
@@ -297,7 +310,7 @@ export function completionsAt(
       for (let i = node.children.length - 1; i >= 0; i--) {
         const child = node.children[i];
         if (child.to <= pos && child.dslRole === 'compound') {
-          return nodeContextCompletions(child, pos, modelJson);
+          return nodeContextCompletions(child, pos, modelJson, lineText);
         }
       }
     }
@@ -305,7 +318,7 @@ export function completionsAt(
   }
 
   // Inside a node or its children
-  return nodeContextCompletions(node, pos, modelJson);
+  return nodeContextCompletions(node, pos, modelJson, lineText);
 }
 
 // ─── Line-Text Completions ───────────────────────────────────────
@@ -316,19 +329,39 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   const equalsMatch = lineText.match(/(\w+)\s*=\s*(\w*)$/);
   if (equalsMatch) {
     const key = equalsMatch[1];
-    return kwargValueCompletions(key, modelJson);
+    return kwargValueCompletions(key, modelJson, lineText);
   }
 
-  // After @ sign: style names from model
+  // Parenthesized kwarg value, e.g. camera `look=(box,5,5)` — offer node ids.
+  const parenMatch = lineText.match(/(\w+)\s*=\s*\([\w,\s]*$/);
+  if (parenMatch) {
+    return kwargValueCompletions(parenMatch[1], modelJson, lineText);
+  }
+
+  // After `layout <type> ` the next positional is the direction enum (row/column).
+  if (/\blayout\s+\w+\s+\w*$/.test(lineText)) {
+    const dir = getPropertySchema('layout.direction');
+    const vals = dir ? getEnumValues(dir) ?? [] : [];
+    if (vals.length) return vals.map(v => ({ label: v, type: 'value' as const, detail: 'direction' }));
+  }
+
+  // After @ sign: style names from model. Labels keep the leading '@' so the
+  // editor's prefix filter (which includes '@' in the typed word) matches them.
   if (lineText.match(/@\w*$/) && modelJson?.styles) {
     return Object.keys(modelJson.styles).map(n => ({
-      label: n, type: 'value', detail: 'Style name',
+      label: `@${n}`, type: 'value', detail: 'Style name',
     }));
   }
 
-  // After -> : node IDs for connections
+  // After -> : node IDs for the next waypoint, plus connection path modifiers
+  // (smooth/closed/bend=/radius=/…) once a target node has been placed.
   if (lineText.includes('->') && modelJson) {
-    return extractNodeIds(modelJson);
+    const ids = extractNodeIds(modelJson);
+    const afterArrow = lineText.slice(lineText.lastIndexOf('->') + 2);
+    if (/\S\s/.test(afterArrow)) {
+      return [...ids, ...routePathModifierItems(lineText)];
+    }
+    return ids;
   }
 
   // After a shape set prefix + dot: offer shapes in that set.
@@ -355,7 +388,7 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   // After node ID + colon: offer geometry keywords (derived from NodeSchema.geometry hint)
   // plus shape set prefixes for qualified template references.
   // This handles the case where the user is typing a new node and the AST is stale.
-  if (lineText.match(/^\s*\w+:\s+\w*$/) || lineText.match(/^\s*\w+:\s*$/)) {
+  if (lineText.match(/^\s*[\w-]+:\s+\w*$/) || lineText.match(/^\s*[\w-]+:\s*$/)) {
     const items: CompletionItem[] = GEOMETRY_KEYWORDS.map(g => {
       const item: CompletionItem = { label: g, type: 'keyword', detail: 'Geometry type' };
       const schemaKey = KEYWORD_TO_SCHEMA[g] ?? g;
@@ -372,7 +405,16 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
         retrigger: true,
       });
     }
+    // And node ids, so a connection can start here (`l: a -> b`).
+    if (modelJson) items.push(...extractNodeIds(modelJson));
     return items;
+  }
+
+  // Typing a hex color value after a color keyword (`fill #`, `stroke #ff`):
+  // the partial isn't a \w token, so keep color completions flowing.
+  const hexMatch = lineText.match(/\b(\w+)\s+#[0-9a-fA-F]*$/);
+  if (hexMatch && COLOR_POSITIONAL_KEYWORDS.has(hexMatch[1])) {
+    return colorCompletions();
   }
 
   // Check for a keyword at the end of the line followed by a space.
@@ -381,6 +423,10 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
   const keywordMatch = lineText.match(/\b(\w+)\s+\w*$/);
   if (keywordMatch) {
     const kw = keywordMatch[1];
+    // `background <color>` is a top-level CSS color string field.
+    if (kw === 'background' && /^\s*background\s/.test(lineText)) {
+      return colorCompletions();
+    }
     if (COLOR_POSITIONAL_KEYWORDS.has(kw)) {
       return colorCompletions();
     }
@@ -403,24 +449,49 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
 /**
  * Generate completions for values after a kwarg key (e.g., after `easing=`).
  * Looks up the key across all annotated schemas to find its type.
+ *
+ * The same kwarg name can live on multiple constructs (e.g. `align` on both
+ * text and layout, with different enums). When `lineText` is given, the owning
+ * construct is disambiguated by the keyword nearest before the kwarg on the
+ * line, so the right value set is offered for the cursor's context.
  */
-function kwargValueCompletions(key: string, modelJson?: any): CompletionItem[] {
-  // Try to find this key in any annotated schema
+function kwargValueCompletions(key: string, modelJson?: any, lineText?: string): CompletionItem[] {
+  // Collect every annotated construct that declares this kwarg.
+  const candidates: Array<[string, z.ZodType]> = [];
   for (const [schemaPath, schema] of Object.entries(ANNOTATED_SCHEMAS)) {
-    const hints = getDsl(schema);
-    if (hints?.kwargs?.includes(key)) {
-      const fieldSchema = getPropertySchema(schemaPath + '.' + key);
-      if (fieldSchema) {
-        const type = detectSchemaType(fieldSchema);
-        if (type === 'enum') {
-          const values = getEnumValues(fieldSchema);
-          if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
-        }
-        if (type === 'color') return colorCompletions();
-        if (type === 'pointref' || type === 'string') {
-          // String/pointref kwargs may want node IDs or other contextual values
-          if (modelJson) return extractNodeIds(modelJson);
-        }
+    if (getDsl(schema)?.kwargs?.includes(key)) candidates.push([schemaPath, schema]);
+  }
+
+  // Disambiguate by which construct keyword appears latest before the cursor.
+  let chosen: [string, z.ZodType] | undefined = candidates[0];
+  if (candidates.length > 1 && lineText) {
+    let bestIdx = -1;
+    for (const cand of candidates) {
+      const kw = getDsl(cand[1])?.keyword ?? cand[0];
+      const idx = lineText.lastIndexOf(kw);
+      if (idx > bestIdx) { bestIdx = idx; chosen = cand; }
+    }
+  }
+
+  if (chosen) {
+    const fieldSchema = getPropertySchema(chosen[0] + '.' + key);
+    if (fieldSchema) {
+      const type = detectSchemaType(fieldSchema);
+      if (type === 'enum') {
+        const values = getEnumValues(fieldSchema);
+        if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
+      }
+      if (type === 'color') return colorCompletions();
+      if (type === 'anchor') {
+        // Named-anchor arm of the anchor union (N/NE/E/...); tuples are typed by hand.
+        return NAMED_ANCHORS.map(a => ({ label: a, type: 'value', detail: 'anchor' }));
+      }
+      if (type === 'pointref' || type === 'string') {
+        // String/pointref kwargs may want node IDs, plus any string literals in
+        // the union (e.g. camera look's `all`).
+        const lits = getUnionLiterals(fieldSchema).map(l => ({ label: l, type: 'value' as const, detail: 'option' }));
+        const ids = modelJson ? extractNodeIds(modelJson) : [];
+        if (lits.length || ids.length) return [...lits, ...ids];
       }
     }
   }
@@ -444,6 +515,11 @@ function kwargValueCompletions(key: string, modelJson?: any): CompletionItem[] {
         if (values) return values.map(v => ({ label: v, type: 'value' }));
       }
     }
+  }
+  // Finally, template-instance props (e.g. `arrow from=` → node IDs).
+  if (lineText) {
+    const tpl = templatePropValueCompletions(key, lineText, modelJson);
+    if (tpl.length > 0) return tpl;
   }
   return [];
 }
@@ -502,7 +578,7 @@ function sectionCompletions(node: AstNode, modelJson?: any): CompletionItem[] {
 
 // ─── Node Context Completions ────────────────────────────────────
 
-function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): CompletionItem[] {
+function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any, lineText?: string): CompletionItem[] {
   const compound = findCompound(node);
 
   if (!compound) {
@@ -538,8 +614,29 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): Co
   // Partially-typed tokens may be parsed as stray children, but the preceding
   // compound still tells us the relevant scope.
   if (isNodeLine(compound)) {
+    // Template instance (e.g. `box: state.node `) → offer the shape's own
+    // props (label, color, …) from its props schema, then node-level props.
+    const templateName = findTemplateName(compound);
+    if (templateName) {
+      const tplItems = templatePropCompletions(templateName, compound);
+      if (tplItems.length > 0) {
+        const nodeItems = nodePropertyCompletions(compound, cursorPastChildren, modelJson)
+          .filter(p => !GEOMETRY_KEYWORDS.includes(p.label)) // templates have no geometry slot
+          .map(item => ({ ...item, scope: 'node' }));
+        return [...tplItems, ...nodeItems];
+      }
+    }
+
     {
       const preceding = findPrecedingCompound(compound, pos);
+      // After a fill/stroke color value, alpha `a=` is valid (named+alpha, hsl
+      // alpha, etc.). Offer it (once) so it's reachable, since the bare-color
+      // path otherwise only shows node props (where 'a' resolves to 'at').
+      const alphaItem: CompletionItem[] =
+        preceding && (preceding.schemaPath === 'fill' || preceding.schemaPath === 'stroke')
+          && lineText && !/\ba\s*=/.test(lineText)
+          ? [{ label: 'a', type: 'property', detail: 'alpha (0-1)', scope: preceding.schemaPath, snippetTemplate: 'a=${1:1}' }]
+          : [];
       if (preceding && preceding.schemaPath) {
         const schema = getPropertySchema(preceding.schemaPath);
         if (schema) {
@@ -561,13 +658,13 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any): Co
             if (remaining.length > 0) {
               const nodeItems = nodePropertyCompletions(compound, cursorPastChildren, modelJson)
                 .map(item => ({ ...item, scope: 'node' }));
-              return [...remaining, ...nodeItems];
+              return [...alphaItem, ...remaining, ...nodeItems];
             }
           }
         }
       }
+      return [...alphaItem, ...nodePropertyCompletions(compound, cursorPastChildren, modelJson)];
     }
-    return nodePropertyCompletions(compound, cursorPastChildren, modelJson);
   }
 
   // Generic compound → suggest missing kwargs/flags (not positional)
@@ -763,10 +860,9 @@ function buildPositionalOnlySnippet(schemaPath: string): { label: string; detail
 }
 
 /**
- * Build a kwarg snippet template using schema defaults and type detection.
+ * Build a kwarg snippet template from a field's schema using defaults + type.
  */
-function buildKwargSnippet(schemaPath: string, fieldName: string): string | null {
-  const fieldSchema = getPropertySchema(schemaPath + '.' + fieldName);
+function kwargSnippetFor(fieldName: string, fieldSchema: z.ZodType | undefined): string | null {
   if (!fieldSchema) return `${fieldName}=\${1:value}`;
 
   const defaultVal = getSchemaDefault(fieldSchema);
@@ -784,6 +880,107 @@ function buildKwargSnippet(schemaPath: string, fieldName: string): string | null
   if (type === 'string') return `${fieldName}=\${1:value}`;
 
   return null;
+}
+
+/** Build a kwarg snippet for a field at `schemaPath.fieldName`. */
+function buildKwargSnippet(schemaPath: string, fieldName: string): string | null {
+  return kwargSnippetFor(fieldName, getPropertySchema(schemaPath + '.' + fieldName) ?? undefined);
+}
+
+/**
+ * Connection path modifiers (flags + kwargs) from PathGeomSchema's route
+ * variant — offered after a target node on a `a -> b ` line. Skips modifiers
+ * already present on the line.
+ */
+function routePathModifierItems(lineText: string): CompletionItem[] {
+  const routeVariant = getDsl(PathGeomSchema)?.variants?.find(v => v.when === 'route')?.hints;
+  if (!routeVariant) return [];
+  const items: CompletionItem[] = [];
+  for (const flag of routeVariant.flags ?? []) {
+    if (lineText.includes(flag)) continue;
+    items.push({ label: flag, type: 'keyword', detail: 'path flag', scope: 'path' });
+  }
+  for (const kw of routeVariant.kwargs ?? []) {
+    if (lineText.includes(kw + '=')) continue;
+    const item: CompletionItem = { label: kw, type: 'property', detail: 'path option', scope: 'path' };
+    const tmpl = buildKwargSnippet('path', kw);
+    if (tmpl) item.snippetTemplate = tmpl;
+    items.push(item);
+  }
+  return items;
+}
+
+/** Extract the template/shape name a node line instantiates (`id: NAME …`). */
+function extractTemplateName(lineText: string): string | null {
+  const m = lineText.match(/^\s*[\w.]+:\s*([\w.]+)/);
+  return m ? m[1] : null;
+}
+
+/** Value completions for a template-instance prop kwarg (e.g. `arrow from=`). */
+function templatePropValueCompletions(key: string, lineText: string, modelJson?: any): CompletionItem[] {
+  const tmplName = extractTemplateName(lineText);
+  if (!tmplName) return [];
+  const propsSchema = getShapePropsSchema(tmplName);
+  if (!propsSchema) return [];
+  const prop = getAvailableProperties('', propsSchema).find(p => p.name === key);
+  if (!prop) return [];
+  const type = detectSchemaType(prop.schema);
+  if (type === 'enum') {
+    const values = getEnumValues(prop.schema);
+    if (values) return values.map(v => ({ label: v, type: 'value', detail: `${key} value` }));
+  }
+  if (type === 'color') return colorCompletions();
+  if ((type === 'string' || type === 'pointref') && modelJson) return extractNodeIds(modelJson);
+  return [];
+}
+
+// ─── Template-instance prop completion ───────────────────────────
+
+/** Find the template name a node-line compound instantiates, if any. */
+function findTemplateName(compound: AstNode): string | null {
+  for (const c of compound.children) {
+    if (c.schemaPath === 'template' && typeof c.value === 'string') return c.value;
+  }
+  return null;
+}
+
+/** Existing template-prop keys already typed on the node line. */
+function collectTemplatePropKeys(compound: AstNode): Set<string> {
+  const keys = new Set<string>();
+  for (const c of compound.children) {
+    if (
+      (c.dslRole === 'kwarg-key' || c.dslRole === 'flag') &&
+      c.schemaPath.startsWith('tplprops:') &&
+      typeof c.value === 'string'
+    ) {
+      keys.add(c.value);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Completions for a template instance's own props, derived from the shape's
+ * props schema (the same schema the click-popup resolves via tplprops paths).
+ */
+function templatePropCompletions(templateName: string, compound: AstNode): CompletionItem[] {
+  const propsSchema = getShapePropsSchema(templateName);
+  if (!propsSchema) return [];
+  const available = getAvailableProperties('', propsSchema);
+  const existing = collectTemplatePropKeys(compound);
+  return available
+    .filter(p => p.name !== 'id' && p.name !== 'children' && !existing.has(p.name))
+    .map(p => {
+      const item: CompletionItem = {
+        label: p.name,
+        type: 'property',
+        detail: p.description,
+        scope: templateName,
+      };
+      const tmpl = kwargSnippetFor(p.name, p.schema);
+      if (tmpl) item.snippetTemplate = tmpl;
+      return item;
+    });
 }
 
 function nodePropertyCompletions(compound: AstNode, cursorPastChildren: boolean, modelJson?: any): CompletionItem[] {
@@ -852,6 +1049,12 @@ function colorCompletions(): CompletionItem[] {
   const items: CompletionItem[] = names.map(name => ({
     label: name, type: 'value', detail: 'Named color',
   }));
+  // Hex affordance — also keeps the menu non-empty once the user types '#'
+  // (the editor's word-boundary includes '#', so a '#'-prefixed label matches).
+  items.push({
+    label: '#000000', type: 'value', detail: 'Hex color',
+    snippetTemplate: '#${1:000000}',
+  });
   // Add color format keywords from annotated schemas
   for (const colorSchema of [HslColorSchema, RgbColorSchema]) {
     const hints = getDsl(colorSchema);
@@ -939,14 +1142,44 @@ function routeAnimateContext(
   const lineStart = findLineStart(text, pos);
   const lineBeforeCursor = text.slice(lineStart, pos);
 
-  // Keyframe-start: fresh indented line (whitespace-only before cursor).
+  // Whitespace-only line: a fresh keyframe line (offer time/chapter) UNLESS it
+  // is indented deeper than its keyframe's time line — then it's a continuation
+  // change line in a multi-change keyframe, which wants target paths.
   if (/^\s*$/.test(lineBeforeCursor)) {
+    const cursorIndent = lineBeforeCursor.length;
+    const lines = text.split('\n');
+    const curLine = lineOf(pos, text);
+    let underTimeLine = false;
+    for (let ln = curLine - 1; ln >= 0; ln--) {
+      const l = lines[ln];
+      if (l.trim() === '') continue;
+      const ind = l.length - l.trimStart().length;
+      if (ind < cursorIndent) {
+        underTimeLine = /^\s*[+\d]/.test(l); // first shallower line is the time line?
+        break;
+      }
+    }
+    if (underTimeLine) {
+      return animatePathCompletions('', modelJson, (modelJson as any)?.animate);
+    }
     return animateKeyframeStartCompletions();
+  }
+
+  // Per-keyframe / per-change easing: `1.5 easing=` or `1.5 box.x: 5 easing=`.
+  if (/\beasing=\w*$/.test(lineBeforeCursor)) {
+    const vals = getEnumValues(EasingNameSchema) ?? [];
+    return vals.map(v => ({ label: v, type: 'value' as const, detail: 'Easing function' }));
   }
 
   // Path or Value context. Find whether a ':' appears on this line before cursor.
   const colonIdx = lineBeforeCursor.lastIndexOf(':');
   if (colonIdx >= 0) {
+    const afterColon = lineBeforeCursor.slice(colonIdx + 1);
+    // A value has been typed and the user is past it (trailing space) → offer
+    // the per-change easing kwarg.
+    if (/\S\s+$/.test(afterColon)) {
+      return [{ label: 'easing=', type: 'keyword', detail: 'Per-change easing', snippetTemplate: 'easing=${1}' }];
+    }
     // Value context: extract the full path from before the colon.
     const beforeColon = lineBeforeCursor.slice(0, colonIdx);
     // The keyframe path is the last dotted token before the colon.
@@ -960,6 +1193,46 @@ function routeAnimateContext(
   // Path context: extract partial by backward scan.
   const partial = extractPartialPath(lineBeforeCursor);
   return animatePathCompletions(partial, modelJson, (modelJson as any)?.animate);
+}
+
+/**
+ * Find the keyword of the section that encloses an indented cursor line — the
+ * nearest preceding non-blank line at a strictly smaller indent. Returns its
+ * first token (e.g. 'style', 'objects', 'images', or a node id), or null when
+ * the cursor is at document root.
+ */
+function enclosingSectionHeader(text: string, pos: number): string | null {
+  const cursorIndent = indentOf(pos, text);
+  if (cursorIndent === 0) return null;
+  const lines = text.split('\n');
+  const curLine = lineOf(pos, text);
+  for (let ln = curLine - 1; ln >= 0; ln--) {
+    const line = lines[ln];
+    if (line.trim() === '') continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent < cursorIndent) {
+      return line.trim().split(/\s+/)[0] ?? null;
+    }
+  }
+  return null;
+}
+
+/** Property completions inside a `style NAME` block (no geometry, no transform). */
+function styleSectionCompletions(): CompletionItem[] {
+  return NODE_PROPERTY_KEYWORDS
+    .filter(p => p.label !== 'at') // styles are property bags, not positioned
+    .map(p => {
+      const item: CompletionItem = { ...p };
+      const schemaKey = KEYWORD_TO_SCHEMA[p.label];
+      if (schemaKey) {
+        const tmpl = buildSnippetTemplate(schemaKey);
+        if (tmpl) item.snippetTemplate = tmpl;
+      }
+      if (!item.snippetTemplate && COLOR_POSITIONAL_KEYWORDS.has(p.label)) {
+        item.snippetTemplate = `${p.label} \${1:color}`;
+      }
+      return item;
+    });
 }
 
 function findLineStart(text: string, pos: number): number {

@@ -6,7 +6,7 @@
 import type { CompletionItem } from './astCompletions';
 import { AnimConfigSchema, EasingNameSchema } from '../types/animation';
 import { getDsl } from './dslMeta';
-import { getEnumValues, detectSchemaType } from '../types/schemaRegistry';
+import { getEnumValues, detectSchemaType, getUnionLiterals } from '../types/schemaRegistry';
 import { getAllColorNames } from '../types/color';
 import { currentValueAt, resolvePath, enumerateNextSegments } from './modelPathWalker';
 
@@ -149,11 +149,25 @@ export function animateKeyframeStartCompletions(): CompletionItem[] {
       snippetTemplate: '${1:1} ${2:path}: ${3:value}',
     },
     {
+      label: '+',
+      type: 'keyword',
+      detail: 'Relative keyframe (+N after previous)',
+      snippetTemplate: '+${1:1} ${2:path}: ${3:value}',
+    },
+    {
       label: 'chapter',
       type: 'keyword',
       detail: 'Named chapter marker',
       snippetTemplate: 'chapter "${1:name}" at ${2:0}',
     },
+  ];
+}
+
+/** Block-level keyframe modifiers offered alongside the target path (after the time). */
+function keyframeModifierItems(): CompletionItem[] {
+  return [
+    { label: 'easing=', type: 'keyword', detail: 'Block easing', snippetTemplate: 'easing=${1}' },
+    { label: 'delay=', type: 'keyword', detail: 'Delay before keyframe', snippetTemplate: 'delay=${1:0.5}' },
   ];
 }
 
@@ -223,13 +237,15 @@ export function animatePathCompletions(
   const committed = segments.slice(0, -1);
   const prefix = committed.join('.');
 
-  // Empty committed → we're at the root. Return top-level scene node ids.
+  // Empty committed → we're at the root: target node ids, plus the block-level
+  // keyframe modifiers (easing=/delay=) which are also valid right after the time.
   if (committed.length === 0) {
     const ids = sceneNodeIds(modelJson);
-    return ids.map(id => {
+    const idItems = ids.map(id => {
       const tier = tierCandidate(id, '', modelJson, animated);
       return makeCandidateItem(id, tier, 'drill');
     });
+    return [...idItems, ...keyframeModifierItems()];
   }
 
   // Resolve the walk through the committed segments.
@@ -338,6 +354,16 @@ export function animateValueCompletions(
     for (const v of ['true', 'false']) {
       if (items[0]?.label === v) continue;
       items.push({ label: v, type: 'value' });
+    }
+  } else if (type === 'pointref' || type === 'string') {
+    // Union/reference value (e.g. cam.camera.look) → union literals + node ids.
+    for (const lit of getUnionLiterals(loc.schema)) {
+      if (items[0]?.label === lit) continue;
+      items.push({ label: lit, type: 'value', detail: 'option' });
+    }
+    for (const id of sceneNodeIds(modelJson)) {
+      if (items[0]?.label === id) continue;
+      items.push({ label: id, type: 'value', detail: 'Node ID' });
     }
   }
   // number → only current-value item (no free list).

@@ -13,7 +13,7 @@ import { snippetKey, activateSnippet } from './snippetPlugin';
 
 export const completionKey = new PluginKey<CompletionState>('completion');
 
-interface CompletionState {
+export interface CompletionState {
   active: boolean;
   items: CompletionItem[];
   selectedIndex: number;
@@ -64,11 +64,16 @@ function getCompletions(state: EditorState): CompletionState {
     from = selFrom;
     to = selTo;
   } else {
-    // Find the word being typed (for replacement range).
-    // Only walk back through alpha/underscore/hyphen/@/# — NOT digits.
+    // Find the word being typed (for replacement range). Walk back through
+    // identifier chars INCLUDING digits (so ids like `a1` are matched), but if
+    // the resulting token starts with a digit it's a number/dimension (e.g.
+    // `100x60`), not a word — treat it as no word so we don't eat it.
     let wordStart = textPos;
-    while (wordStart > lineStart && /[a-zA-Z_\-#@]/.test(text[wordStart - 1])) {
+    while (wordStart > lineStart && /[a-zA-Z0-9_\-#@]/.test(text[wordStart - 1])) {
       wordStart--;
+    }
+    if (wordStart < textPos && /[0-9]/.test(text[wordStart])) {
+      wordStart = textPos; // number-leading token → not a completable word
     }
     typedWord = text.slice(wordStart, textPos).toLowerCase();
     from = wordStart + PM_OFFSET;
@@ -164,15 +169,20 @@ class CompletionMenuView {
   }
 }
 
-function applyCompletion(view: EditorView, cState: CompletionState, item: CompletionItem) {
-  // Drill targets: insert label + '.' and re-trigger completions at the new position.
-  // The plugin's apply method re-fires getCompletions when docChanged && active.
+/**
+ * Apply a completion to an EditorState — the pure, view-independent core.
+ * Used by both the live view handler and the headless EditorSession so the
+ * accept behaviour cannot drift between them.
+ */
+export function acceptCompletion(
+  state: EditorState,
+  cState: CompletionState,
+  item: CompletionItem,
+): EditorState {
+  // Drill targets: insert label + '.' and leave the menu active so the
+  // plugin's docChanged apply re-fires getCompletions at the new position.
   if (item.retrigger) {
-    const tr = view.state.tr.insertText(item.label + '.', cState.from, cState.to);
-    // Don't set meta to EMPTY — leave menu active so docChanged re-triggers.
-    view.dispatch(tr);
-    view.focus();
-    return;
+    return state.apply(state.tr.insertText(item.label + '.', cState.from, cState.to));
   }
 
   // Strip snippet placeholders for the inserted text: ${1:W} → W
@@ -180,17 +190,21 @@ function applyCompletion(view: EditorView, cState: CompletionState, item: Comple
     ? item.snippetTemplate.replace(/\$\{\d+:([^}]+)\}/g, '$1')
     : item.label;
 
-  const tr = view.state.tr.insertText(insertText, cState.from, cState.to);
-  tr.setMeta(completionKey, EMPTY);
-  view.dispatch(tr);
+  let next = state.apply(
+    state.tr.insertText(insertText, cState.from, cState.to).setMeta(completionKey, EMPTY),
+  );
 
-  // If the item has a snippet template with placeholders, activate snippet mode
+  // If the item has a snippet template with placeholders, activate snippet mode.
   if (item.snippetTemplate && item.snippetTemplate.includes('${')) {
     const insertFrom = cState.from - PM_OFFSET; // text offset
-    const newState = activateSnippet(view.state, insertFrom, item.snippetTemplate);
-    view.updateState(newState);
+    next = activateSnippet(next, insertFrom, item.snippetTemplate);
   }
 
+  return next;
+}
+
+function applyCompletion(view: EditorView, cState: CompletionState, item: CompletionItem) {
+  view.updateState(acceptCompletion(view.state, cState, item));
   view.focus();
 }
 

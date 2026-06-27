@@ -12,6 +12,10 @@ export interface PositionalHint {
 
 export interface DslHints {
   keyword?: string;
+  // When true, the keyword is omitted on emit if no positional carries a
+  // value (e.g. `transform`'s `at` is dropped for extras-only transforms like
+  // `rotation=45`). The walker accepts the keyword-less form symmetrically.
+  keywordOmittable?: boolean;
   positional?: PositionalHint[];
   kwargs?: string[];
   flags?: string[];
