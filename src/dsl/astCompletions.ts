@@ -835,8 +835,8 @@ function buildPositionalOnlySnippet(schemaPath: string): { label: string; detail
       const placeholders = names.map(n => `\${${tabIndex++}:${n}}`);
 
       if (format === 'dimension') {
-        groups.push(placeholders.join('x'));
-        labelParts.push(names.join('x'));
+        groups.push(placeholders.join('x'));         // inserted text uses ASCII 'x' (the parser splits on it)
+        labelParts.push(names.join('×'));       // menu label reads "w×h"
       } else if (format === 'spaced') {
         groups.push(placeholders.join(' '));
         labelParts.push(names.join(' '));

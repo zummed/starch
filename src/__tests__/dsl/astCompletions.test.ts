@@ -183,10 +183,12 @@ describe('completionsAt', () => {
       const l = labels(items);
       expect(l).not.toContain('fill');  // not node-level
       expect(l).not.toContain('w');     // not positional field names
-      // Should offer dimension snippet
+      // Should offer the dimension snippet: label reads "w×h", but the
+      // inserted template uses ASCII 'x' so the parser can split on it.
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('x');
+        expect(items[0].label).toBe('w×h');
+        expect(items[0].snippetTemplate).toBe('${1:w}x${2:h}');
       }
     });
 
