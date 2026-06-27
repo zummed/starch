@@ -206,7 +206,7 @@ function buildTopLevelKeywords(): CompletionItem[] {
     name: 'name "${1:title}"',
     description: 'description "${1:text}"',
     background: 'background ${1:color}',
-    viewport: 'viewport (${1:W},${2:H})',
+    viewport: 'viewport ${1:w}x${2:h}',
     images: 'images',
     style: 'style ${1:name}',
     animate: 'animate ${1:3}',
@@ -790,18 +790,17 @@ function buildSnippetTemplate(schemaPath: string): string | null {
       const name = pos.keys[0];
       groups.push(`"\${${tabIndex++}:${name}}"`);
     } else {
-      const placeholders = pos.keys.map(k => {
-        const name = k.length <= 2 ? k.toUpperCase() : k;
-        return `\${${tabIndex++}:${name}}`;
-      });
+      // Lowercase field names as tab-stops so the hint reads meaningfully
+      // (e.g. "rect ${w}x${h}", "at ${x},${y}").
+      const placeholders = pos.keys.map(k => `\${${tabIndex++}:${k}}`);
 
       if (format === 'dimension') {
-        groups.push(`(${placeholders.join(',')})`);
+        groups.push(placeholders.join('x'));
       } else if (format === 'spaced') {
         groups.push(placeholders.join(' '));
       } else if (format === 'joined') {
         const sep = pos.separator ?? ',';
-        groups.push(`(${placeholders.join(sep)})`);
+        groups.push(placeholders.join(sep));
       } else {
         groups.push(placeholders.join(' '));
       }
@@ -832,19 +831,19 @@ function buildPositionalOnlySnippet(schemaPath: string): { label: string; detail
       groups.push(`"\${${tabIndex++}:${name}}"`);
       labelParts.push(`"${name}"`);
     } else {
-      const names = pos.keys.map(k => k.length <= 2 ? k.toUpperCase() : k);
+      const names = pos.keys;
       const placeholders = names.map(n => `\${${tabIndex++}:${n}}`);
 
       if (format === 'dimension') {
-        groups.push(`(${placeholders.join(',')})`);
-        labelParts.push(`(${names.join(',')})`);
+        groups.push(placeholders.join('x'));
+        labelParts.push(names.join('x'));
       } else if (format === 'spaced') {
         groups.push(placeholders.join(' '));
         labelParts.push(names.join(' '));
       } else if (format === 'joined') {
         const sep = pos.separator ?? ',';
-        groups.push(`(${placeholders.join(sep)})`);
-        labelParts.push(`(${names.join(sep)})`);
+        groups.push(placeholders.join(sep));
+        labelParts.push(names.join(sep));
       } else {
         groups.push(placeholders.join(' '));
         labelParts.push(names.join(' '));

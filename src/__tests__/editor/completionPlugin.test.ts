@@ -63,11 +63,11 @@ function applyResult(text: string, from: number, to: number, label: string): str
 
 describe('completion word boundary', () => {
   it('identifies a partial keyword at end of line', () => {
-    expect(wordBoundary('box: rect (100,60) fi', 21).word).toBe('fi');
+    expect(wordBoundary('box: rect 100x60 fi', 19).word).toBe('fi');
   });
 
-  it('does NOT eat a dimension value like (100,60)', () => {
-    expect(wordBoundary('box: rect (100,60)', 18).word).toBe('');
+  it('does NOT eat a dimension value like 100x60', () => {
+    expect(wordBoundary('box: rect 100x60', 16).word).toBe('');
   });
 
   it('does NOT eat a number', () => {
@@ -83,7 +83,7 @@ describe('completion word boundary', () => {
   });
 
   it('empty word when cursor is after a space', () => {
-    expect(wordBoundary('box: rect (100,60) ', 19).word).toBe('');
+    expect(wordBoundary('box: rect 100x60 ', 17).word).toBe('');
   });
 
   it('matches @style prefix', () => {
@@ -102,23 +102,23 @@ describe('completion word boundary', () => {
 
 describe('completion application', () => {
   it('typing "fill " then completing a color INSERTS after the space', () => {
-    const text = 'box: rect (100,60) fill ';
-    const cursor = 24; // after the space
+    const text = 'box: rect 100x60 fill ';
+    const cursor = 22; // after the space
     const { from, to, word } = wordBoundary(text, cursor);
     expect(word).toBe(''); // no word — just a space
     expect(from).toBe(to); // zero-width range
 
     const result = applyResult(text, from, to, 'red');
-    expect(result).toBe('box: rect (100,60) fill red');
+    expect(result).toBe('box: rect 100x60 fill red');
   });
 
   it('typing "fi" then completing "fill" replaces only "fi"', () => {
-    const text = 'box: rect (100,60) fi';
-    const cursor = 21;
+    const text = 'box: rect 100x60 fi';
+    const cursor = 19;
     const { from, to } = wordBoundary(text, cursor);
 
     const result = applyResult(text, from, to, 'fill');
-    expect(result).toBe('box: rect (100,60) fill');
+    expect(result).toBe('box: rect 100x60 fill');
   });
 
   it('typing "re" then completing "rect" replaces only "re"', () => {
@@ -151,24 +151,24 @@ describe('completion application', () => {
 
   it('does NOT eat "fill" when completing a color after "fill "', () => {
     // This is the critical bug: "fill " + select color should keep "fill"
-    const text = 'foo: rect (100,100) fill ';
-    const cursor = 25; // after space
+    const text = 'foo: rect 100x100 fill ';
+    const cursor = 23; // after space
     const { from, to, word } = wordBoundary(text, cursor);
     expect(word).toBe('');
 
     const result = applyResult(text, from, to, 'black');
-    expect(result).toBe('foo: rect (100,100) fill black');
+    expect(result).toBe('foo: rect 100x100 fill black');
   });
 
   it('cursor after "fill" (no space) replaces the keyword', () => {
     // If you press Ctrl+Space while cursor is on "fill" itself,
     // the whole word gets replaced. This is expected for keyword replacement.
-    const text = 'foo: rect (100,100) fill';
-    const cursor = 24;
+    const text = 'foo: rect 100x100 fill';
+    const cursor = 22;
     const { from, to, word } = wordBoundary(text, cursor);
     expect(word).toBe('fill');
 
     const result = applyResult(text, from, to, 'fill');
-    expect(result).toBe('foo: rect (100,100) fill'); // no change
+    expect(result).toBe('foo: rect 100x100 fill'); // no change
   });
 });

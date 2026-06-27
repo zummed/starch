@@ -5,7 +5,7 @@ Captured from user testing sessions. Items marked with status.
 ## DSL Syntax
 
 - [x] Compact human-readable syntax as alternative to JSON5
-- [x] `id: geometry (w,h) props at (x,y)` line format
+- [x] `id: geometry WxH props at x,y` line format
 - [x] Arrow syntax for connections: `a -> b`, `a -> (250,100) -> b`
 - [x] Indentation-based children
 - [x] Flat references: `card.badge.fill: 120 70 45`
@@ -48,7 +48,7 @@ Captured from user testing sessions. Items marked with status.
 
 ## Editor — Click-to-Popup (DSL mode)
 
-- [x] Clicking a dimension pair (140,80) opens number slider for w or h
+- [x] Clicking dimensions (140x80) opens number slider for w or h
 - [x] Clicking individual HSL numbers (fill 210 70 45) opens number slider for h, s, or l
 - [x] Clicking `key=value` values (radius=8) opens appropriate popup (number slider, enum, etc.)
 - [x] Clicking `fill` keyword opens compound color picker (HSL)

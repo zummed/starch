@@ -311,9 +311,10 @@ export function parseCompoundText(text: string, schemaPath: string): Record<stri
         }
         if (hint.keys.length === 1) fields[hint.keys[0]] = colorTokens.join(' ');
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
-        // Parenthesised pair, e.g. "(140,80)" → w=140, h=80.
+        // Keyword-led pair: "140x80" (size, split on x) or "200,150" (position).
         const token = positionalTokens[tokenIdx++];
-        const parts = token.replace(/^\(|\)$/g, '').split(',');
+        const sep = hint.format === 'dimension' ? 'x' : (hint.separator ?? ',');
+        const parts = token.split(sep);
         for (let k = 0; k < hint.keys.length && k < parts.length; k++) fields[hint.keys[k]] = parts[k];
       } else {
         for (const key of hint.keys) {
@@ -342,7 +343,8 @@ export function rebuildCompoundText(keyword: string, fields: Record<string, stri
       } else if (hint.format === 'dimension' || hint.format === 'joined') {
         const vals = hint.keys.map(k => fields[k]).filter(Boolean);
         if (vals.length === hint.keys.length) {
-          parts.push(`(${vals.join(',')})`);
+          const sep = hint.format === 'dimension' ? 'x' : (hint.separator ?? ',');
+          parts.push(vals.join(sep));
           hint.keys.forEach(k => emittedKeys.add(k));
         }
       } else {

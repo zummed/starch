@@ -27,38 +27,27 @@ export function executePositional(
     ctx.next();
   }
 
-  // dimension: a parenthesised pair "(W,H)" — sizes share the universal pair
-  // notation with positions and points.
+  // dimension: "WxH" — a size as a single identifier token (e.g. "140x80").
+  // Keyword-led and never in a list/kwarg/after->, so it stays paren-free and
+  // keeps the domain "by" glyph. Ellipse uses transform:'double' (diameter).
   if (format === 'dimension') {
-    if (!ctx.is('parenOpen')) return null;
-    ctx.next(); // consume (
-    if (!ctx.is('number')) return null;
-    const aTok = ctx.next()!;
-    if (ctx.is('comma')) ctx.next();
-    if (!ctx.is('number')) return null;
-    const bTok = ctx.next()!;
-    if (ctx.is('parenClose')) ctx.next();
+    if (!ctx.is('identifier')) return null;
+    const tok = ctx.peek()!;
+    const m = /^(-?\d+(?:\.\d+)?)x(-?\d+(?:\.\d+)?)$/.exec(tok.value);
+    if (!m) return null;
+    ctx.next();
     const transform = (v: number) =>
       hint.transform === 'double' ? v / 2 : v;
     const [k1, k2] = hint.keys;
-    result[k1] = transform(parseFloat(aTok.value));
+    result[k1] = transform(parseFloat(m[1]));
+    if (k2) result[k2] = transform(parseFloat(m[2]));
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k1}`,
-      from: aTok.offset,
-      to: aTok.offset + aTok.value.length,
+      from: tok.offset,
+      to: tok.offset + tok.value.length,
       value: result[k1],
       dslRole: 'value',
     });
-    if (k2) {
-      result[k2] = transform(parseFloat(bTok.value));
-      ctx.emitLeaf({
-        schemaPath: `${schemaPath}.${k2}`,
-        from: bTok.offset,
-        to: bTok.offset + bTok.value.length,
-        value: result[k2],
-        dslRole: 'value',
-      });
-    }
     return result;
   }
 
@@ -104,17 +93,17 @@ export function executePositional(
     return result;
   }
 
-  // joined: a parenthesised pair "(X,Y)" — the same pair notation as
-  // dimensions and points. When no paren follows (e.g. `at rotation=45`),
-  // returns empty so the caller's kwarg loop handles the remaining keys.
+  // joined: a bare comma pair "X,Y" — keyword-led (e.g. `at 200,150`), so it
+  // stays paren-free. When no number follows (e.g. `at rotation=45`), returns
+  // the partial result so the caller's kwarg loop handles the remaining keys.
   if (format === 'joined') {
-    if (!ctx.is('parenOpen')) return result;
-    ctx.next(); // consume (
+    const sep = hint.separator ?? ',';
     for (let i = 0; i < hint.keys.length; i++) {
       if (i > 0) {
-        if (ctx.is('comma')) ctx.next();
+        if (sep === ',' && !ctx.is('comma')) return result;
+        ctx.next();
       }
-      if (!ctx.is('number')) break;
+      if (!ctx.is('number')) return result;
       const tok = ctx.next()!;
       const k = hint.keys[i];
       result[k] = parseFloat(tok.value);
@@ -126,7 +115,6 @@ export function executePositional(
         dslRole: 'value',
       });
     }
-    if (ctx.is('parenClose')) ctx.next();
     return result;
   }
 

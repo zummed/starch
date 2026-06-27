@@ -12,7 +12,7 @@ describe('astEmitter - basic rendering', () => {
   it('renders a simple rect node', () => {
     const scene = { objects: [{ id: 'box', rect: { w: 140, h: 80 } }] };
     const { text } = buildAstFromModel(scene, hints);
-    expect(text).toContain('box: rect (140,80)');
+    expect(text).toContain('box: rect 140x80');
   });
 
   it('produces AST with correct tree structure', () => {
@@ -58,7 +58,7 @@ describe('astEmitter - basic rendering', () => {
   it('renders transform with at keyword', () => {
     const scene = { objects: [{ id: 'box', rect: { w: 100, h: 100 }, transform: { x: 50, y: 75 } }] };
     const { text } = buildAstFromModel(scene, hints);
-    expect(text).toContain('at (50,75)');
+    expect(text).toContain('at 50,75');
   });
 
   it('renders transform fallback to kwargs when only x present', () => {
@@ -108,7 +108,7 @@ describe('astEmitter - metadata', () => {
 
   it('renders viewport', () => {
     const { text } = buildAstFromModel({ viewport: { width: 600, height: 400 }, objects: [] }, hints);
-    expect(text).toContain('viewport (600,400)');
+    expect(text).toContain('viewport 600x400');
   });
 
   it('renders all metadata together', () => {
@@ -122,7 +122,7 @@ describe('astEmitter - metadata', () => {
     expect(text).toContain('name "My Diagram"');
     expect(text).toContain('description "A test"');
     expect(text).toContain('background "#1a1a2e"');
-    expect(text).toContain('viewport (600,400)');
+    expect(text).toContain('viewport 600x400');
   });
 });
 
@@ -181,21 +181,21 @@ describe('astEmitter - geometry types', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'box', rect: { w: 160, h: 100 } }],
     }, hints);
-    expect(text).toContain('box: rect (160,100)');
+    expect(text).toContain('box: rect 160x100');
   });
 
   it('renders rect with radius', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'box', rect: { w: 160, h: 100, radius: 8 } }],
     }, hints);
-    expect(text).toContain('box: rect (160,100) radius=8');
+    expect(text).toContain('box: rect 160x100 radius=8');
   });
 
   it('renders ellipse', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'dot', ellipse: { rx: 4, ry: 4 } }],
     }, hints);
-    expect(text).toContain('dot: ellipse (8,8)');
+    expect(text).toContain('dot: ellipse 8x8');
   });
 
   it('renders text with content and properties', () => {
@@ -209,14 +209,14 @@ describe('astEmitter - geometry types', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'pic', image: { src: 'photo.png', w: 200, h: 150 } }],
     }, hints);
-    expect(text).toContain('pic: image "photo.png" (200,150)');
+    expect(text).toContain('pic: image "photo.png" 200x150');
   });
 
   it('renders image with fit', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'pic', image: { src: 'photo.png', w: 200, h: 150, fit: 'cover' } }],
     }, hints);
-    expect(text).toContain('pic: image "photo.png" (200,150) fit=cover');
+    expect(text).toContain('pic: image "photo.png" 200x150 fit=cover');
   });
 
   it('renders camera', () => {
@@ -297,14 +297,14 @@ describe('astEmitter - properties', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'box', rect: { w: 10, h: 10 }, transform: { x: 200, y: 150 } }],
     }, hints);
-    expect(text).toContain('at (200,150)');
+    expect(text).toContain('at 200,150');
   });
 
   it('renders at with rotation', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'box', rect: { w: 10, h: 10 }, transform: { x: 200, y: 150, rotation: 45 } }],
     }, hints);
-    expect(text).toContain('at (200,150) rotation=45');
+    expect(text).toContain('at 200,150 rotation=45');
   });
 
   it('renders style reference', () => {
@@ -367,7 +367,7 @@ describe('astEmitter - properties', () => {
     const { text } = buildAstFromModel({
       objects: [{ id: 'box', rect: { w: 10, h: 10 }, transform: { x: 100, y: 200, anchor: 'N' } }],
     }, hints);
-    expect(text).toContain('at (100,200) anchor=N');
+    expect(text).toContain('at 100,200 anchor=N');
   });
 
   it('renders transform with only extras (no x/y)', () => {
@@ -395,9 +395,9 @@ describe('astEmitter - children', () => {
         ],
       }],
     }, hints);
-    expect(text).toContain('card: rect (160,100)');
+    expect(text).toContain('card: rect 160x100');
     expect(text).toContain('  title: text "Hello" size=14');
-    expect(text).toContain('  badge: ellipse (8,8)');
+    expect(text).toContain('  badge: ellipse 8x8');
   });
 
   it('renders nested children', () => {
@@ -412,9 +412,9 @@ describe('astEmitter - children', () => {
         }],
       }],
     }, hints);
-    expect(text).toContain('outer: rect (200,200)');
-    expect(text).toContain('  inner: rect (100,100)');
-    expect(text).toContain('    deep: ellipse (10,10)');
+    expect(text).toContain('outer: rect 200x200');
+    expect(text).toContain('  inner: rect 100x100');
+    expect(text).toContain('    deep: ellipse 10x10');
   });
 });
 
@@ -502,7 +502,7 @@ describe('astEmitter - inline vs block rendering', () => {
     }, hints);
     const lines = text.trim().split('\n');
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('box: rect (10,10) fill white');
+    expect(lines[0]).toContain('box: rect 10x10 fill white');
   });
 
   it('renders block when props > 6', () => {
@@ -543,7 +543,7 @@ describe('astEmitter - inline vs block rendering', () => {
     }, hints, { box: 'block' });
     const lines = text.trim().split('\n');
     expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toContain('box: rect (10,10)');
+    expect(lines[0]).toContain('box: rect 10x10');
     expect(lines[1]).toContain('  fill white');
   });
 
@@ -736,10 +736,10 @@ describe('astEmitter - complete scene', () => {
       ],
     }, hints);
     expect(text).toContain('name "Test"');
-    expect(text).toContain('viewport (800,600)');
+    expect(text).toContain('viewport 800x600');
     expect(text).toContain('background "#000"');
     expect(text).toContain('style primary');
-    expect(text).toContain('box: rect (160,100)');
+    expect(text).toContain('box: rect 160x100');
     expect(text).toContain('label: text "Hi" size=12');
   });
 });

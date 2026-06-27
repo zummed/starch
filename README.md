@@ -24,9 +24,9 @@ Starch is a text-driven diagram and animation tool. Describe shapes, connections
 <script src="https://unpkg.com/@bitsnbobs/starch/dist/starch-embed.iife.js"></script>
 
 <starch-diagram autoplay>
-server: rect (140,46) radius=8 fill #34d399 at (200,100)
+server: rect 140x46 radius=8 fill #34d399 at 200,100
   text "Server" size=14
-client: rect (140,46) radius=8 fill #22d3ee at (200,250)
+client: rect 140x46 radius=8 fill #22d3ee at 200,250
   text "Client" size=14
 req: arrow client server stroke #fbbf24 label "request"
   draw 0
@@ -48,9 +48,9 @@ import { StarchDiagram } from '@bitsnbobs/starch';
 
 const diagram = new StarchDiagram(document.getElementById('my-diagram'), {
   dsl: `
-    server: rect (140,46) fill steelblue at (200,100)
+    server: rect 140x46 fill steelblue at 200,100
       text "Server"
-    client: rect (140,46) fill dodgerblue at (200,250)
+    client: rect 140x46 fill dodgerblue at 200,250
       text "Client"
   `,
   autoplay: true,
@@ -77,9 +77,9 @@ Diagrams are plain text using an indentation-based syntax. Both `colour` and `co
 ### Shapes
 
 ```
-server: rect (140,46) radius=8 fill steelblue at (200,100)
+server: rect 140x46 radius=8 fill steelblue at 200,100
   text "Server" size=14 bold
-db: ellipse (50,50) fill darkorange at (400,200)
+db: ellipse 50x50 fill darkorange at 400,200
 req: arrow server db stroke gold label "query"
   draw 0
 ```
@@ -93,10 +93,10 @@ req: arrow server db stroke gold label "query"
 Any rect becomes a flex container when children nest under it:
 
 ```
-container: rect (300,200) fill #2a2d35 radius=12 at (300,200)
+container: rect 300x200 fill #2a2d35 radius=12 at 300,200
   layout direction=row gap=12 padding=16
-  child1: rect (80,40) fill #22d3ee
-  child2: rect (80,40) fill #34d399
+  child1: rect 80x40 fill #22d3ee
+  child2: rect 80x40 fill #34d399
 ```
 
 Properties: `direction`, `gap`, `padding`, `justify`, `align`, `wrap`

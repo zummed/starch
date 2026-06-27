@@ -10,7 +10,7 @@ function ctx(text: string): WalkContext {
 
 describe('executePositional - basic formats', () => {
   it('format dimension parses WxH', () => {
-    const c = ctx('(100,200)');
+    const c = ctx('100x200');
     const hint: PositionalHint = { keys: ['w', 'h'], format: 'dimension' };
     const result = executePositional(c, hint, '');
     expect(result).toEqual({ w: 100, h: 200 });
@@ -23,8 +23,8 @@ describe('executePositional - basic formats', () => {
     expect(result).toEqual({ content: 'hello world' });
   });
 
-  it('format joined parses a parenthesised pair (X,Y)', () => {
-    const c = ctx('(50,100)');
+  it('format joined with separator parses X,Y', () => {
+    const c = ctx('50,100');
     const hint: PositionalHint = { keys: ['x', 'y'], format: 'joined', separator: ',' };
     const result = executePositional(c, hint, '');
     expect(result).toEqual({ x: 50, y: 100 });
@@ -52,7 +52,7 @@ describe('executePositional - basic formats', () => {
   });
 
   it('transform double halves dimensions (ellipse)', () => {
-    const c = ctx('(100,60)');
+    const c = ctx('100x60');
     const hint: PositionalHint = {
       keys: ['rx', 'ry'], format: 'dimension', transform: 'double',
     };
@@ -61,7 +61,7 @@ describe('executePositional - basic formats', () => {
   });
 
   it('emits AST leaves with schemaPath', () => {
-    const c = ctx('(100,60)');
+    const c = ctx('100x60');
     const hint: PositionalHint = { keys: ['w', 'h'], format: 'dimension' };
     executePositional(c, hint, 'rect');
     const leaves = c.astLeaves();
@@ -217,19 +217,19 @@ import { executeColor } from '../../dsl/hintExecutors';
 
 describe('executeSchema - schema dispatch', () => {
   it('parses rect geometry', () => {
-    const c = ctx('rect (100,200)');
+    const c = ctx('rect 100x200');
     const result = executeSchema(c, RectGeomSchema, 'rect');
     expect(result).toEqual({ w: 100, h: 200 });
   });
 
   it('parses rect with radius kwarg', () => {
-    const c = ctx('rect (100,200) radius=8');
+    const c = ctx('rect 100x200 radius=8');
     const result = executeSchema(c, RectGeomSchema, 'rect');
     expect(result).toEqual({ w: 100, h: 200, radius: 8 });
   });
 
   it('parses transform with positional + kwargs', () => {
-    const c = ctx('at (200,150) rotation=45');
+    const c = ctx('at 200,150 rotation=45');
     const result = executeSchema(c, TransformSchema, 'transform');
     expect(result).toEqual({ x: 200, y: 150, rotation: 45 });
   });
@@ -241,19 +241,19 @@ describe('executeSchema - schema dispatch', () => {
   });
 
   it('parses ellipse with dimension transform (double)', () => {
-    const c = ctx('ellipse (100,60)');
+    const c = ctx('ellipse 100x60');
     const result = executeSchema(c, EllipseGeomSchema, 'ellipse');
     expect(result).toEqual({ rx: 50, ry: 30 });
   });
 
   it('returns null when keyword does not match', () => {
-    const c = ctx('notrect (100,200)');
+    const c = ctx('notrect 100x200');
     const result = executeSchema(c, RectGeomSchema, 'rect');
     expect(result).toBeNull();
   });
 
   it('emits keyword AST leaf', () => {
-    const c = ctx('rect (100,200)');
+    const c = ctx('rect 100x200');
     executeSchema(c, RectGeomSchema, 'rect');
     const leaves = c.astLeaves();
     const keywordLeaf = leaves.find(l => l.dslRole === 'keyword');

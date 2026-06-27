@@ -76,7 +76,7 @@ describe('completionsAt', () => {
       // Regression: "A ctrl+space at the top level offers animate, but if I
       // start typing animate it switches to anchor." The partial word "a" on
       // an unindented fresh line must still be classified as top-level.
-      const text = 'box: rect (100,60) fill red\na';
+      const text = 'box: rect 100x60 fill red\na';
       const fl = filteredLabels(text, text.length);
       expect(fl).toContain('animate');
       expect(fl).not.toContain('anchor');
@@ -87,7 +87,7 @@ describe('completionsAt', () => {
       // completionPlugin.ts passes lineText WITH the partial word included.
       // The context detection must strip it before classifying fresh-line vs
       // continuation.
-      const text = 'box: rect (100,60) fill red\na';
+      const text = 'box: rect 100x60 fill red\na';
       const pos = text.length;
       const lineStart = text.lastIndexOf('\n') + 1;
       const lineText = text.slice(lineStart, pos); // "a" — word included
@@ -137,8 +137,8 @@ describe('completionsAt', () => {
     it('geometry keywords have snippet templates', () => {
       const items = completionsAt(null, 0, 'box: ');
       const s = snippets(items);
-      expect(s['rect']).toContain('(${1:W},${2:H})');
-      expect(s['ellipse']).toContain('(${1:RX},${2:RY})');
+      expect(s['rect']).toContain('${1:w}x${2:h}');
+      expect(s['ellipse']).toContain('${1:rx}x${2:ry}');
       expect(s['text']).toContain('"${1:content}"');
     });
   });
@@ -147,7 +147,7 @@ describe('completionsAt', () => {
 
   describe('color completions', () => {
     it('returns colors after "fill "', () => {
-      const l = labels(completionsAt(null, 0, 'box: rect (100,100) fill '));
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 fill '));
       expect(l).toContain('red');
       expect(l).toContain('blue');
       expect(l).toContain('cornflowerblue');
@@ -156,13 +156,13 @@ describe('completionsAt', () => {
     });
 
     it('returns colors after "stroke "', () => {
-      const l = labels(completionsAt(null, 0, 'box: rect (100,100) stroke '));
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 stroke '));
       expect(l).toContain('red');
       expect(l).toContain('hsl');
     });
 
     it('filters colors by prefix — "steel" matches steelblue', () => {
-      const fl = filteredLabels('box: rect (100,100) fill steel\n', 28);
+      const fl = filteredLabels('box: rect 100x100 fill steel\n', 28);
       expect(fl).toContain('steelblue');
       expect(fl).not.toContain('red');
     });
@@ -170,34 +170,34 @@ describe('completionsAt', () => {
     it('hsl/rgb have snippet templates in color list', () => {
       const items = completionsAt(null, 0, 'fill ');
       const s = snippets(items);
-      expect(s['hsl']).toContain('${1:H} ${2:S} ${3:L}');
-      expect(s['rgb']).toContain('${1:R} ${2:G} ${3:B}');
+      expect(s['hsl']).toContain('${1:h} ${2:s} ${3:l}');
+      expect(s['rgb']).toContain('${1:r} ${2:g} ${3:b}');
     });
   });
 
   // ─── Positional Keywords (no named completions) ───────────────
 
   describe('positional keyword context', () => {
-    it('"rect " offers a (W,H) snippet, not property names', () => {
+    it('"rect " offers WxH snippet, not property names', () => {
       const items = completionsAt(null, 0, 'box: rect ');
       const l = labels(items);
       expect(l).not.toContain('fill');  // not node-level
       expect(l).not.toContain('w');     // not positional field names
-      // Should offer the dimension snippet, now a parenthesised pair
+      // Should offer dimension snippet
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('(${1:W},${2:H})');
+        expect(items[0].snippetTemplate).toContain('x');
       }
     });
 
     it('"at " offers X,Y snippet, not node properties', () => {
-      const items = completionsAt(null, 0, 'box: rect (100,100) at ');
+      const items = completionsAt(null, 0, 'box: rect 100x100 at ');
       const l = labels(items);
       expect(l).not.toContain('fill');
       expect(l).not.toContain('x');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:X}');
+        expect(items[0].snippetTemplate).toContain('${1:x}');
       }
     });
 
@@ -205,7 +205,7 @@ describe('completionsAt', () => {
       const items = completionsAt(null, 0, 'fill hsl ');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:H}');
+        expect(items[0].snippetTemplate).toContain('${1:h}');
       }
     });
 
@@ -213,7 +213,7 @@ describe('completionsAt', () => {
       const items = completionsAt(null, 0, 'fill rgb ');
       expect(items.length).toBeLessThanOrEqual(1);
       if (items.length > 0) {
-        expect(items[0].snippetTemplate).toContain('${1:R}');
+        expect(items[0].snippetTemplate).toContain('${1:r}');
       }
     });
 
@@ -242,7 +242,7 @@ describe('completionsAt', () => {
 
     it('returns style names after "@"', () => {
       const model = { styles: { primary: { fill: 'blue' }, dark: { fill: 'black' } } };
-      const l = labels(completionsAt(null, 0, 'box: rect (100,100) @', model));
+      const l = labels(completionsAt(null, 0, 'box: rect 100x100 @', model));
       // Labels keep the leading '@' so the editor's prefix filter (which
       // includes '@' in the typed word) matches them.
       expect(l).toContain('@primary');
@@ -261,36 +261,36 @@ describe('completionsAt', () => {
 
   describe('two-tier scoped completions', () => {
     it('after "stroke red ": width in stroke scope, properties in node scope', () => {
-      const { ast: _ctx0 } = walkDocument('box: rect (100,100) stroke red ');
-      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect (100,100) stroke red '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) stroke red '.length, 'box: rect (100,100) stroke red ');
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
+      const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
       expect(scoped(items, 'stroke')).toContain('width');
       expect(scoped(items, 'node')).toContain('fill');
       expect(scoped(items, 'node')).toContain('at');
     });
 
-    it('after "rect (140,80) ": radius in rect scope, properties in node scope', () => {
-      const { ast: _ctx } = walkDocument('box: rect (140,80) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (140,80) '.length);
-      const items = completionsAt(ast, 'box: rect (140,80) '.length, 'box: rect (140,80) ');
+    it('after "rect 140x80 ": radius in rect scope, properties in node scope', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       expect(scoped(items, 'rect')).toContain('radius');
       expect(scoped(items, 'node')).toContain('fill');
       expect(scoped(items, 'node')).toContain('stroke');
     });
 
     it('after "fill red ": only the alpha (a=) is fill-scoped', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) fill red ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) fill red '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) fill red '.length, 'box: rect (100,100) fill red ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
       // The only fill-scoped completion after a color is its alpha (`a=`).
       const scopedItems = items.filter(i => i.scope !== undefined);
       expect(scopedItems.map(i => i.label)).toEqual(['a']);
     });
 
-    it('after "rect (140,80) radius=8 ": rect scope empty, node scope only', () => {
-      const { ast: _ctx } = walkDocument('box: rect (140,80) radius=8 ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (140,80) radius=8 '.length);
-      const items = completionsAt(ast, 'box: rect (140,80) radius=8 '.length, 'box: rect (140,80) radius=8 ');
+    it('after "rect 140x80 radius=8 ": rect scope empty, node scope only', () => {
+      const { ast: _ctx } = walkDocument('box: rect 140x80 radius=8 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 radius=8 '.length);
+      const items = completionsAt(ast, 26, 'box: rect 140x80 radius=8 ');
       expect(scoped(items, 'rect')).toHaveLength(0);
       // Node properties should still be available
       const l = labels(items);
@@ -298,9 +298,9 @@ describe('completionsAt', () => {
     });
 
     it('after "stroke red width=2 ": only alpha is stroke-scoped (width already set)', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) stroke red width=2 ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) stroke red width=2 '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) stroke red width=2 '.length, 'box: rect (100,100) stroke red width=2 ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 stroke red width=2 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 stroke red width=2 '.length);
+      const items = completionsAt(ast, 37, 'box: rect 100x100 stroke red width=2 ');
       // width is set, so the only remaining stroke-scoped completion is alpha.
       expect(scoped(items, 'stroke')).toEqual(['a']);
     });
@@ -310,9 +310,9 @@ describe('completionsAt', () => {
 
   describe('positional fields excluded', () => {
     it('rect completions do NOT include w or h (positional, not kwargs)', () => {
-      const { ast: _ctx } = walkDocument('box: rect (140,80) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (140,80) '.length);
-      const items = completionsAt(ast, 'box: rect (140,80) '.length, 'box: rect (140,80) ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       const rectItems = scoped(items, 'rect');
       expect(rectItems).not.toContain('w');
       expect(rectItems).not.toContain('h');
@@ -320,18 +320,18 @@ describe('completionsAt', () => {
     });
 
     it('stroke completions do NOT include color (positional)', () => {
-      const { ast: _ctx0 } = walkDocument('box: rect (100,100) stroke red ');
-      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect (100,100) stroke red '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) stroke red '.length, 'box: rect (100,100) stroke red ');
+      const { ast: _ctx0 } = walkDocument('box: rect 100x100 stroke red ');
+      const ast = leavesToAst(_ctx0.astLeaves(), 'box: rect 100x100 stroke red '.length);
+      const items = completionsAt(ast, 29, 'box: rect 100x100 stroke red ');
       const strokeItems = scoped(items, 'stroke');
       expect(strokeItems).not.toContain('color');
       expect(strokeItems).toContain('width');
     });
 
     it('transform completions do NOT include x or y (positional)', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) at (50,75) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) at (50,75) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) at (50,75) '.length, 'box: rect (100,100) at (50,75) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 at 50,75 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 at 50,75 '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 at 50,75 ');
       const atItems = scoped(items, 'transform');
       expect(atItems).not.toContain('x');
       expect(atItems).not.toContain('y');
@@ -345,41 +345,41 @@ describe('completionsAt', () => {
 
   describe('snippet templates', () => {
     it('fill has a color snippet template', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const fill = items.find(i => i.label === 'fill');
       expect(fill?.snippetTemplate).toBe('fill ${1:color}');
     });
 
     it('stroke has a color snippet template', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const stroke = items.find(i => i.label === 'stroke');
       expect(stroke?.snippetTemplate).toContain('${1:color}');
     });
 
     it('at has a position snippet template', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const at = items.find(i => i.label === 'at');
-      expect(at?.snippetTemplate).toContain('${1:X},${2:Y}');
+      expect(at?.snippetTemplate).toContain('${1:x},${2:y}');
     });
 
     it('kwarg completions have value snippets', () => {
-      const { ast: _ctx } = walkDocument('box: rect (140,80) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (140,80) '.length);
-      const items = completionsAt(ast, 'box: rect (140,80) '.length, 'box: rect (140,80) ');
+      const { ast: _ctx } = walkDocument('box: rect 140x80 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 140x80 '.length);
+      const items = completionsAt(ast, 17, 'box: rect 140x80 ');
       const radius = items.find(i => i.label === 'radius');
       expect(radius?.snippetTemplate).toMatch(/radius=\$\{1:\d+\}/);
     });
 
     it('layout has a type snippet template', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const layout = items.find(i => i.label === 'layout');
       expect(layout?.snippetTemplate).toContain('${1:type}');
     });
@@ -391,19 +391,19 @@ describe('completionsAt', () => {
   // so CodeMirror can filter the list as the user types.
 
   describe('prefix filtering stability', () => {
-    it('typing "fi" after "rect (100,100) " still shows fill', () => {
-      // User typed "box: rect (100,100) fi" — adapter strips "fi", lineText = "box: rect (100,100) "
-      const fl = filteredLabels('box: rect (100,100) fi\n', 20);
+    it('typing "fi" after "rect 100x100 " still shows fill', () => {
+      // User typed "box: rect 100x100 fi" — adapter strips "fi", lineText = "box: rect 100x100 "
+      const fl = filteredLabels('box: rect 100x100 fi\n', 20);
       expect(fl).toContain('fill');
     });
 
-    it('typing "st" after "rect (100,100) " still shows stroke', () => {
-      const fl = filteredLabels('box: rect (100,100) st\n', 20);
+    it('typing "st" after "rect 100x100 " still shows stroke', () => {
+      const fl = filteredLabels('box: rect 100x100 st\n', 20);
       expect(fl).toContain('stroke');
     });
 
-    it('typing "ra" after "rect (100,100) " still shows radius', () => {
-      const fl = filteredLabels('box: rect (100,100) ra\n', 20);
+    it('typing "ra" after "rect 100x100 " still shows radius', () => {
+      const fl = filteredLabels('box: rect 100x100 ra\n', 20);
       expect(fl).toContain('radius');
     });
 
@@ -419,13 +419,13 @@ describe('completionsAt', () => {
 
     it('typing "wid" after "stroke red " shows width', () => {
       // cursor at end of "wid" on line 1, before the \n (position 32)
-      const fl = filteredLabels('box: rect (100,100) stroke red wid\n', 32);
+      const fl = filteredLabels('box: rect 100x100 stroke red wid\n', 32);
       expect(fl).toContain('width');
     });
 
-    it('typing "rot" after "at (50,75) " shows rotation', () => {
+    it('typing "rot" after "at 50,75 " shows rotation', () => {
       // cursor at end of "rot" on line 1, before the \n (position 30)
-      const fl = filteredLabels('box: rect (100,100) at (50,75) rot\n', 30);
+      const fl = filteredLabels('box: rect 100x100 at 50,75 rot\n', 30);
       expect(fl).toContain('rotation');
     });
   });
@@ -434,18 +434,18 @@ describe('completionsAt', () => {
 
   describe('node property completions', () => {
     it('does not offer geometry keywords when geometry already present', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const l = labels(items);
       expect(l).not.toContain('rect');
       expect(l).not.toContain('ellipse');
     });
 
     it('does not offer properties already present on the node', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) fill red ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) fill red '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) fill red '.length, 'box: rect (100,100) fill red ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 fill red ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 fill red '.length);
+      const items = completionsAt(ast, 27, 'box: rect 100x100 fill red ');
       const l = labels(items);
       expect(l).not.toContain('fill');  // already present
       expect(l).toContain('stroke');    // not yet present
@@ -453,9 +453,9 @@ describe('completionsAt', () => {
 
     it('offers @style references when styles exist in model', () => {
       const model = { styles: { primary: {} }, objects: [{ id: 'box', rect: { w: 100, h: 100 } }] };
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ', model);
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ', model);
       const l = labels(items);
       expect(l).toContain('@primary');
     });
@@ -705,9 +705,9 @@ describe('completionsAt', () => {
     });
 
     it('node properties come from NodeSchema hints', () => {
-      const { ast: _ctx } = walkDocument('box: rect (100,100) ');
-      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect (100,100) '.length);
-      const items = completionsAt(ast, 'box: rect (100,100) '.length, 'box: rect (100,100) ');
+      const { ast: _ctx } = walkDocument('box: rect 100x100 ');
+      const ast = leavesToAst(_ctx.astLeaves(), 'box: rect 100x100 '.length);
+      const items = completionsAt(ast, 18, 'box: rect 100x100 ');
       const l = labels(items);
       // These are derived from inlineProps/blockProps/kwargs/flags
       expect(l).toContain('fill');

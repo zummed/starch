@@ -325,9 +325,9 @@ describe('animateValueCompletions', () => {
 
 describe('animate completions end-to-end', () => {
   const dsl = `objects
-  card: at (100,100)
-    bg: rect (160,100) fill midnightblue stroke steelblue width=2
-    badge: ellipse (8,8) fill limegreen
+  card: at 100,100
+    bg: rect 160x100 fill midnightblue stroke steelblue width=2
+    badge: ellipse 8x8 fill limegreen
 
 animate 3 loop
   1 card.bg.fill: crimson

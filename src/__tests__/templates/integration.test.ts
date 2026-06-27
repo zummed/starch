@@ -79,7 +79,7 @@ objects
 
   it('parses positional text + dimensions for box', () => {
     const scene = parseScene(`
-      b: box "Hello" (200,80)
+      b: box "Hello" 200x80
     `);
     const b = scene.nodes.find(n => n.id === 'b');
     expect(b).toBeDefined();
@@ -90,7 +90,7 @@ objects
 
   it('parses positional text + dimensions + kwargs for box', () => {
     const scene = parseScene(`
-      b: box "Hello" (200,80) radius=12 color=steelblue
+      b: box "Hello" 200x80 radius=12 color=steelblue
     `);
     const b = scene.nodes.find(n => n.id === 'b');
     expect(b).toBeDefined();
@@ -100,7 +100,7 @@ objects
 
   it('parses fully-qualified positional syntax: core.box "Text"', () => {
     const scene = parseScene(`
-      b: core.box "Title" (150,60)
+      b: core.box "Title" 150x60
     `);
     const b = scene.nodes.find(n => n.id === 'b');
     expect(b).toBeDefined();
@@ -121,8 +121,8 @@ objects
     // NOTE: positional `arrow a -> b` conflicts with the primitive arrow/route
     // detection which fires first. Arrow templates use kwargs for from/to.
     const scene = parseScene(`
-      a: box (10,10)
-      b: box (10,10)
+      a: box 10x10
+      b: box 10x10
       conn: arrow from=a to=b label="go"
     `);
     const ids = scene.nodes.map(n => n.id);
@@ -152,7 +152,7 @@ objects
 
   it('explicit template keyword with positionals', () => {
     const scene = parseScene(`
-      b: template box "Explicit" (100,50)
+      b: template box "Explicit" 100x50
     `);
     const b = scene.nodes.find(n => n.id === 'b');
     expect(b).toBeDefined();

@@ -3,11 +3,16 @@
 > Author: design review, 2026‑06‑27
 > Scope: the surface DSL (`src/dsl`, `src/types`, `src/templates`), not the renderer or editor internals.
 
-> **Update (decisions taken & shipped):** Two Phase‑0 items below were decided and implemented.
-> - **One pair notation (§2.1).** Rather than the "keep `WxH`" recommendation, the stronger one‑rule option was chosen: **every number pair is now `(a,b)`** — sizes, positions, points, waypoints, and `look`. `WxH` and bare `at x,y` are retired (`rect (140,80) ... at (200,150)`). Rationale: `(x,y)` is the only form that stays unambiguous in lists, kwarg values, and after `->`, so it can be the *single* notation; bare `x,y` cannot. The dedicated `dimensions` token is removed from the tokenizer.
-> - **No time suffix (§2.3).** The `s` suffix is **removed**, not made optional — durations are bare numbers (`animate 3`). Making it optional was judged to add complexity for no gain.
+> **Update (decisions taken & shipped, latest first):**
 >
-> The remaining recommendations below stand as written.
+> **The hybrid landed (§2.1).** After shipping then re‑reviewing "`(a,b)` everywhere," we reverted to the hybrid this review originally recommended — and which an adversarial re‑review confirmed: `WxH` (size) and bare `at x,y` (position) are *keyword‑led fixed slots* that never appear in a list, kwarg, or after `->`, so they were already unambiguous and gained nothing from parens except a terseness/domain‑readability cost on the two most common tokens. Final rule:
+> - **Sizes keep the `WxH` glyph** — `rect 140x80`, `ellipse 50x50`, `viewport 600x400`. (No dedicated lexer token: `140x80` lexes as one identifier and the `dimension` format splits on `x`.)
+> - **Positions stay bare** — `at 200,150`.
+> - **Parens only where the grammar needs them** — the point‑reference family: path vertices `(0,0) (250,0)`, waypoints `a -> (250,100) -> b`, and `look=(300,200)`. These were always parens and are unchanged.
+>
+> So number groups are: `WxH` for sizes, bare `a,b` for the `at` slot, `(a,b)` for points/refs. One model type (a pair) underneath; the surface form is chosen per‑field by the `format` hint. Completion shows lowercase field‑name tab‑stops (`rect ${w}x${h}`, `at ${x},${y}`).
+>
+> **No time suffix (§2.3).** The `s` suffix is **removed** (not optional) — durations are bare numbers (`animate 3`). This one stuck across both rounds.
 
 
 ## TL;DR opinions
