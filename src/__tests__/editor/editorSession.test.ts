@@ -52,6 +52,22 @@ describe('EditorSession: completion menu', () => {
     const s = new EditorSession('box: rect 10x10 fill ');
     expect(s.availableLabels()).toEqual(expect.arrayContaining(['steelblue', 'hsl', 'rgb']));
   });
+
+  it('offers node + rect properties after a WxH size (trailing space)', () => {
+    // Regression: a completed `rect 100x100 ` (WxH lexes as one identifier)
+    // must still offer node-scope props and the rect-scope `radius`, not
+    // re-offer geometry keywords or fall over.
+    const s = new EditorSession('foo: rect 100x100 ');
+    expect(s.availableLabels()).toEqual(
+      expect.arrayContaining(['radius', 'fill', 'stroke', 'at']),
+    );
+    expect(s.availableLabels()).not.toContain('rect');
+  });
+
+  it('filters node props after a WxH size by typed prefix', () => {
+    const s = new EditorSession('foo: rect 100x100 fi');
+    expect(s.availableLabels()).toEqual(['fill']);
+  });
 });
 
 describe('EditorSession: accepting completions + snippets', () => {
