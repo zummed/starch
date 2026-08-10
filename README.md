@@ -4,17 +4,17 @@
 
 **Write text. Get animated diagrams.**
 
-Keyframe animation, camera direction, and flex/grid layout for SVG diagrams —
-all driven by a small plain-text DSL you can diff, review, and version-control.
+Keyframe animation, camera direction, and flex/grid layout for SVG diagrams,
+in plain text you can version control.
 
 [**Playground**](https://zummed.github.io/starch/) · [npm](https://www.npmjs.com/package/@bitsnbobs/starch) · [MkDocs plugin](mkdocs-plugin/README.md)
 
-![Animated starch diagram — a request flows from a client through an API to a database and cache](https://raw.githubusercontent.com/zummed/starch/main/docs/readme/hero.gif)
+<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/hero.gif" alt="Animated starch diagram — a request flows from a client through an API to a database and cache" width="100%">
 
 </div>
 
 <details>
-<summary>This diagram is ~30 lines of text — expand them, or <a href="https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNsaWVudDogYXQgOTAsMTIwCiAgICBjbGllbnRCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgIzIyZDNlZSB3aWR0aD0yCiAgICBjbGllbnRMYWJlbDogdGV4dCAiQ2xpZW50IiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGFwaTogb3BhY2l0eSAwIGF0IDMzMCwxMjAKICAgIGFwaUJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjMzRkMzk5IHdpZHRoPTIKICAgIGFwaUxhYmVsOiB0ZXh0ICJBUEkiIHNpemU9MTMgZmlsbCAjZTJlOGYwCiAgZGI6IG9wYWNpdHkgMCBhdCA1NzAsMTIwCiAgICBkYkJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjZmJiZjI0IHdpZHRoPTIKICAgIGRiTGFiZWw6IHRleHQgIkRhdGFiYXNlIiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGNhY2hlOiBvcGFjaXR5IDAgYXQgMzMwLDI3MAogICAgY2FjaGVCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgI2Y0NzJiNiB3aWR0aD0yCiAgICBjYWNoZUxhYmVsOiB0ZXh0ICJDYWNoZSIgc2l6ZT0xMyBmaWxsICNlMmU4ZjAKICByZXE6IGFycm93IGZyb209Y2xpZW50IHRvPWFwaSBsYWJlbD0icmVxdWVzdCIgY29sb3I9IzdkODU5MCBvcGFjaXR5IDAKICBxOiBhcnJvdyBmcm9tPWFwaSB0bz1kYiBsYWJlbD0icXVlcnkiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCiAgaGl0OiBhcnJvdyBmcm9tPWFwaSB0bz1jYWNoZSBsYWJlbD0iaG90IHBhdGgiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCgphbmltYXRlIDcgbG9vcCBlYXNpbmc9ZWFzZUluT3V0CiAgMC45CiAgICBhcGkub3BhY2l0eTogMQogICAgcmVxLm9wYWNpdHk6IDEKICAxLjgKICAgIGRiLm9wYWNpdHk6IDEKICAgIHEub3BhY2l0eTogMQogIDIuNwogICAgY2FjaGUub3BhY2l0eTogMQogICAgaGl0Lm9wYWNpdHk6IDE">open this diagram in the playground</a>.</summary>
+<summary>The ~30 lines behind it — or <a href="https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNsaWVudDogYXQgOTAsMTIwCiAgICBjbGllbnRCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgIzIyZDNlZSB3aWR0aD0yCiAgICBjbGllbnRMYWJlbDogdGV4dCAiQ2xpZW50IiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGFwaTogb3BhY2l0eSAwIGF0IDMzMCwxMjAKICAgIGFwaUJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjMzRkMzk5IHdpZHRoPTIKICAgIGFwaUxhYmVsOiB0ZXh0ICJBUEkiIHNpemU9MTMgZmlsbCAjZTJlOGYwCiAgZGI6IG9wYWNpdHkgMCBhdCA1NzAsMTIwCiAgICBkYkJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjZmJiZjI0IHdpZHRoPTIKICAgIGRiTGFiZWw6IHRleHQgIkRhdGFiYXNlIiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGNhY2hlOiBvcGFjaXR5IDAgYXQgMzMwLDI3MAogICAgY2FjaGVCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgI2Y0NzJiNiB3aWR0aD0yCiAgICBjYWNoZUxhYmVsOiB0ZXh0ICJDYWNoZSIgc2l6ZT0xMyBmaWxsICNlMmU4ZjAKICByZXE6IGFycm93IGZyb209Y2xpZW50IHRvPWFwaSBsYWJlbD0icmVxdWVzdCIgY29sb3I9IzdkODU5MCBvcGFjaXR5IDAKICBxOiBhcnJvdyBmcm9tPWFwaSB0bz1kYiBsYWJlbD0icXVlcnkiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCiAgaGl0OiBhcnJvdyBmcm9tPWFwaSB0bz1jYWNoZSBsYWJlbD0iaG90IHBhdGgiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCgphbmltYXRlIDcgbG9vcCBlYXNpbmc9ZWFzZUluT3V0CiAgMC45CiAgICBhcGkub3BhY2l0eTogMQogICAgcmVxLm9wYWNpdHk6IDEKICAxLjgKICAgIGRiLm9wYWNpdHk6IDEKICAgIHEub3BhY2l0eTogMQogIDIuNwogICAgY2FjaGUub3BhY2l0eTogMQogICAgaGl0Lm9wYWNpdHk6IDE">open it in the playground</a></summary>
 
 ```
 objects
@@ -48,18 +48,12 @@ animate 7 loop easing=easeInOut
 
 </details>
 
-Every example below is a playground sample, shown verbatim — the image next to it was
-rendered from that exact text, the *open in playground* link loads it live, and you'll
-find it by name in the playground's sample browser.
+Every example below is a playground sample, rendered from the exact text shown.
 
 ## Shapes, templates, and arrows
 
 Declare objects with ids, position them, connect them. Templates like `box`, `circle`,
 `pill`, `card`, and `note` bundle a background, label, and auto-sizing in one line.
-
-<table>
-<tr>
-<td width="52%" valign="top">
 
 ```
 objects
@@ -71,26 +65,15 @@ objects
   link: arrow from=api to=worker label="jobs" color=steelblue
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGFwaTogYm94ICJBUEkgZ2F0ZXdheSIgY29sb3I9c3RlZWxibHVlIGF0IDEwMCw3MAogIHdvcmtlcjogY2lyY2xlICJXb3JrZXIiIGNvbG9yPW1lZGl1bXNlYWdyZWVuIGF0IDM0MCw3MAogIHN0YXR1czogcGlsbCAiaGVhbHRoeSIgY29sb3I9ZGFya29yYW5nZSBhdCA1MDAsNzAKICBkb2M6IG5vdGUgIlBsYWluIHRleHQgaW4sIGRpYWdyYW1zIG91dC4iIGF0IDEwMCwyMTAKICBpbmZvOiBjYXJkICJDYXJkIiBib2R5PSJXaXRoIGJvZHkgdGV4dCIgY29sb3I9bWVkaXVtcHVycGxlIGF0IDM0MCwyMTUKICBsaW5rOiBhcnJvdyBmcm9tPWFwaSB0bz13b3JrZXIgbGFiZWw9ImpvYnMiIGNvbG9yPXN0ZWVsYmx1ZQ) · sample: `template-tour`
-
-</td>
-<td valign="top">
-
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/shapes.png" alt="Rendered shapes: boxes, a circle, a pill, a note, a card, and a labelled arrow" width="100%">
 
-</td>
-</tr>
-</table>
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGFwaTogYm94ICJBUEkgZ2F0ZXdheSIgY29sb3I9c3RlZWxibHVlIGF0IDEwMCw3MAogIHdvcmtlcjogY2lyY2xlICJXb3JrZXIiIGNvbG9yPW1lZGl1bXNlYWdyZWVuIGF0IDM0MCw3MAogIHN0YXR1czogcGlsbCAiaGVhbHRoeSIgY29sb3I9ZGFya29yYW5nZSBhdCA1MDAsNzAKICBkb2M6IG5vdGUgIlBsYWluIHRleHQgaW4sIGRpYWdyYW1zIG91dC4iIGF0IDEwMCwyMTAKICBpbmZvOiBjYXJkICJDYXJkIiBib2R5PSJXaXRoIGJvZHkgdGV4dCIgY29sb3I9bWVkaXVtcHVycGxlIGF0IDM0MCwyMTUKICBsaW5rOiBhcnJvdyBmcm9tPWFwaSB0bz13b3JrZXIgbGFiZWw9ImpvYnMiIGNvbG9yPXN0ZWVsYmx1ZQ) · sample: `template-tour`
 
 ## Keyframe animation
 
 An `animate` block sets property values at points in time; starch interpolates between
-them. Any property is animatable — position, color, opacity, layout, camera — and each
-track can pick its own curve from 18 easings (`spring` here).
-
-<table>
-<tr>
-<td width="52%" valign="top">
+them. Any property animates — position, color, opacity, layout, camera — and each track
+can pick its own curve from 18 easings (`spring` here).
 
 ```
 objects
@@ -110,26 +93,15 @@ animate 5 loop
     store.transform.x: { value: 530, easing: "spring" }
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGluZ2VzdDogY2FyZCAiSW5nZXN0IiBib2R5PSJyYXcgZXZlbnRzIiBjb2xvcj1zdGVlbGJsdWUgb3BhY2l0eSAwIGF0IDQwLDEyMAogIHBhcnNlOiBjYXJkICJQYXJzZSIgYm9keT0iaW50byByZWNvcmRzIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBvcGFjaXR5IDAgYXQgNDAsMTIwCiAgc3RvcmU6IGNhcmQgIlN0b3JlIiBib2R5PSJ0aW1lIHNlcmllcyIgY29sb3I9ZGFya29yYW5nZSBvcGFjaXR5IDAgYXQgNDAsMTIwCgphbmltYXRlIDUgbG9vcAogIDEKICAgIGluZ2VzdC5vcGFjaXR5OiAxCiAgICBpbmdlc3QudHJhbnNmb3JtLng6IHsgdmFsdWU6IDEzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMgogICAgcGFyc2Uub3BhY2l0eTogMQogICAgcGFyc2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDMzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMwogICAgc3RvcmUub3BhY2l0eTogMQogICAgc3RvcmUudHJhbnNmb3JtLng6IHsgdmFsdWU6IDUzMCwgZWFzaW5nOiAic3ByaW5nIiB9) · sample: `staggered-cards`
-
-</td>
-<td valign="top">
-
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/animate.gif" alt="Three cards dealing in one by one with spring easing" width="100%">
 
-</td>
-</tr>
-</table>
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGluZ2VzdDogY2FyZCAiSW5nZXN0IiBib2R5PSJyYXcgZXZlbnRzIiBjb2xvcj1zdGVlbGJsdWUgb3BhY2l0eSAwIGF0IDQwLDEyMAogIHBhcnNlOiBjYXJkICJQYXJzZSIgYm9keT0iaW50byByZWNvcmRzIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBvcGFjaXR5IDAgYXQgNDAsMTIwCiAgc3RvcmU6IGNhcmQgIlN0b3JlIiBib2R5PSJ0aW1lIHNlcmllcyIgY29sb3I9ZGFya29yYW5nZSBvcGFjaXR5IDAgYXQgNDAsMTIwCgphbmltYXRlIDUgbG9vcAogIDEKICAgIGluZ2VzdC5vcGFjaXR5OiAxCiAgICBpbmdlc3QudHJhbnNmb3JtLng6IHsgdmFsdWU6IDEzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMgogICAgcGFyc2Uub3BhY2l0eTogMQogICAgcGFyc2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDMzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMwogICAgc3RvcmUub3BhY2l0eTogMQogICAgc3RvcmUudHJhbnNmb3JtLng6IHsgdmFsdWU6IDUzMCwgZWFzaW5nOiAic3ByaW5nIiB9) · sample: `staggered-cards`
 
 ## Camera direction
 
-A `camera` object frames the scene. Animate `look` to guide the viewer through a
-diagram step by step — a target can be an object id, a list `(a,b)` to fit several,
-coordinates, or `all`; the camera zooms to fit whatever it looks at.
-
-<table>
-<tr>
-<td width="52%" valign="top">
+A `camera` object frames the scene. Animate `look` to walk the viewer through a diagram:
+a target can be an object id, a list `(a,b)` to fit several, coordinates, or `all`, and
+the camera zooms to fit whatever it looks at.
 
 ```
 objects
@@ -145,26 +117,15 @@ animate 8 loop easing=easeInOut
   8 cam.camera.look: all
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNhbTogY2FtZXJhIGxvb2s9YWxsCiAgYTogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGNyaW1zb24gYXQgNTAsMTAwCiAgYjogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGxpbWVncmVlbiBhdCAzMDAsNTAKICBjOiByZWN0IDYweDYwIHJhZGl1cz02IGZpbGwgcm95YWxibHVlIGF0IDU1MCwzMDAKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAyIGNhbS5jYW1lcmEubG9vazogKGEpCiAgNCBjYW0uY2FtZXJhLmxvb2s6IChhLGIpCiAgNiBjYW0uY2FtZXJhLmxvb2s6IChjKQogIDggY2FtLmNhbWVyYS5sb29rOiBhbGw) · sample: `camera-look-fit`
-
-</td>
-<td valign="top">
-
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/camera.gif" alt="A camera gliding between nodes, fitting one, two, then all of them" width="100%">
 
-</td>
-</tr>
-</table>
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNhbTogY2FtZXJhIGxvb2s9YWxsCiAgYTogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGNyaW1zb24gYXQgNTAsMTAwCiAgYjogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGxpbWVncmVlbiBhdCAzMDAsNTAKICBjOiByZWN0IDYweDYwIHJhZGl1cz02IGZpbGwgcm95YWxibHVlIGF0IDU1MCwzMDAKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAyIGNhbS5jYW1lcmEubG9vazogKGEpCiAgNCBjYW0uY2FtZXJhLmxvb2s6IChhLGIpCiAgNiBjYW0uY2FtZXJhLmxvb2s6IChjKQogIDggY2FtLmNhbWVyYS5sb29rOiBhbGw) · sample: `camera-look-fit`
 
 ## Layout engines
 
 Nest children under a container and give it a `layout` — flex, grid, or circular. The
-layout solves positions for you, and layout properties (gap, span, slot, angle)
-animate like everything else — here the ring advances one slot per second.
-
-<table>
-<tr>
-<td width="52%" valign="top">
+layout solves positions for you, and layout properties (gap, span, slot, angle) animate
+like everything else; here the ring advances one slot per second.
 
 ```
 objects
@@ -185,25 +146,29 @@ animate 6 loop easing=easeInOut
   6 ring.layout.startAngle: 360
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIHJpbmc6IGVsbGlwc2UgMjIweDIyMCBzdHJva2Ugc2xhdGVncmF5IHdpZHRoPTEgbGF5b3V0IGNpcmN1bGFyIHJhZGl1cz0xMTAgc3RhcnRBbmdsZT0wIGF0IDI1MCwxNzAKICAgIG4xOiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgc3RlZWxibHVlCiAgICBuMjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGNvcmFsCiAgICBuMzogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHNlYWdyZWVuCiAgICBuNDogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGdvbGQKICAgIG41OiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgbWVkaXVtcHVycGxlCiAgICBuNjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHRvbWF0bwoKYW5pbWF0ZSA2IGxvb3AgZWFzaW5nPWVhc2VJbk91dAogIDEgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogNjAKICAyIHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDEyMAogIDMgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMTgwCiAgNCByaW5nLmxheW91dC5zdGFydEFuZ2xlOiAyNDAKICA1IHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDMwMAogIDYgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMzYw) · sample: `circular-layout`
-
-</td>
-<td valign="top">
-
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/layout.gif" alt="Six nodes ringed evenly, rotating one slot per second" width="100%">
 
-</td>
-</tr>
-</table>
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIHJpbmc6IGVsbGlwc2UgMjIweDIyMCBzdHJva2Ugc2xhdGVncmF5IHdpZHRoPTEgbGF5b3V0IGNpcmN1bGFyIHJhZGl1cz0xMTAgc3RhcnRBbmdsZT0wIGF0IDI1MCwxNzAKICAgIG4xOiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgc3RlZWxibHVlCiAgICBuMjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGNvcmFsCiAgICBuMzogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHNlYWdyZWVuCiAgICBuNDogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGdvbGQKICAgIG41OiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgbWVkaXVtcHVycGxlCiAgICBuNjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHRvbWF0bwoKYW5pbWF0ZSA2IGxvb3AgZWFzaW5nPWVhc2VJbk91dAogIDEgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogNjAKICAyIHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDEyMAogIDMgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMTgwCiAgNCByaW5nLmxheW91dC5zdGFydEFuZ2xlOiAyNDAKICA1IHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDMwMAogIDYgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMzYw) · sample: `circular-layout`
 
-There's more in the [playground](https://zummed.github.io/starch/)'s sample browser:
-flex and grid layouts, slot animation between containers, smooth splines and routed
+## Live editor
+
+The [playground](https://zummed.github.io/starch/) is where you write these: type on the
+left, the diagram redraws on the right as you go, with playback and chapter controls
+underneath. Errors show up as you type without blanking the last good frame.
+
+<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/playground.png" alt="The starch playground: sample browser, DSL editor, and the live diagram with playback controls" width="100%">
+
+Its sample browser is also the syntax reference — one minimal sample per feature,
+covering flex and grid layouts, slot animation between containers, splines and routed
 connectors, state-machine shapes, style animation, and camera rotation.
+
+Diagrams embedded in your own pages can open it too: add `editable` to a
+`<starch-diagram>` and its edit button round-trips the DSL back into the page.
 
 ## Quick start
 
-The fastest way in is a script tag — the same pattern as mermaid. It registers the
-`<starch-diagram>` element and exposes a `Starch` global:
+A script tag, the same pattern as mermaid. It registers the `<starch-diagram>` element
+and exposes a `Starch` global:
 
 ```html
 <script src="https://unpkg.com/@bitsnbobs/starch/dist/starch-embed.iife.js"></script>
@@ -213,7 +178,7 @@ The fastest way in is a script tag — the same pattern as mermaid. It registers
 </starch-diagram>
 ```
 
-Or install the package (ESM-only, no dependencies required):
+Or install it (ESM-only, no dependencies):
 
 ```bash
 npm install @bitsnbobs/starch
@@ -227,8 +192,7 @@ const diagram = new StarchDiagram(container, { dsl, autoplay: true });
 
 ## Run the playground locally
 
-The [playground](https://zummed.github.io/starch/) — live editor, sample browser,
-playback controls — also runs on your machine, no clone needed:
+No clone needed:
 
 ```bash
 npx @bitsnbobs/starch          # one-off
@@ -237,8 +201,8 @@ npm install -g @bitsnbobs/starch
 starch                         # or install the `starch` command
 ```
 
-Either serves the playground at `http://localhost:4600` and opens your browser
-(`--port <n>` and `--no-open` to taste). To hack on starch itself:
+Both serve it at `http://localhost:4600` and open a browser (`--port <n>`, `--no-open`).
+To work on starch itself:
 
 ```bash
 git clone https://github.com/zummed/starch.git
@@ -313,9 +277,6 @@ animate 10
     chapter "Complete" at 7
 ```
 
-The playground's sample browser doubles as the syntax reference — every feature has a
-minimal sample you can edit live.
-
 ## Embedding
 
 The package ships four entry points:
@@ -334,8 +295,8 @@ The package ships four entry points:
 <starch-diagram src="/diagrams/arch.starch" autoplay></starch-diagram>
 ```
 
-Hover shows playback controls; parse and fetch errors appear as an overlay instead of
-failing silently. From JS the element is a full player:
+Hover shows playback controls; parse and fetch errors render as an overlay. From JS the
+element is a full player:
 
 ```js
 const el = document.querySelector('starch-diagram');
@@ -347,9 +308,8 @@ el.addEventListener('starch:error', (e) => { /* e.detail.message */ });
 
 ### Markdown code blocks
 
-`Starch.scan()` upgrades fenced code blocks in rendered HTML the same way mermaid
-does — any `<code class="language-starch">` block (or `div.starch`) becomes a live
-diagram:
+`Starch.scan()` turns any `<code class="language-starch">` block (or `div.starch`) in
+rendered HTML into a live diagram, the same way mermaid does:
 
 ```js
 Starch.scan();            // whole document
@@ -383,7 +343,7 @@ function App() {
 
 ### Static SVG
 
-For thumbnails, previews, or export — no animation loop, no mounted component:
+No animation loop, no mounted component — for thumbnails, previews, or export:
 
 ```js
 import { renderToSVG } from '@bitsnbobs/starch';
@@ -396,9 +356,9 @@ const svgAtStart = renderToSVG(dsl, { time: 0 });
 Node) — the README images above are generated exactly this way
 ([docs/readme/build.sh](docs/readme/build.sh)).
 
-### Errors are never silent
+### Errors
 
-`setDSL` returns a result instead of throwing, so live editors can keep the last good
+`setDSL` returns a result instead of throwing, so a live editor can keep the last good
 frame on screen while the user types:
 
 ```js
@@ -456,9 +416,6 @@ window.addEventListener('message', (e) => {
 });
 ```
 
-For lightweight in-place editing without the playground, a `<textarea>` plus `setDSL`
-is enough — errors surface in the result while the last good frame stays rendered.
-
 ## API reference
 
 ### `StarchDiagram`
@@ -508,7 +465,7 @@ npm run build        # library entries + types
 npm run build:embed  # standalone embed (IIFE)
 npm run build:app    # playground (also what `npx @bitsnbobs/starch` serves)
 npm run build:all    # everything
-docs/readme/build.sh # regenerate the README images (needs inkscape + ImageMagick)
+docs/readme/build.sh # regenerate the README images (needs inkscape, ImageMagick, chrome)
 ```
 
 Releases are automated: merging to `main` runs semantic-release, which versions and
