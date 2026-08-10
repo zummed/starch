@@ -69,9 +69,15 @@ export function getWorldPosition(roots: Node[], id: string): { x: number; y: num
  * same estimate as unmeasured text, path points) into `bounds`, then
  * recurse into its children at their own world positions. Camera nodes
  * (and their subtrees) never contribute — they're viewports, not content.
+ *
+ * Path-following nodes (arrowheads, connector labels) are skipped too:
+ * their real position is resolved from the routed path at render time, so
+ * their transform still reads as the origin here — counting them would
+ * stretch every auto-fit box out to 0,0.
  */
 function accumulateNodeBounds(node: Node, worldX: number, worldY: number, bounds: WorldBounds): void {
   if (node.camera) return;
+  if (node.transform?.pathFollow) return;
 
   let w = 0, h = 0;
   if (node.rect) { w = node.rect.w; h = node.rect.h; }

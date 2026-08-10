@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
+import { computeViewBox, computeAutoFitViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
 import { createNode } from '../../types/node';
 
 const defaultVB: ViewBox = { x: 0, y: 0, w: 800, h: 600 };
@@ -62,5 +62,33 @@ describe('computeViewBox', () => {
     });
     const vb = computeViewBox(cam, defaultVB);
     expect(vb.rotation).toBe(45);
+  });
+});
+
+describe('computeAutoFitViewBox', () => {
+  it('fits content with a margin', () => {
+    const nodes = [
+      createNode({ id: 'a', rect: { w: 100, h: 40 }, transform: { x: 200, y: 100 } }),
+    ];
+    expect(computeAutoFitViewBox(nodes, 10)).toEqual({ x: 140, y: 70, w: 120, h: 60 });
+  });
+
+  it('ignores path-following nodes, which have no transform of their own', () => {
+    // An arrow's label/head sit at the origin until the renderer places them
+    // along the routed path — counting them would stretch the box out to 0,0.
+    const nodes = [
+      createNode({ id: 'a', rect: { w: 100, h: 40 }, transform: { x: 200, y: 100 } }),
+      createNode({
+        id: 'ab',
+        children: [
+          createNode({
+            id: 'ab.label',
+            transform: { pathFollow: 'ab.route', pathProgress: 0.5 },
+            children: [createNode({ id: 'ab.label.bg', rect: { w: 60, h: 20 } })],
+          }),
+        ],
+      }),
+    ];
+    expect(computeAutoFitViewBox(nodes, 10)).toEqual({ x: 140, y: 70, w: 120, h: 60 });
   });
 });
