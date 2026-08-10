@@ -9,16 +9,14 @@ all driven by a small plain-text DSL you can diff, review, and version-control.
 
 [**Playground**](https://zummed.github.io/starch/) · [npm](https://www.npmjs.com/package/@bitsnbobs/starch) · [MkDocs plugin](mkdocs-plugin/README.md)
 
-![Animated starch diagram — a request pulses from a client through an API to a database and cache](https://raw.githubusercontent.com/zummed/starch/main/docs/readme/hero.gif)
+![Animated starch diagram — a request flows from a client through an API to a database and cache](https://raw.githubusercontent.com/zummed/starch/main/docs/readme/hero.gif)
 
 </div>
 
 <details>
-<summary>This diagram is ~40 lines of text — expand them, or <a href="https://zummed.github.io/starch/#dsl=YmFja2dyb3VuZCAjMTQxNjFjCgpvYmplY3RzCiAgY2xpZW50OiBhdCA5MCwxMjAKICAgIGNsaWVudEJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjMjJkM2VlIHdpZHRoPTIKICAgIGNsaWVudExhYmVsOiB0ZXh0ICJDbGllbnQiIHNpemU9MTMgZmlsbCAjZTJlOGYwCiAgYXBpOiBvcGFjaXR5IDAgYXQgMzMwLDEyMAogICAgYXBpQmc6IHJlY3QgMTIweDUwIHJhZGl1cz0xMCBmaWxsICMxNjIwMmUgc3Ryb2tlICMzNGQzOTkgd2lkdGg9MgogICAgYXBpTGFiZWw6IHRleHQgIkFQSSIgc2l6ZT0xMyBmaWxsICNlMmU4ZjAKICBkYjogb3BhY2l0eSAwIGF0IDU3MCwxMjAKICAgIGRiQmc6IHJlY3QgMTIweDUwIHJhZGl1cz0xMCBmaWxsICMxNjIwMmUgc3Ryb2tlICNmYmJmMjQgd2lkdGg9MgogICAgZGJMYWJlbDogdGV4dCAiRGF0YWJhc2UiIHNpemU9MTMgZmlsbCAjZTJlOGYwCiAgY2FjaGU6IG9wYWNpdHkgMCBhdCAzMzAsMjcwCiAgICBjYWNoZUJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjZjQ3MmI2IHdpZHRoPTIKICAgIGNhY2hlTGFiZWw6IHRleHQgIkNhY2hlIiBzaXplPTEzIGZpbGwgI2UyZThmMAogIHJlcTogYXJyb3cgZnJvbT1jbGllbnQgdG89YXBpIGxhYmVsPSJyZXF1ZXN0IiBjb2xvcj0jN2Q4NTkwIG9wYWNpdHkgMAogIHE6IGFycm93IGZyb209YXBpIHRvPWRiIGxhYmVsPSJxdWVyeSIgY29sb3I9IzdkODU5MCBvcGFjaXR5IDAKICBoaXQ6IGFycm93IGZyb209YXBpIHRvPWNhY2hlIGxhYmVsPSJob3QgcGF0aCIgY29sb3I9IzdkODU5MCBvcGFjaXR5IDAKICBwdWxzZTogZWxsaXBzZSA4eDggZmlsbCAjMjJkM2VlIG9wYWNpdHkgMCBhdCAxNjAsMTIwCgphbmltYXRlIDcgbG9vcCBlYXNpbmc9ZWFzZUluT3V0CiAgMC45CiAgICBhcGkub3BhY2l0eTogMQogICAgcmVxLm9wYWNpdHk6IDEKICAxLjgKICAgIGRiLm9wYWNpdHk6IDEKICAgIHEub3BhY2l0eTogMQogIDIuNwogICAgY2FjaGUub3BhY2l0eTogMQogICAgaGl0Lm9wYWNpdHk6IDEKICAzLjYgcHVsc2Uub3BhY2l0eTogMQogIDMuNjEgcHVsc2UudHJhbnNmb3JtLng6IDE2MAogIDQuNQogICAgcHVsc2UudHJhbnNmb3JtLng6IDMzMAogICAgcHVsc2UuZmlsbDogIzM0ZDM5OQogIDUuNAogICAgcHVsc2UudHJhbnNmb3JtLng6IDU0MAogICAgcHVsc2UuZmlsbDogI2ZiYmYyNAogIDUuNyBwdWxzZS5vcGFjaXR5OiAwCg">open this diagram in the playground</a>.</summary>
+<summary>This diagram is ~30 lines of text — expand them, or <a href="https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNsaWVudDogYXQgOTAsMTIwCiAgICBjbGllbnRCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgIzIyZDNlZSB3aWR0aD0yCiAgICBjbGllbnRMYWJlbDogdGV4dCAiQ2xpZW50IiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGFwaTogb3BhY2l0eSAwIGF0IDMzMCwxMjAKICAgIGFwaUJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjMzRkMzk5IHdpZHRoPTIKICAgIGFwaUxhYmVsOiB0ZXh0ICJBUEkiIHNpemU9MTMgZmlsbCAjZTJlOGYwCiAgZGI6IG9wYWNpdHkgMCBhdCA1NzAsMTIwCiAgICBkYkJnOiByZWN0IDEyMHg1MCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjZmJiZjI0IHdpZHRoPTIKICAgIGRiTGFiZWw6IHRleHQgIkRhdGFiYXNlIiBzaXplPTEzIGZpbGwgI2UyZThmMAogIGNhY2hlOiBvcGFjaXR5IDAgYXQgMzMwLDI3MAogICAgY2FjaGVCZzogcmVjdCAxMjB4NTAgcmFkaXVzPTEwIGZpbGwgIzE2MjAyZSBzdHJva2UgI2Y0NzJiNiB3aWR0aD0yCiAgICBjYWNoZUxhYmVsOiB0ZXh0ICJDYWNoZSIgc2l6ZT0xMyBmaWxsICNlMmU4ZjAKICByZXE6IGFycm93IGZyb209Y2xpZW50IHRvPWFwaSBsYWJlbD0icmVxdWVzdCIgY29sb3I9IzdkODU5MCBvcGFjaXR5IDAKICBxOiBhcnJvdyBmcm9tPWFwaSB0bz1kYiBsYWJlbD0icXVlcnkiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCiAgaGl0OiBhcnJvdyBmcm9tPWFwaSB0bz1jYWNoZSBsYWJlbD0iaG90IHBhdGgiIGNvbG9yPSM3ZDg1OTAgb3BhY2l0eSAwCgphbmltYXRlIDcgbG9vcCBlYXNpbmc9ZWFzZUluT3V0CiAgMC45CiAgICBhcGkub3BhY2l0eTogMQogICAgcmVxLm9wYWNpdHk6IDEKICAxLjgKICAgIGRiLm9wYWNpdHk6IDEKICAgIHEub3BhY2l0eTogMQogIDIuNwogICAgY2FjaGUub3BhY2l0eTogMQogICAgaGl0Lm9wYWNpdHk6IDE">open this diagram in the playground</a>.</summary>
 
 ```
-background #14161c
-
 objects
   client: at 90,120
     clientBg: rect 120x50 radius=10 fill #16202e stroke #22d3ee width=2
@@ -35,7 +33,6 @@ objects
   req: arrow from=client to=api label="request" color=#7d8590 opacity 0
   q: arrow from=api to=db label="query" color=#7d8590 opacity 0
   hit: arrow from=api to=cache label="hot path" color=#7d8590 opacity 0
-  pulse: ellipse 8x8 fill #22d3ee opacity 0 at 160,120
 
 animate 7 loop easing=easeInOut
   0.9
@@ -47,21 +44,13 @@ animate 7 loop easing=easeInOut
   2.7
     cache.opacity: 1
     hit.opacity: 1
-  3.6 pulse.opacity: 1
-  3.61 pulse.transform.x: 160
-  4.5
-    pulse.transform.x: 330
-    pulse.fill: #34d399
-  5.4
-    pulse.transform.x: 540
-    pulse.fill: #fbbf24
-  5.7 pulse.opacity: 0
 ```
 
 </details>
 
-Every example below is a complete, real program — the image next to it was rendered from
-that exact text, and the *open in playground* link loads it live in your browser.
+Every example below is a playground sample, shown verbatim — the image next to it was
+rendered from that exact text, the *open in playground* link loads it live, and you'll
+find it by name in the playground's sample browser.
 
 ## Shapes, templates, and arrows
 
@@ -73,8 +62,6 @@ Declare objects with ids, position them, connect them. Templates like `box`, `ci
 <td width="52%" valign="top">
 
 ```
-background #14161c
-
 objects
   api: box "API gateway" color=steelblue at 100,70
   worker: circle "Worker" color=mediumseagreen at 340,70
@@ -84,7 +71,7 @@ objects
   link: arrow from=api to=worker label="jobs" color=steelblue
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=YmFja2dyb3VuZCAjMTQxNjFjCgpvYmplY3RzCiAgYXBpOiBib3ggIkFQSSBnYXRld2F5IiBjb2xvcj1zdGVlbGJsdWUgYXQgMTAwLDcwCiAgd29ya2VyOiBjaXJjbGUgIldvcmtlciIgY29sb3I9bWVkaXVtc2VhZ3JlZW4gYXQgMzQwLDcwCiAgc3RhdHVzOiBwaWxsICJoZWFsdGh5IiBjb2xvcj1kYXJrb3JhbmdlIGF0IDUwMCw3MAogIGRvYzogbm90ZSAiUGxhaW4gdGV4dCBpbiwgZGlhZ3JhbXMgb3V0LiIgYXQgMTAwLDIxMAogIGluZm86IGNhcmQgIkNhcmQiIGJvZHk9IldpdGggYm9keSB0ZXh0IiBjb2xvcj1tZWRpdW1wdXJwbGUgYXQgMzQwLDIxNQogIGxpbms6IGFycm93IGZyb209YXBpIHRvPXdvcmtlciBsYWJlbD0iam9icyIgY29sb3I9c3RlZWxibHVlCg)
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGFwaTogYm94ICJBUEkgZ2F0ZXdheSIgY29sb3I9c3RlZWxibHVlIGF0IDEwMCw3MAogIHdvcmtlcjogY2lyY2xlICJXb3JrZXIiIGNvbG9yPW1lZGl1bXNlYWdyZWVuIGF0IDM0MCw3MAogIHN0YXR1czogcGlsbCAiaGVhbHRoeSIgY29sb3I9ZGFya29yYW5nZSBhdCA1MDAsNzAKICBkb2M6IG5vdGUgIlBsYWluIHRleHQgaW4sIGRpYWdyYW1zIG91dC4iIGF0IDEwMCwyMTAKICBpbmZvOiBjYXJkICJDYXJkIiBib2R5PSJXaXRoIGJvZHkgdGV4dCIgY29sb3I9bWVkaXVtcHVycGxlIGF0IDM0MCwyMTUKICBsaW5rOiBhcnJvdyBmcm9tPWFwaSB0bz13b3JrZXIgbGFiZWw9ImpvYnMiIGNvbG9yPXN0ZWVsYmx1ZQ) · sample: `template-tour`
 
 </td>
 <td valign="top">
@@ -98,45 +85,37 @@ objects
 ## Keyframe animation
 
 An `animate` block sets property values at points in time; starch interpolates between
-them. Any property is animatable — position, color, opacity, layout, camera — with 18
-easing curves.
+them. Any property is animatable — position, color, opacity, layout, camera — and each
+track can pick its own curve from 18 easings (`spring` here).
 
 <table>
 <tr>
 <td width="52%" valign="top">
 
 ```
-background #14161c
-
 objects
-  linear: ellipse 18x18 fill #22d3ee at 150,50
-  l1: text "linear" size=11 align=end fill #7d8590 at 130,50
-  easeInOut: ellipse 18x18 fill #34d399 at 150,95
-  l2: text "easeInOut" size=11 align=end fill #7d8590 at 130,95
-  easeOutBack: ellipse 18x18 fill #fbbf24 at 150,140
-  l3: text "easeOutBack" size=11 align=end fill #7d8590 at 130,140
-  bounce: ellipse 18x18 fill #f472b6 at 150,185
-  l4: text "bounce" size=11 align=end fill #7d8590 at 130,185
+  ingest: card "Ingest" body="raw events" color=steelblue opacity 0 at 40,120
+  parse: card "Parse" body="into records" color=mediumseagreen opacity 0 at 40,120
+  store: card "Store" body="time series" color=darkorange opacity 0 at 40,120
 
-animate 4 loop
-  1.8
-    linear.transform.x: { value: 480, easing: "linear" }
-    easeInOut.transform.x: { value: 480, easing: "easeInOut" }
-    easeOutBack.transform.x: { value: 480, easing: "easeOutBack" }
-    bounce.transform.x: { value: 480, easing: "bounce" }
-  3.8
-    linear.transform.x: { value: 150, easing: "easeInOut" }
-    easeInOut.transform.x: { value: 150, easing: "easeInOut" }
-    easeOutBack.transform.x: { value: 150, easing: "easeInOut" }
-    bounce.transform.x: { value: 150, easing: "easeInOut" }
+animate 5 loop
+  1
+    ingest.opacity: 1
+    ingest.transform.x: { value: 130, easing: "spring" }
+  2
+    parse.opacity: 1
+    parse.transform.x: { value: 330, easing: "spring" }
+  3
+    store.opacity: 1
+    store.transform.x: { value: 530, easing: "spring" }
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=YmFja2dyb3VuZCAjMTQxNjFjCgpvYmplY3RzCiAgbGluZWFyOiBlbGxpcHNlIDE4eDE4IGZpbGwgIzIyZDNlZSBhdCAxNTAsNTAKICBsMTogdGV4dCAibGluZWFyIiBzaXplPTExIGFsaWduPWVuZCBmaWxsICM3ZDg1OTAgYXQgMTMwLDUwCiAgZWFzZUluT3V0OiBlbGxpcHNlIDE4eDE4IGZpbGwgIzM0ZDM5OSBhdCAxNTAsOTUKICBsMjogdGV4dCAiZWFzZUluT3V0IiBzaXplPTExIGFsaWduPWVuZCBmaWxsICM3ZDg1OTAgYXQgMTMwLDk1CiAgZWFzZU91dEJhY2s6IGVsbGlwc2UgMTh4MTggZmlsbCAjZmJiZjI0IGF0IDE1MCwxNDAKICBsMzogdGV4dCAiZWFzZU91dEJhY2siIHNpemU9MTEgYWxpZ249ZW5kIGZpbGwgIzdkODU5MCBhdCAxMzAsMTQwCiAgYm91bmNlOiBlbGxpcHNlIDE4eDE4IGZpbGwgI2Y0NzJiNiBhdCAxNTAsMTg1CiAgbDQ6IHRleHQgImJvdW5jZSIgc2l6ZT0xMSBhbGlnbj1lbmQgZmlsbCAjN2Q4NTkwIGF0IDEzMCwxODUKCmFuaW1hdGUgNCBsb29wCiAgMS44CiAgICBsaW5lYXIudHJhbnNmb3JtLng6IHsgdmFsdWU6IDQ4MCwgZWFzaW5nOiAibGluZWFyIiB9CiAgICBlYXNlSW5PdXQudHJhbnNmb3JtLng6IHsgdmFsdWU6IDQ4MCwgZWFzaW5nOiAiZWFzZUluT3V0IiB9CiAgICBlYXNlT3V0QmFjay50cmFuc2Zvcm0ueDogeyB2YWx1ZTogNDgwLCBlYXNpbmc6ICJlYXNlT3V0QmFjayIgfQogICAgYm91bmNlLnRyYW5zZm9ybS54OiB7IHZhbHVlOiA0ODAsIGVhc2luZzogImJvdW5jZSIgfQogIDMuOAogICAgbGluZWFyLnRyYW5zZm9ybS54OiB7IHZhbHVlOiAxNTAsIGVhc2luZzogImVhc2VJbk91dCIgfQogICAgZWFzZUluT3V0LnRyYW5zZm9ybS54OiB7IHZhbHVlOiAxNTAsIGVhc2luZzogImVhc2VJbk91dCIgfQogICAgZWFzZU91dEJhY2sudHJhbnNmb3JtLng6IHsgdmFsdWU6IDE1MCwgZWFzaW5nOiAiZWFzZUluT3V0IiB9CiAgICBib3VuY2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDE1MCwgZWFzaW5nOiAiZWFzZUluT3V0IiB9Cg)
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGluZ2VzdDogY2FyZCAiSW5nZXN0IiBib2R5PSJyYXcgZXZlbnRzIiBjb2xvcj1zdGVlbGJsdWUgb3BhY2l0eSAwIGF0IDQwLDEyMAogIHBhcnNlOiBjYXJkICJQYXJzZSIgYm9keT0iaW50byByZWNvcmRzIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBvcGFjaXR5IDAgYXQgNDAsMTIwCiAgc3RvcmU6IGNhcmQgIlN0b3JlIiBib2R5PSJ0aW1lIHNlcmllcyIgY29sb3I9ZGFya29yYW5nZSBvcGFjaXR5IDAgYXQgNDAsMTIwCgphbmltYXRlIDUgbG9vcAogIDEKICAgIGluZ2VzdC5vcGFjaXR5OiAxCiAgICBpbmdlc3QudHJhbnNmb3JtLng6IHsgdmFsdWU6IDEzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMgogICAgcGFyc2Uub3BhY2l0eTogMQogICAgcGFyc2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDMzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMwogICAgc3RvcmUub3BhY2l0eTogMQogICAgc3RvcmUudHJhbnNmb3JtLng6IHsgdmFsdWU6IDUzMCwgZWFzaW5nOiAic3ByaW5nIiB9) · sample: `staggered-cards`
 
 </td>
 <td valign="top">
 
-<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/animate.gif" alt="Four dots racing with different easing curves" width="100%">
+<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/animate.gif" alt="Three cards dealing in one by one with spring easing" width="100%">
 
 </td>
 </tr>
@@ -144,44 +123,34 @@ animate 4 loop
 
 ## Camera direction
 
-A `camera` object frames the scene. Animate `look` and `zoom` to guide the viewer
-through a diagram step by step — targets can be coordinates, object ids, or `all`.
+A `camera` object frames the scene. Animate `look` to guide the viewer through a
+diagram step by step — a target can be an object id, a list `(a,b)` to fit several,
+coordinates, or `all`; the camera zooms to fit whatever it looks at.
 
 <table>
 <tr>
 <td width="52%" valign="top">
 
 ```
-background #14161c
-
 objects
-  cam: camera look=(300,170) zoom=1.1
-  a: box "Service A" color=steelblue at 140,90
-  b: box "Service B" color=mediumseagreen at 460,90
-  q: box "Queue" color=darkorange at 300,260
-  ab: arrow from=a to=b color=slategray
-  aq: arrow from=a to=q color=slategray
-  qb: arrow from=q to=b color=slategray
+  cam: camera look=all
+  a: rect 60x60 radius=6 fill crimson at 50,100
+  b: rect 60x60 radius=6 fill limegreen at 300,50
+  c: rect 60x60 radius=6 fill royalblue at 550,300
 
-animate 8 loop easing=easeInOutCubic
-  1.6
-    cam.camera.look: a
-    cam.camera.zoom: 2.2
-  3.2
-    cam.camera.look: q
-  4.8
-    cam.camera.look: b
-  6.4
-    cam.camera.look: (300,170)
-    cam.camera.zoom: 1.1
+animate 8 loop easing=easeInOut
+  2 cam.camera.look: (a)
+  4 cam.camera.look: (a,b)
+  6 cam.camera.look: (c)
+  8 cam.camera.look: all
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=YmFja2dyb3VuZCAjMTQxNjFjCgpvYmplY3RzCiAgY2FtOiBjYW1lcmEgbG9vaz0oMzAwLDE3MCkgem9vbT0xLjEKICBhOiBib3ggIlNlcnZpY2UgQSIgY29sb3I9c3RlZWxibHVlIGF0IDE0MCw5MAogIGI6IGJveCAiU2VydmljZSBCIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBhdCA0NjAsOTAKICBxOiBib3ggIlF1ZXVlIiBjb2xvcj1kYXJrb3JhbmdlIGF0IDMwMCwyNjAKICBhYjogYXJyb3cgZnJvbT1hIHRvPWIgY29sb3I9c2xhdGVncmF5CiAgYXE6IGFycm93IGZyb209YSB0bz1xIGNvbG9yPXNsYXRlZ3JheQogIHFiOiBhcnJvdyBmcm9tPXEgdG89YiBjb2xvcj1zbGF0ZWdyYXkKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXRDdWJpYwogIDEuNgogICAgY2FtLmNhbWVyYS5sb29rOiBhCiAgICBjYW0uY2FtZXJhLnpvb206IDIuMgogIDMuMgogICAgY2FtLmNhbWVyYS5sb29rOiBxCiAgNC44CiAgICBjYW0uY2FtZXJhLmxvb2s6IGIKICA2LjQKICAgIGNhbS5jYW1lcmEubG9vazogKDMwMCwxNzApCiAgICBjYW0uY2FtZXJhLnpvb206IDEuMQo)
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNhbTogY2FtZXJhIGxvb2s9YWxsCiAgYTogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGNyaW1zb24gYXQgNTAsMTAwCiAgYjogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGxpbWVncmVlbiBhdCAzMDAsNTAKICBjOiByZWN0IDYweDYwIHJhZGl1cz02IGZpbGwgcm95YWxibHVlIGF0IDU1MCwzMDAKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAyIGNhbS5jYW1lcmEubG9vazogKGEpCiAgNCBjYW0uY2FtZXJhLmxvb2s6IChhLGIpCiAgNiBjYW0uY2FtZXJhLmxvb2s6IChjKQogIDggY2FtLmNhbWVyYS5sb29rOiBhbGw) · sample: `camera-look-fit`
 
 </td>
 <td valign="top">
 
-<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/camera.gif" alt="A camera panning and zooming between three services" width="100%">
+<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/camera.gif" alt="A camera gliding between nodes, fitting one, two, then all of them" width="100%">
 
 </td>
 </tr>
@@ -190,51 +159,46 @@ animate 8 loop easing=easeInOutCubic
 ## Layout engines
 
 Nest children under a container and give it a `layout` — flex, grid, or circular. The
-layout solves positions for you, and layout properties (gap, span, slot) animate like
-everything else.
+layout solves positions for you, and layout properties (gap, span, slot, angle)
+animate like everything else — here the ring advances one slot per second.
 
 <table>
 <tr>
 <td width="52%" valign="top">
 
 ```
-background #14161c
-
 objects
-  row: rect 400x74 radius=10 fill #16202e stroke #2b3444 width=1 layout flex row gap=12 justify=center align=center at 250,60
-    fa: rect 90x42 radius=6 fill #22d3ee
-    fb: rect 90x42 radius=6 fill #34d399
-    fc: rect 90x42 radius=6 fill #f472b6
-  dash: rect 400x170 radius=10 fill #16202e stroke #2b3444 width=1 layout grid columns=3 gap=10 padding=12 align=start at 250,215
-    m1: rect 0x40 radius=6 fill #22d3ee
-    m2: rect 0x40 radius=6 fill #34d399
-    m3: rect 0x40 radius=6 fill #f472b6
-    chart: rect 0x84 radius=6 fill #3b4658 layout gridCol=1 colSpan=2
-    sidebar: rect 0x84 radius=6 fill #a78bfa
+  ring: ellipse 220x220 stroke slategray width=1 layout circular radius=110 startAngle=0 at 250,170
+    n1: rect 50x30 radius=4 fill steelblue
+    n2: rect 50x30 radius=4 fill coral
+    n3: rect 50x30 radius=4 fill seagreen
+    n4: rect 50x30 radius=4 fill gold
+    n5: rect 50x30 radius=4 fill mediumpurple
+    n6: rect 50x30 radius=4 fill tomato
 
 animate 6 loop easing=easeInOut
-  3
-    row.layout.gap: 48
-    dash.chart.layout.colSpan: 1
-  6
-    row.layout.gap: 12
-    dash.chart.layout.colSpan: 2
+  1 ring.layout.startAngle: 60
+  2 ring.layout.startAngle: 120
+  3 ring.layout.startAngle: 180
+  4 ring.layout.startAngle: 240
+  5 ring.layout.startAngle: 300
+  6 ring.layout.startAngle: 360
 ```
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=YmFja2dyb3VuZCAjMTQxNjFjCgpvYmplY3RzCiAgcm93OiByZWN0IDQwMHg3NCByYWRpdXM9MTAgZmlsbCAjMTYyMDJlIHN0cm9rZSAjMmIzNDQ0IHdpZHRoPTEgbGF5b3V0IGZsZXggcm93IGdhcD0xMiBqdXN0aWZ5PWNlbnRlciBhbGlnbj1jZW50ZXIgYXQgMjUwLDYwCiAgICBmYTogcmVjdCA5MHg0MiByYWRpdXM9NiBmaWxsICMyMmQzZWUKICAgIGZiOiByZWN0IDkweDQyIHJhZGl1cz02IGZpbGwgIzM0ZDM5OQogICAgZmM6IHJlY3QgOTB4NDIgcmFkaXVzPTYgZmlsbCAjZjQ3MmI2CiAgZGFzaDogcmVjdCA0MDB4MTcwIHJhZGl1cz0xMCBmaWxsICMxNjIwMmUgc3Ryb2tlICMyYjM0NDQgd2lkdGg9MSBsYXlvdXQgZ3JpZCBjb2x1bW5zPTMgZ2FwPTEwIHBhZGRpbmc9MTIgYWxpZ249c3RhcnQgYXQgMjUwLDIxNQogICAgbTE6IHJlY3QgMHg0MCByYWRpdXM9NiBmaWxsICMyMmQzZWUKICAgIG0yOiByZWN0IDB4NDAgcmFkaXVzPTYgZmlsbCAjMzRkMzk5CiAgICBtMzogcmVjdCAweDQwIHJhZGl1cz02IGZpbGwgI2Y0NzJiNgogICAgY2hhcnQ6IHJlY3QgMHg4NCByYWRpdXM9NiBmaWxsICMzYjQ2NTggbGF5b3V0IGdyaWRDb2w9MSBjb2xTcGFuPTIKICAgIHNpZGViYXI6IHJlY3QgMHg4NCByYWRpdXM9NiBmaWxsICNhNzhiZmEKCmFuaW1hdGUgNiBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAzCiAgICByb3cubGF5b3V0LmdhcDogNDgKICAgIGRhc2guY2hhcnQubGF5b3V0LmNvbFNwYW46IDEKICA2CiAgICByb3cubGF5b3V0LmdhcDogMTIKICAgIGRhc2guY2hhcnQubGF5b3V0LmNvbFNwYW46IDIK)
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIHJpbmc6IGVsbGlwc2UgMjIweDIyMCBzdHJva2Ugc2xhdGVncmF5IHdpZHRoPTEgbGF5b3V0IGNpcmN1bGFyIHJhZGl1cz0xMTAgc3RhcnRBbmdsZT0wIGF0IDI1MCwxNzAKICAgIG4xOiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgc3RlZWxibHVlCiAgICBuMjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGNvcmFsCiAgICBuMzogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHNlYWdyZWVuCiAgICBuNDogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGdvbGQKICAgIG41OiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgbWVkaXVtcHVycGxlCiAgICBuNjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHRvbWF0bwoKYW5pbWF0ZSA2IGxvb3AgZWFzaW5nPWVhc2VJbk91dAogIDEgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogNjAKICAyIHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDEyMAogIDMgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMTgwCiAgNCByaW5nLmxheW91dC5zdGFydEFuZ2xlOiAyNDAKICA1IHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDMwMAogIDYgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMzYw) · sample: `circular-layout`
 
 </td>
 <td valign="top">
 
-<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/layout.gif" alt="A flex row breathing its gap apart while a grid reflows around a resizing cell" width="100%">
+<img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/layout.gif" alt="Six nodes ringed evenly, rotating one slot per second" width="100%">
 
 </td>
 </tr>
 </table>
 
 There's more in the [playground](https://zummed.github.io/starch/)'s sample browser:
-smooth splines and routed connectors, state-machine shapes, style animation, camera
-rotation, circular layout, and slot animation between containers.
+flex and grid layouts, slot animation between containers, smooth splines and routed
+connectors, state-machine shapes, style animation, and camera rotation.
 
 ## Quick start
 

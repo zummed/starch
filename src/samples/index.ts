@@ -61,6 +61,42 @@ ${resetLines.join('\n')}`,
 
 export const v2Samples: V2Sample[] = [
 
+  // ─── SHOWCASE ──────────────────────────────────────────────────
+  // First sample = the playground's default scene, and the README hero.
+  {
+    name: 'request-flow',
+    category: 'Showcase',
+    description: 'A request flows from client to API, database, and cache — staggered fade-ins with labelled arrows',
+    dsl: `\
+objects
+  client: at 90,120
+    clientBg: rect 120x50 radius=10 fill #16202e stroke #22d3ee width=2
+    clientLabel: text "Client" size=13 fill #e2e8f0
+  api: opacity 0 at 330,120
+    apiBg: rect 120x50 radius=10 fill #16202e stroke #34d399 width=2
+    apiLabel: text "API" size=13 fill #e2e8f0
+  db: opacity 0 at 570,120
+    dbBg: rect 120x50 radius=10 fill #16202e stroke #fbbf24 width=2
+    dbLabel: text "Database" size=13 fill #e2e8f0
+  cache: opacity 0 at 330,270
+    cacheBg: rect 120x50 radius=10 fill #16202e stroke #f472b6 width=2
+    cacheLabel: text "Cache" size=13 fill #e2e8f0
+  req: arrow from=client to=api label="request" color=#7d8590 opacity 0
+  q: arrow from=api to=db label="query" color=#7d8590 opacity 0
+  hit: arrow from=api to=cache label="hot path" color=#7d8590 opacity 0
+
+animate 7 loop easing=easeInOut
+  0.9
+    api.opacity: 1
+    req.opacity: 1
+  1.8
+    db.opacity: 1
+    q.opacity: 1
+  2.7
+    cache.opacity: 1
+    hit.opacity: 1`,
+  },
+
   // ─── PRIMITIVES ────────────────────────────────────────────────
   {
     name: 'rect',
@@ -117,6 +153,19 @@ l3: text "dotted" size=11 fill gray at 42,180`,
   },
 
   // ─── SHAPE SETS ──────────────────────────────────────────────
+  {
+    name: 'template-tour',
+    category: 'Shape Sets',
+    description: 'One of each core template, connected with a labelled arrow',
+    dsl: `\
+objects
+  api: box "API gateway" color=steelblue at 100,70
+  worker: circle "Worker" color=mediumseagreen at 340,70
+  status: pill "healthy" color=darkorange at 500,70
+  doc: note "Plain text in, diagrams out." at 100,210
+  info: card "Card" body="With body text" color=mediumpurple at 340,215
+  link: arrow from=api to=worker label="jobs" color=steelblue`,
+  },
   {
     name: 'core-shapes',
     category: 'Shape Sets',
@@ -370,6 +419,27 @@ animate 4 loop easing=easeInOut
   4
     mover.transform.x: 100
     mover.transform.y: 150`,
+  },
+  {
+    name: 'staggered-cards',
+    category: 'Animation',
+    description: 'Cards deal in one by one with spring easing',
+    dsl: `\
+objects
+  ingest: card "Ingest" body="raw events" color=steelblue opacity 0 at 40,120
+  parse: card "Parse" body="into records" color=mediumseagreen opacity 0 at 40,120
+  store: card "Store" body="time series" color=darkorange opacity 0 at 40,120
+
+animate 5 loop
+  1
+    ingest.opacity: 1
+    ingest.transform.x: { value: 130, easing: "spring" }
+  2
+    parse.opacity: 1
+    parse.transform.x: { value: 330, easing: "spring" }
+  3
+    store.opacity: 1
+    store.transform.x: { value: 530, easing: "spring" }`,
   },
   {
     name: 'opacity-animation',
