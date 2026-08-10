@@ -148,6 +148,24 @@ describe('emitFrame', () => {
     expect(pushCall!.args[0]).toBe(0.5);
   });
 
+  it('composites a child\'s own opacity with its parent\'s', () => {
+    const { backend, calls } = createMockBackend();
+    const child = createNode({ id: 'c', opacity: 0.8, rect: { w: 10, h: 10 } });
+    const parent = createNode({ id: 'p', opacity: 0.5, children: [child] });
+    emitFrame(backend, [parent], [parent]);
+    const pushes = calls.filter(c => c.method === 'pushOpacity').map(c => c.args[0]);
+    expect(pushes).toEqual([0.5, 0.5 * 0.8]);
+  });
+
+  it('a faded-out parent hides children that set their own opacity', () => {
+    const { backend, calls } = createMockBackend();
+    const child = createNode({ id: 'c', opacity: 0.85, rect: { w: 10, h: 10 } });
+    const parent = createNode({ id: 'p', opacity: 0, children: [child] });
+    emitFrame(backend, [parent], [parent]);
+    const pushes = calls.filter(c => c.method === 'pushOpacity').map(c => c.args[0]);
+    expect(pushes).toEqual([0, 0]);
+  });
+
   it('skips invisible nodes', () => {
     const { backend, calls } = createMockBackend();
     const node = createNode({ id: 'hidden', visible: false, rect: { w: 10, h: 10 } });

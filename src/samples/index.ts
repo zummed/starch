@@ -455,15 +455,15 @@ objects
   {
     name: 'opacity-inheritance',
     category: 'Inheritance',
-    description: 'Opacity inherits like fill — child 0.8 overrides parent 0.5, child without opacity inherits 0.5',
+    description: 'Opacity composites — a child\'s own opacity multiplies its parent\'s, so 0.8 inside 0.5 renders at 0.4',
     dsl: `\
 objects
   parent: opacity 0.5 at 120,130
     inherits: rect 80x80 radius=8 fill dodgerblue
-    overrides: rect 80x80 radius=8 fill dodgerblue opacity 0.8 at 100,0
+    composes: rect 80x80 radius=8 fill dodgerblue opacity 0.8 at 100,0
   reference: rect 80x80 radius=8 fill dodgerblue at 370,130
   l1: text "inherits 0.5" size=10 fill gray at 120,240
-  l2: text "overrides to 0.8" size=10 fill gray at 220,240
+  l2: text "0.8 x 0.5 = 0.4" size=10 fill gray at 220,240
   l3: text "full opacity" size=10 fill gray at 370,240`,
   },
 

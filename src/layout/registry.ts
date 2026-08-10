@@ -2,6 +2,11 @@ import type { Node } from '../types/node';
 import type { ConstraintResult } from './solver';
 import { Solver } from './solver';
 import { getWorldPosition } from '../renderer/geometry';
+import { flexConstraintStrategy } from './flex';
+import { absoluteStrategy } from './absolute';
+import { gridConstraintStrategy } from './strategies/grid';
+import { circularConstraintStrategy } from './strategies/circular';
+import { LAYOUT_STRATEGY_NAMES, type LayoutStrategyName } from '../types/properties';
 
 /** A single child's resolved placement, extracted from solved variables. */
 export interface ChildPlacement {
@@ -17,11 +22,33 @@ export type ConstraintStrategy = (node: Node, children: Node[]) => ConstraintRes
 
 const strategies = new Map<string, ConstraintStrategy>();
 
+const BUILTIN_STRATEGIES: Record<LayoutStrategyName, ConstraintStrategy> = {
+  flex: flexConstraintStrategy,
+  absolute: absoluteStrategy,
+  grid: gridConstraintStrategy,
+  circular: circularConstraintStrategy,
+};
+
+// Registered on first use rather than at module load: bundlers may drop a
+// module's top-level side effects when only bindings are imported from it
+// (exactly this tree-shake removed the registration from the production
+// playground bundle), but code inside a called function can't be dropped.
+let builtinsRegistered = false;
+function ensureBuiltins(): void {
+  if (builtinsRegistered) return;
+  builtinsRegistered = true;
+  for (const name of LAYOUT_STRATEGY_NAMES) {
+    if (!strategies.has(name)) strategies.set(name, BUILTIN_STRATEGIES[name]);
+  }
+}
+
 export function registerLayoutStrategy(name: string, strategy: ConstraintStrategy): void {
+  ensureBuiltins();
   strategies.set(name, strategy);
 }
 
 export function getLayoutStrategy(name: string): ConstraintStrategy | undefined {
+  ensureBuiltins();
   return strategies.get(name);
 }
 
@@ -144,7 +171,12 @@ export function computeLayoutPlacements(roots: Node[]): LayoutResult[] {
     const layoutType = node.layout?.type;
     if (!layoutType) return;
     const strategy = getLayoutStrategy(layoutType);
-    if (!strategy) return;
+    if (!strategy) {
+      // The parser's schema restricts layout types to registered names, so
+      // reaching this means broken wiring — fail loudly, not with a
+      // silently unlaid-out container.
+      throw new Error(`[starch] layout: no strategy registered for "${layoutType}"`);
+    }
 
     const { children: layoutChildren, slotMemberIds } = collectLayoutChildren(node, roots);
     const result = strategy(node, layoutChildren);

@@ -219,8 +219,10 @@ function emitNode(
   const [anchorX, anchorY] = resolveAnchorPixels(t?.anchor as AnchorPoint | undefined, node);
   backend.pushTransform(x, y, rotation, scale, anchorX, anchorY);
 
-  // Priority: own > style > parent (same for all visual properties including opacity)
-  const opacity = node.opacity ?? styleOpacity ?? parentOpacity;
+  // Fill/stroke inherit (own > style > parent). Opacity composites instead:
+  // a node's own opacity multiplies its ancestors', so fading a group fades
+  // the whole subtree even when a child sets its own opacity.
+  const opacity = (node.opacity ?? styleOpacity ?? 1) * parentOpacity;
   backend.pushOpacity(opacity);
 
   const fill = node.fill ?? styleFill ?? parentFill;
