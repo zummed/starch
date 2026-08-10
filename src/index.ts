@@ -1,10 +1,14 @@
 // ── Main class ──
 export { StarchDiagram } from './StarchDiagram';
-export type { StarchDiagramOptions, StarchEvent, StarchEventHandler, StarchEventType } from './StarchDiagram';
+export type { StarchDiagramOptions, StarchEvent, StarchEventHandler, StarchEventType, LoadResult } from './StarchDiagram';
 
-// ── React hook ──
-export { useV2Diagram } from './app/components/V2Diagram';
-export type { V2DiagramProps } from './app/components/V2Diagram';
+// ── Static rendering ──
+export { renderToSVG } from './renderStatic';
+export type { RenderToSVGOptions } from './renderStatic';
+
+// ── Edit-in-playground round trip ──
+export { PLAYGROUND_URL, buildEditUrl, encodeDslToHash, decodeDslFromHash, isPlaygroundMessage, isHostMessage } from './editing';
+export type { PlaygroundMessage, HostMessage } from './editing';
 
 // ── Parsing ──
 export { parseScene } from './parser/parser';
@@ -19,7 +23,7 @@ export { applyTrackValues, applyTrackValuesMut, cloneNodeTree } from './animatio
 export { SvgRenderBackend } from './renderer/svgBackend';
 export type { RenderBackend, RgbaColor, StrokeStyle, PathSegment } from './renderer/backend';
 export { emitFrame } from './renderer/emitter';
-export { computeViewBox, findActiveCamera } from './renderer/camera';
+export { computeViewBox, findActiveCamera, computeAutoFitViewBox } from './renderer/camera';
 export type { ViewBox } from './renderer/camera';
 
 // ── Layout ──

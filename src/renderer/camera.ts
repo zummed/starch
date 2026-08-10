@@ -1,4 +1,5 @@
 import type { Node } from '../types/node';
+import { computeSceneWorldBounds } from './geometry';
 
 export interface ViewBox {
   x: number;
@@ -41,5 +42,21 @@ export function computeViewBox(
     w,
     h,
     rotation: rotation !== 0 ? rotation : undefined,
+  };
+}
+
+/**
+ * Compute a viewBox that fits all content in the scene (excluding camera
+ * nodes) with a margin, for use when no camera is active.
+ */
+export function computeAutoFitViewBox(nodes: Node[], margin = 30): ViewBox | undefined {
+  const bounds = computeSceneWorldBounds(nodes);
+  if (!bounds) return undefined;
+
+  return {
+    x: bounds.minX - margin,
+    y: bounds.minY - margin,
+    w: (bounds.maxX - bounds.minX) + margin * 2,
+    h: (bounds.maxY - bounds.minY) + margin * 2,
   };
 }

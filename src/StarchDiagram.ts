@@ -13,17 +13,17 @@ import { evaluateAllTracks } from './animation/evaluator';
 import { applyTrackValues } from './animation/applyTracks';
 import { measureTextNodes } from './text/measurePass';
 import { getTextMeasurer } from './text/measure';
-import { computeViewBox, findActiveCamera } from './renderer/camera';
-import { computeSceneWorldBounds } from './renderer/geometry';
+import { computeViewBox, findActiveCamera, computeAutoFitViewBox } from './renderer/camera';
 import { emitFrame } from './renderer/emitter';
 import { SvgRenderBackend } from './renderer/svgBackend';
 import { colorToRgba } from './types/color';
 
-export type StarchEventType = 'chapterEnter' | 'chapterExit' | 'ended';
+export type StarchEventType = 'chapterEnter' | 'chapterExit' | 'ended' | 'error';
 export interface StarchEvent {
   type: StarchEventType;
   chapter?: Chapter;
   time: number;
+  message?: string;
 }
 export type StarchEventHandler = (event: StarchEvent) => void;
 
@@ -33,6 +33,8 @@ export interface StarchDiagramOptions {
   speed?: number;
   onEvent?: StarchEventHandler;
 }
+
+export type LoadResult = { ok: true; warnings: string[] } | { ok: false; error: string };
 
 export class StarchDiagram {
   private _container: HTMLElement;
@@ -44,6 +46,8 @@ export class StarchDiagram {
   private _baseNodes: Node[] = [];
   private _viewport = { w: 800, h: 500 };
   private _valuesMap = new Map<string, unknown>();
+  private _lastError: string | null = null;
+  private _warnings: string[] = [];
 
   private _time = 0;
   private _playing = false;
@@ -79,6 +83,8 @@ export class StarchDiagram {
   get playing(): boolean { return this._playing; }
   get speed(): number { return this._speed; }
   get chapters(): Chapter[] { return this._animConfig.chapters ?? []; }
+  get error(): string | null { return this._lastError; }
+  get warnings(): string[] { return this._warnings; }
 
   get activeChapter(): Chapter | undefined {
     const chapters = this.chapters;
@@ -142,9 +148,12 @@ export class StarchDiagram {
 
   // ── Content ──
 
-  setDSL(dsl: string): void {
-    this._loadDSL(dsl);
-    this._render();
+  setDSL(dsl: string): LoadResult {
+    const result = this._loadDSL(dsl);
+    if (result.ok) {
+      this._render();
+    }
+    return result;
   }
 
   // ── Events ──
@@ -172,35 +181,44 @@ export class StarchDiagram {
 
   // ── Internal ──
 
-  private _loadDSL(dsl: string): void {
+  private _loadDSL(dsl: string): LoadResult {
+    let scene: ParsedScene;
     try {
-      const scene = parseScene(dsl, getTextMeasurer());
-      this._scene = scene;
-      for (const warning of scene.warnings) {
-        console.warn(warning);
-      }
-      this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [] };
+      scene = parseScene(dsl, getTextMeasurer());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this._lastError = message;
+      this._emit({ type: 'error', message, time: this._time });
+      return { ok: false, error: message }; // keep previous scene state on parse error
+    }
 
-      const vp = scene.viewport as { width?: number; height?: number } | undefined;
-      this._viewport = {
-        w: vp?.width ?? 800,
-        h: vp?.height ?? 500,
-      };
+    this._scene = scene;
+    for (const warning of scene.warnings) {
+      console.warn(warning);
+    }
+    this._warnings = scene.warnings;
+    this._lastError = null;
+    this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [] };
 
-      // Apply background
-      if (scene.background) {
-        try {
-          this._backend.setBackground(colorToRgba(scene.background as Color));
-        } catch {
-          this._backend.setBackground('transparent');
-        }
-      } else {
+    const vp = scene.viewport as { width?: number; height?: number } | undefined;
+    this._viewport = {
+      w: vp?.width ?? 800,
+      h: vp?.height ?? 500,
+    };
+
+    // Apply background
+    if (scene.background) {
+      try {
+        this._backend.setBackground(colorToRgba(scene.background as Color));
+      } catch {
         this._backend.setBackground('transparent');
       }
-    } catch {
-      return; // keep previous state on parse error
+    } else {
+      this._backend.setBackground('transparent');
     }
+
     this._rebuild();
+    return { ok: true, warnings: scene.warnings };
   }
 
   private _rebuild(): void {
@@ -281,22 +299,9 @@ export class StarchDiagram {
     if (cameraNode) {
       viewBox = computeViewBox(cameraNode, { x: 0, y: 0, ...this._viewport });
     } else {
-      viewBox = this._computeAutoFit(animated);
+      viewBox = computeAutoFitViewBox(animated);
     }
 
     emitFrame(this._backend, animated, animated, viewBox);
-  }
-
-  private _computeAutoFit(nodes: Node[]): ViewBox | undefined {
-    const bounds = computeSceneWorldBounds(nodes);
-    if (!bounds) return undefined;
-
-    const margin = 30;
-    return {
-      x: bounds.minX - margin,
-      y: bounds.minY - margin,
-      w: (bounds.maxX - bounds.minX) + margin * 2,
-      h: (bounds.maxY - bounds.minY) + margin * 2,
-    };
   }
 }

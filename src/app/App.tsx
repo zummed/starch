@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useV2Diagram } from './components/V2Diagram';
+import { useV2Diagram } from '../react/V2Diagram';
 import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabFileManager } from './components/TabFileManager';
 import { Timeline } from './components/Timeline';
 import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
 import { v2Samples, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
+import { isEmbedMode, readHashImport, useEmbedHost } from './embedSession';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
@@ -70,13 +71,24 @@ function savePrefs(prefs: Record<string, unknown>) {
 }
 
 export default function App() {
+  // Embed mode (?embed=1) and any DSL on the URL hash are both fixed for the lifetime
+  // of the page — resolve them once, up front.
+  const embedMode = useRef(isEmbedMode(window.location.search)).current;
+  const initialHashImport = useRef(readHashImport(window.location.hash)).current;
+
   const initialPrefs = useRef(loadPrefs());
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(detectDefaultMode);
 
-  const storedTabs = useRef(loadStoredTabs());
+  // Embed sessions never touch the tabs localStorage — an embedded edit must never
+  // clobber the user's own playground tabs.
+  const storedTabs = useRef(embedMode ? null : loadStoredTabs());
   const nextTabIdRef = useRef(storedTabs.current?.nextTabId ?? 1);
 
   const [tabs, setTabs] = useState<EditorTab[]>(() => {
+    if (embedMode) {
+      const dsl = initialHashImport.kind === 'dsl' ? initialHashImport.dsl : DEFAULT_DSL;
+      return [{ id: 'embed', label: 'Embedded', dsl, closable: false }];
+    }
     const sampleTab: EditorTab = {
       id: 'sample',
       label: 'Sample',
@@ -95,6 +107,7 @@ export default function App() {
     return [sampleTab, ...restored];
   });
   const [activeTabId, _setActiveTabId] = useState(() => {
+    if (embedMode) return 'embed';
     const stored = storedTabs.current;
     if (stored?.activeTabId) {
       const exists = stored.activeTabId === 'sample' || stored.tabs.some(t => t.id === stored.activeTabId);
@@ -107,9 +120,10 @@ export default function App() {
     activeTabIdRef.current = id;
     _setActiveTabId(id);
   }, []);
-  const [showEditor, setShowEditor] = useState(initialPrefs.current.showEditor);
-  const [showBrowser, setShowBrowser] = useState(initialPrefs.current.showBrowser);
+  const [showEditor, setShowEditor] = useState(embedMode ? true : initialPrefs.current.showEditor);
+  const [showBrowser, setShowBrowser] = useState(embedMode ? false : initialPrefs.current.showBrowser);
   const [showFileManager, setShowFileManager] = useState(false);
+  const [importError, setImportError] = useState(false);
   const [activeBlade, setActiveBlade] = useState<'samples' | 'files' | 'editor' | 'viewer'>('viewer');
   const [debugMode, setDebugMode] = useState(false);
   const [previewRatio, setPreviewRatio] = useState(false);
@@ -158,6 +172,44 @@ export default function App() {
     }
   }, []);
 
+  // Boot-time hash handling. Embed mode already consumed the hash as its initial DSL
+  // (see the `tabs` initializer above) — here we just surface a decode error. In
+  // normal mode a `#dsl=` hash is imported as a new active tab, then cleared so a
+  // reload doesn't re-import a duplicate.
+  useEffect(() => {
+    if (embedMode) {
+      if (initialHashImport.kind === 'error') {
+        console.warn('starch playground: failed to decode DSL from URL hash');
+        setImportError(true);
+      }
+      return;
+    }
+    if (initialHashImport.kind === 'dsl') {
+      const id = 'tab-' + (nextTabIdRef.current++);
+      setTabs(prev => [...prev, { id, label: 'Imported', dsl: initialHashImport.dsl, closable: true }]);
+      setActiveTabId(id);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else if (initialHashImport.kind === 'error') {
+      console.warn('starch playground: failed to decode DSL from URL hash');
+      setImportError(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; embedMode/initialHashImport are boot-time constants
+  }, []);
+
+  // Embed mode: replace the editor content when the host sends an `init` message.
+  const handleHostInit = useCallback((dsl: string) => {
+    setTabs(prev => prev.map(t => t.id === 'embed' ? { ...t, dsl } : t));
+    editorRef.current?.loadDsl(dsl);
+    setActiveDsl(dsl);
+  }, []);
+  const embedHost = useEmbedHost(embedMode, handleHostInit);
+  const handleEmbedSave = useCallback(() => {
+    embedHost.save(editorRef.current?.getDsl() ?? activeDsl);
+  }, [embedHost, activeDsl]);
+  const handleEmbedCancel = useCallback(() => {
+    embedHost.cancel();
+  }, [embedHost]);
+
   // Auto-detect layout on resize
   useEffect(() => {
     const handler = () => {
@@ -172,9 +224,10 @@ export default function App() {
     savePrefs({ showBrowser, showEditor, editorWidth });
   }, [showBrowser, showEditor, editorWidth]);
 
-  // Persist user tabs (debounced)
+  // Persist user tabs (debounced). Never in embed mode — see the storedTabs comment above.
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (embedMode) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveStoredTabs(tabs, activeTabId, nextTabIdRef.current);
@@ -536,70 +589,74 @@ export default function App() {
 
   const editorContent = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1d24',
-        flexShrink: 0, background: '#0a0c10', overflow: 'hidden',
-      }}>
-        {tabs.filter(t => !t.closable || t.visible !== false).map(tab => (
-          <div
-            key={tab.id}
-            onClick={() => setActiveTabId(tab.id)}
-            style={{
-              padding: '6px 12px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
-              color: tab.id === activeTabId ? '#e2e5ea' : '#6b7280',
-              background: tab.id === activeTabId ? '#0e1117' : 'transparent',
-              borderBottom: tab.id === activeTabId ? '2px solid #a78bfa' : '2px solid transparent',
-              whiteSpace: 'nowrap', userSelect: 'none',
-            }}
-          >
-            {tab.label.length > 30 ? tab.label.slice(0, 30) + '...' : tab.label}
-          </div>
-        ))}
-        <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
-        <div style={{ flex: 1 }} />
-      </div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
-        borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
-      }}>
-        {activeTab.closable && (
-          <>
-            <button
-              onClick={loadFileToTab}
+      {!embedMode && (
+        <div style={{
+          display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1d24',
+          flexShrink: 0, background: '#0a0c10', overflow: 'hidden',
+        }}>
+          {tabs.filter(t => !t.closable || t.visible !== false).map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
               style={{
-                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
-                border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
-                cursor: 'pointer', whiteSpace: 'nowrap',
+                padding: '6px 12px', fontSize: 11, fontFamily: FONT, cursor: 'pointer',
+                color: tab.id === activeTabId ? '#e2e5ea' : '#6b7280',
+                background: tab.id === activeTabId ? '#0e1117' : 'transparent',
+                borderBottom: tab.id === activeTabId ? '2px solid #a78bfa' : '2px solid transparent',
+                whiteSpace: 'nowrap', userSelect: 'none',
               }}
             >
-              Load
-            </button>
+              {tab.label.length > 30 ? tab.label.slice(0, 30) + '...' : tab.label}
+            </div>
+          ))}
+          <div onClick={addTab} style={{ padding: '6px 10px', fontSize: 13, color: '#4a4f59', cursor: 'pointer', userSelect: 'none' }}>+</div>
+          <div style={{ flex: 1 }} />
+        </div>
+      )}
+      {!embedMode && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
+          borderBottom: '1px solid #1a1d24', flexShrink: 0, background: '#0a0c10',
+        }}>
+          {activeTab.closable && (
+            <>
+              <button
+                onClick={loadFileToTab}
+                style={{
+                  padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+                  border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Load
+              </button>
+              <button
+                onClick={saveTabToFile}
+                style={{
+                  padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
+                  border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Save
+              </button>
+            </>
+          )}
+          <div style={{ flex: 1 }} />
+          {activeTab.closable && (
             <button
-              onClick={saveTabToFile}
+              onClick={() => closeTab(activeTabId)}
               style={{
-                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: FONT,
-                border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
-                cursor: 'pointer', whiteSpace: 'nowrap',
+                padding: '3px 6px', borderRadius: 4, fontSize: 11, fontFamily: FONT,
+                border: '1px solid #2a2d35', background: '#14161c', color: '#ef4444',
+                cursor: 'pointer', lineHeight: 1,
               }}
             >
-              Save
+              ✕
             </button>
-          </>
-        )}
-        <div style={{ flex: 1 }} />
-        {activeTab.closable && (
-          <button
-            onClick={() => closeTab(activeTabId)}
-            style={{
-              padding: '3px 6px', borderRadius: 4, fontSize: 11, fontFamily: FONT,
-              border: '1px solid #2a2d35', background: '#14161c', color: '#ef4444',
-              cursor: 'pointer', lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <StructuralEditor
           key={activeTab.id}
@@ -672,6 +729,67 @@ export default function App() {
         }
       `}</style>
 
+      {/* Embed mode top bar — replaces sample/file navigation with Save/Cancel for the
+          single diagram being edited. */}
+      {embedMode && (
+        <div style={{
+          padding: '8px 12px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', borderBottom: '1px solid #1a1d24', flexShrink: 0,
+          background: '#0a0c10',
+        }}>
+          <span style={{
+            fontSize: 11, fontFamily: FONT, fontWeight: 600, color: '#8a8f98',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {(typeof diagram.name === 'string' && diagram.name.trim()) || 'Untitled'}
+          </span>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={handleEmbedCancel}
+              style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontFamily: FONT,
+                border: '1px solid #2a2d35', background: '#14161c', color: '#6b7280',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleEmbedSave}
+              style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontFamily: FONT,
+                border: '1px solid #a78bfa', background: 'rgba(167,139,250,0.1)', color: '#a78bfa',
+                cursor: 'pointer',
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Non-intrusive signal for a #dsl= hash that failed to decode */}
+      {importError && (
+        <div style={{
+          padding: '6px 12px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', borderBottom: '1px solid #ef4444',
+          background: '#3b1219', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 11, fontFamily: FONT, color: '#ef4444' }}>
+            Couldn't load the diagram from this link — the URL may be corrupted.
+          </span>
+          <button
+            onClick={() => setImportError(false)}
+            style={{
+              background: 'transparent', border: 'none', color: '#ef4444',
+              fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: '0 4px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         padding: isBlade ? '8px 12px' : '10px 20px',
@@ -720,23 +838,23 @@ export default function App() {
             background: '#08090d', borderRight: '1px solid #1a1d24',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
           }}>
-            {bladeBarItem('samples', 'SAMPLES', activeBlade === 'samples', () => setActiveBlade('samples'))}
-            {bladeBarItem('files', 'FILES', activeBlade === 'files', () => setActiveBlade('files'))}
+            {!embedMode && bladeBarItem('samples', 'SAMPLES', activeBlade === 'samples', () => setActiveBlade('samples'))}
+            {!embedMode && bladeBarItem('files', 'FILES', activeBlade === 'files', () => setActiveBlade('files'))}
             {bladeBarItem('editor', 'EDITOR', activeBlade === 'editor', () => setActiveBlade('editor'))}
             {bladeBarItem('viewer', 'VIEWER', activeBlade === 'viewer', () => setActiveBlade('viewer'))}
           </div>
 
           {/* Content area — all mounted, only one visible */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'samples' ? 'block' : 'none' }}>
+            {!embedMode && <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'samples' ? 'block' : 'none' }}>
               <V2SampleBrowser activeSampleId={activeSampleId} onSelect={handleSampleClick} />
-            </div>
-            <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'files' ? 'block' : 'none' }}>
+            </div>}
+            {!embedMode && <div style={{ flex: 1, overflow: 'auto', display: activeBlade === 'files' ? 'block' : 'none' }}>
               <TabFileManager
                 tabs={tabs} activeTabId={activeTabId} onSelectTab={setActiveTabId}
                 onToggleVisible={handleToggleVisible} onDuplicateTab={handleDuplicateTab} onDeleteTab={closeTab}
               />
-            </div>
+            </div>}
             <div style={{ flex: 1, overflow: 'hidden', display: activeBlade === 'editor' ? 'flex' : 'none', flexDirection: 'column' }}>
               {editorContent}
             </div>
@@ -754,48 +872,50 @@ export default function App() {
           style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, userSelect: isDragging ? 'none' : 'auto' }}
           onMouseMove={(e) => {
             if (!dragging.current || !bodyRef.current) return;
-            const panelsWidth = 36 + ((showBrowser || showFileManager) ? 240 : 0);
+            const panelsWidth = embedMode ? 0 : 36 + ((showBrowser || showFileManager) ? 240 : 0);
             const bodyLeft = bodyRef.current.getBoundingClientRect().left;
             setEditorWidth(Math.max(e.clientX - bodyLeft - panelsWidth, 200));
           }}
           onMouseUp={() => { dragging.current = false; setIsDragging(false); }}
           onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
         >
-          {/* Left blade bar */}
-          <div style={{
-            width: 32, height: '100%', flexShrink: 0,
-            background: '#08090d', borderRight: '1px solid #1a1d24',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
-          }}>
-            {bladeBarItem('samples', 'SAMPLES', showBrowser, () => { setShowBrowser(!showBrowser); if (!showBrowser) setShowFileManager(false); })}
-            {bladeBarItem('files', 'FILES', showFileManager, () => { setShowFileManager(!showFileManager); if (!showFileManager) setShowBrowser(false); })}
-          </div>
+          {!embedMode && (<>
+            {/* Left blade bar */}
+            <div style={{
+              width: 32, height: '100%', flexShrink: 0,
+              background: '#08090d', borderRight: '1px solid #1a1d24',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
+            }}>
+              {bladeBarItem('samples', 'SAMPLES', showBrowser, () => { setShowBrowser(!showBrowser); if (!showBrowser) setShowFileManager(false); })}
+              {bladeBarItem('files', 'FILES', showFileManager, () => { setShowFileManager(!showFileManager); if (!showFileManager) setShowBrowser(false); })}
+            </div>
 
-          {/* Side panel — slides in/out */}
-          <div style={{
-            width: (showBrowser || showFileManager) ? 240 : 0,
-            height: '100%',
-            flexShrink: 0,
-            overflow: 'hidden',
-            transition: 'width 0.2s ease',
-          }}>
-            {showBrowser && (
-              <V2SampleBrowser
-                activeSampleId={activeSampleId}
-                onSelect={handleSampleClick}
-              />
-            )}
-            {showFileManager && (
-              <TabFileManager
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onSelectTab={setActiveTabId}
-                onToggleVisible={handleToggleVisible}
-                onDuplicateTab={handleDuplicateTab}
-                onDeleteTab={closeTab}
-              />
-            )}
-          </div>
+            {/* Side panel — slides in/out */}
+            <div style={{
+              width: (showBrowser || showFileManager) ? 240 : 0,
+              height: '100%',
+              flexShrink: 0,
+              overflow: 'hidden',
+              transition: 'width 0.2s ease',
+            }}>
+              {showBrowser && (
+                <V2SampleBrowser
+                  activeSampleId={activeSampleId}
+                  onSelect={handleSampleClick}
+                />
+              )}
+              {showFileManager && (
+                <TabFileManager
+                  tabs={tabs}
+                  activeTabId={activeTabId}
+                  onSelectTab={setActiveTabId}
+                  onToggleVisible={handleToggleVisible}
+                  onDuplicateTab={handleDuplicateTab}
+                  onDeleteTab={closeTab}
+                />
+              )}
+            </div>
+          </>)}
 
           {/* Editor panel — slide in/out */}
           <div style={{

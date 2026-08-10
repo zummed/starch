@@ -24,8 +24,10 @@ jobs:
 
       - run: npm ci
 
-      - name: Test
-        run: npm test
-
+      # Build before testing: the suite includes smoke tests that run
+      # against the built dist artifacts (skipped when dist is absent).
       - name: Build library and embed
         run: npm run build && npm run build:embed
+
+      - name: Test
+        run: npm test

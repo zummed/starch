@@ -1,17 +1,17 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import type { AnimConfig } from '../../types/animation';
-import type { Chapter } from '../../types/animation';
-import { parseScene, type ParsedScene } from '../../parser/parser';
-import { buildTimeline } from '../../animation/timeline';
-import { evaluateAllTracks, evaluateTrack } from '../../animation/evaluator';
-import { applyTrackValues } from '../../animation/applyTracks';
-import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
-import { emitFrame } from '../../renderer/emitter';
-import { SvgRenderBackend } from '../../renderer/svgBackend';
-import type { RenderBackend } from '../../renderer/backend';
-import { colorToRgba } from '../../types/color';
-import { measureTextNodes } from '../../text/measurePass';
-import { getTextMeasurer } from '../../text/measure';
+import type { AnimConfig } from '../types/animation';
+import type { Chapter } from '../types/animation';
+import { parseScene, type ParsedScene } from '../parser/parser';
+import { buildTimeline } from '../animation/timeline';
+import { evaluateAllTracks, evaluateTrack } from '../animation/evaluator';
+import { applyTrackValues } from '../animation/applyTracks';
+import { computeViewBox, findActiveCamera, type ViewBox } from '../renderer/camera';
+import { emitFrame } from '../renderer/emitter';
+import { SvgRenderBackend } from '../renderer/svgBackend';
+import type { RenderBackend } from '../renderer/backend';
+import { colorToRgba } from '../types/color';
+import { measureTextNodes } from '../text/measurePass';
+import { getTextMeasurer } from '../text/measure';
 
 
 

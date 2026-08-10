@@ -4,7 +4,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/embed.ts',
-      name: 'StarchEmbed',
+      name: 'Starch',
       fileName: 'starch-embed',
       formats: ['iife'],
     },

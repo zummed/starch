@@ -25,19 +25,16 @@ Use fenced code blocks with the `starch` language:
 
 ````markdown
 ```starch
-{
-  objects: [
-    { box: "api", at: [200, 100], colour: "#34d399", text: "API" },
-    { box: "db", at: [200, 300], colour: "#a78bfa", text: "DB" },
-    { line: "conn", from: "api", to: "db", colour: "#fbbf24", progress: 0 },
-  ],
-  animate: {
-    duration: 3,
-    keyframes: [
-      { time: 1.5, changes: { conn: { progress: 1, easing: "easeInOut" } } },
-    ],
-  },
-}
+api: rect 140x46 radius=8 fill #34d399 at 200,100
+  apiLabel: text "API" size=14
+db: rect 140x46 radius=8 fill #a78bfa at 200,250
+  dbLabel: text "DB" size=14
+conn: arrow api db stroke #fbbf24 label "query"
+  draw 0
+
+animate 3 loop
+  1.5
+    conn.draw: { value: 1, easing: "easeInOut" }
 ```
 ````
 
