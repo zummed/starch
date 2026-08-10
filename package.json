@@ -11,6 +11,9 @@
   "bugs": {
     "url": "https://github.com/zummed/starch/issues"
   },
+  "bin": {
+    "starch": "./bin/starch.js"
+  },
   "main": "./dist/starch.js",
   "module": "./dist/starch.js",
   "types": "./dist/index.d.ts",
@@ -28,7 +31,9 @@
     "./dist/starch-embed.iife.js"
   ],
   "files": [
-    "dist"
+    "dist",
+    "dist-app",
+    "bin"
   ],
   "publishConfig": {
     "access": "public"
