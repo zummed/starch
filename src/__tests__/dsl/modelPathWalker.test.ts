@@ -184,4 +184,14 @@ describe('pathExists', () => {
     expect(pathExists(scene, 'card.nope')).toBe(false);
     expect(pathExists(scene, 'card.bg.nope.further')).toBe(false);
   });
+
+  it('returns false for a phantom path reached through the children array', () => {
+    // Regression: getPropertySchema must not treat a non-numeric segment
+    // after an array field as reaching into the array's element type.
+    // 'card.children.fill' previously resolved to true because the walker
+    // treated 'children' (an array field) as if any following segment name
+    // could resolve through NodeSchema (the array's element type) — a
+    // phantom path with no corresponding value anywhere in the model.
+    expect(pathExists(scene, 'card.children.fill')).toBe(false);
+  });
 });

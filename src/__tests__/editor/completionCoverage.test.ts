@@ -9,7 +9,10 @@ import { NodeSchema } from '../../types/node';
 import {
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema, PathGeomSchema,
 } from '../../types/node';
-import { StrokeSchema, TransformSchema, DashSchema, LayoutSchema } from '../../types/properties';
+import {
+  StrokeSchema, TransformSchema, DashSchema, LayoutSchema,
+  LAYOUT_STRATEGY_SCHEMAS, LayoutUniversalSchema,
+} from '../../types/properties';
 import { AnimConfigSchema } from '../../types/animation';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../../templates/registry';
 import { registerBuiltinTemplates } from '../../templates/index';
@@ -100,11 +103,37 @@ const CONSTRUCTS: ConstructCtx[] = [
 
 describe('coverage: construct kwargs + flags', () => {
   for (const c of CONSTRUCTS) {
+    // Layout kwargs are strategy-scoped (`layout grid ` offers grid keys,
+    // not flex's) — covered per strategy in the dedicated describe below.
+    if (c.name === 'layout') continue;
     const h = hints(c.schema);
     const expected = [...(h.kwargs ?? []), ...(h.flags ?? [])];
     if (expected.length === 0) continue;
     it(`${c.name} offers: ${expected.join(', ')}`, () => {
       expectOffers(c.prefix + ' ', expected);
+    });
+  }
+});
+
+// Strategy-scoped layout coverage: after `layout <type> `, the offer set is
+// universal keys + that strategy's container keys + every strategy's child
+// hints (the parent's strategy isn't knowable from the line). The union
+// across strategies covers every LayoutSchema kwarg, so the gate's intent —
+// everything typeable is completable somewhere — still holds. `direction`
+// is positional (its row/column VALUES are asserted separately below).
+describe('coverage: layout kwargs (strategy-scoped)', () => {
+  const allChildHints = new Set<string>();
+  for (const s of Object.values(LAYOUT_STRATEGY_SCHEMAS)) {
+    for (const k of Object.keys(s.childHints.shape)) allChildHints.add(k);
+  }
+  for (const [name, s] of Object.entries(LAYOUT_STRATEGY_SCHEMAS)) {
+    const expected = [...new Set([
+      ...Object.keys(LayoutUniversalSchema.shape),
+      ...Object.keys(s.container.shape),
+      ...allChildHints,
+    ])].filter(k => k !== 'direction');
+    it(`layout ${name} offers: ${expected.join(', ')}`, () => {
+      expectOffers(`b: rect 10x10\n  layout ${name} `, expected);
     });
   }
 });

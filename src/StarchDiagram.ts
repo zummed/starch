@@ -13,17 +13,11 @@ import { evaluateAllTracks } from './animation/evaluator';
 import { applyTrackValues } from './animation/applyTracks';
 import { measureTextNodes } from './text/measurePass';
 import { getTextMeasurer } from './text/measure';
-import { runLayout, registerStrategy } from './layout/registry';
-import { flexStrategy } from './layout/flex';
-import { absoluteStrategy } from './layout/absolute';
 import { computeViewBox, findActiveCamera } from './renderer/camera';
+import { computeSceneWorldBounds } from './renderer/geometry';
 import { emitFrame } from './renderer/emitter';
 import { SvgRenderBackend } from './renderer/svgBackend';
 import { colorToRgba } from './types/color';
-
-// Register layout strategies (idempotent — Map.set overwrites)
-registerStrategy('flex', flexStrategy);
-registerStrategy('absolute', absoluteStrategy);
 
 export type StarchEventType = 'chapterEnter' | 'chapterExit' | 'ended';
 export interface StarchEvent {
@@ -44,10 +38,10 @@ export class StarchDiagram {
   private _container: HTMLElement;
   private _backend: RenderBackend;
 
-  private _scene: ParsedScene = { nodes: [], styles: {}, trackPaths: [] };
+  private _scene: ParsedScene = { nodes: [], styles: {}, trackPaths: [], warnings: [] };
   private _animConfig: AnimConfig = { duration: 5, loop: true, keyframes: [] };
   private _tracks: Tracks = new Map();
-  private _animatedSlotNodeIds = new Set<string>();
+  private _baseNodes: Node[] = [];
   private _viewport = { w: 800, h: 500 };
   private _valuesMap = new Map<string, unknown>();
 
@@ -182,6 +176,9 @@ export class StarchDiagram {
     try {
       const scene = parseScene(dsl, getTextMeasurer());
       this._scene = scene;
+      for (const warning of scene.warnings) {
+        console.warn(warning);
+      }
       this._animConfig = scene.animate ?? { duration: 5, loop: true, keyframes: [] };
 
       const vp = scene.viewport as { width?: number; height?: number } | undefined;
@@ -209,7 +206,10 @@ export class StarchDiagram {
   private _rebuild(): void {
     const result = buildTimeline(this._animConfig, this._scene.nodes);
     this._tracks = result.tracks;
-    this._animatedSlotNodeIds = result.animatedSlotNodeIds;
+    this._baseNodes = result.baseNodes;
+    for (const warning of result.warnings) {
+      console.warn(warning);
+    }
   }
 
   private _scheduleFrame(): void {
@@ -270,9 +270,10 @@ export class StarchDiagram {
 
   private _render(): void {
     const values = evaluateAllTracks(this._tracks, this._time, this._valuesMap);
-    const animated = applyTrackValues(this._scene.nodes, values);
+    const animated = applyTrackValues(this._baseNodes, values);
+    // Layout itself is solved once in buildTimeline; text still needs
+    // fresh measurement every frame since animated content changes size.
     measureTextNodes(animated, getTextMeasurer());
-    runLayout(animated, this._animatedSlotNodeIds);
 
     // Compute viewbox from camera or auto-fit
     let viewBox: ViewBox | undefined;
@@ -287,45 +288,15 @@ export class StarchDiagram {
   }
 
   private _computeAutoFit(nodes: Node[]): ViewBox | undefined {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    const addBounds = (nodeList: Node[], parentX: number, parentY: number) => {
-      for (const n of nodeList) {
-        if (n.camera) continue;
-        const px = parentX + (n.transform?.x ?? 0);
-        const py = parentY + (n.transform?.y ?? 0);
-        let w = 0, h = 0;
-        if (n.rect) { w = n.rect.w; h = n.rect.h; }
-        else if (n.ellipse) { w = n.ellipse.rx * 2; h = n.ellipse.ry * 2; }
-        else if (n.text && n._measured) { w = n._measured.width; h = n._measured.height; }
-        else if (n.text) { w = (n.text.content?.length ?? 0) * (n.text.size ?? 14) * 0.6; h = (n.text.size ?? 14); }
-        if (n.path?.points?.length) {
-          for (const [ptx, pty] of n.path.points) {
-            minX = Math.min(minX, px + ptx);
-            minY = Math.min(minY, py + pty);
-            maxX = Math.max(maxX, px + ptx);
-            maxY = Math.max(maxY, py + pty);
-          }
-        }
-        if (w > 0 || h > 0) {
-          minX = Math.min(minX, px - w / 2);
-          minY = Math.min(minY, py - h / 2);
-          maxX = Math.max(maxX, px + w / 2);
-          maxY = Math.max(maxY, py + h / 2);
-        }
-        if (n.children.length) addBounds(n.children, px, py);
-      }
-    };
-
-    addBounds(nodes, 0, 0);
-    if (minX === Infinity) return undefined;
+    const bounds = computeSceneWorldBounds(nodes);
+    if (!bounds) return undefined;
 
     const margin = 30;
     return {
-      x: minX - margin,
-      y: minY - margin,
-      w: (maxX - minX) + margin * 2,
-      h: (maxY - minY) + margin * 2,
+      x: bounds.minX - margin,
+      y: bounds.minY - margin,
+      w: (bounds.maxX - bounds.minX) + margin * 2,
+      h: (bounds.maxY - bounds.minY) + margin * 2,
     };
   }
 }

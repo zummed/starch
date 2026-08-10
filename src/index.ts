@@ -23,8 +23,8 @@ export { computeViewBox, findActiveCamera } from './renderer/camera';
 export type { ViewBox } from './renderer/camera';
 
 // ── Layout ──
-export { runLayout, registerStrategy } from './layout/registry';
-export type { LayoutStrategy, ChildPlacement } from './layout/registry';
+export { runLayout, registerLayoutStrategy } from './layout';
+export type { ChildPlacement } from './layout';
 
 // ── Text ──
 export { getTextMeasurer } from './text/measure';

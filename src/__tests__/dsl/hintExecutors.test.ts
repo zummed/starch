@@ -117,6 +117,7 @@ describe('executePositional - arrow and tuples', () => {
 });
 
 import { executeKwargs, executeFlags } from '../../dsl/hintExecutors';
+import { LayoutSchema } from '../../types/properties';
 
 describe('executeKwargs', () => {
   it('consumes key=value pairs', () => {
@@ -168,6 +169,41 @@ describe('executeKwargs', () => {
     const c = ctx('not-a-kwarg');
     const result = executeKwargs(c, ['width'], '');
     expect(result).toEqual({});
+  });
+
+  describe('schema-driven boolean coercion', () => {
+    it('coerces true/false to real booleans for a z.boolean() field (skip)', () => {
+      const c = ctx('skip=true');
+      const result = executeKwargs(c, ['skip'], 'layout', LayoutSchema);
+      expect(result).toEqual({ skip: true });
+      expect(result.skip).not.toBe('true'); // real boolean, not the string
+    });
+
+    it('coerces false too', () => {
+      const c = ctx('skip=false');
+      const result = executeKwargs(c, ['skip'], 'layout', LayoutSchema);
+      expect(result).toEqual({ skip: false });
+    });
+
+    it('leaves non-boolean identifier fields as strings (e.g. align, an enum)', () => {
+      const c = ctx('align=center');
+      const result = executeKwargs(c, ['align'], 'layout', LayoutSchema);
+      expect(result).toEqual({ align: 'center' });
+    });
+
+    it('without an ownerSchema, identifier values stay strings (back-compat)', () => {
+      const c = ctx('skip=true');
+      const result = executeKwargs(c, ['skip'], 'layout');
+      expect(result).toEqual({ skip: 'true' });
+    });
+
+    it('LayoutSchema.safeParse accepts the coerced boolean', () => {
+      const c = ctx('skip=true');
+      const result = executeKwargs(c, ['skip'], 'layout', LayoutSchema);
+      const parsed = LayoutSchema.safeParse(result);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) expect(parsed.data.skip).toBe(true);
+    });
   });
 });
 

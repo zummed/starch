@@ -7,6 +7,7 @@ import { validateTree } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
 import { walkDocument } from '../dsl/schemaWalker';
+import { validateLayoutUsage } from '../layout';
 
 export interface ParsedScene {
   name?: string;
@@ -19,6 +20,7 @@ export interface ParsedScene {
   images?: Record<string, string>;
   use?: string[];
   trackPaths: string[];
+  warnings: string[];
 }
 
 /**
@@ -105,6 +107,10 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
   // Generate track paths (walks all nodes including style nodes)
   const trackPaths = generateTrackPaths(allNodes);
 
+  // Misapplied layout props (e.g. a grid hint on a flex child) don't fail
+  // parsing — they warn, same policy as timeline warnings.
+  const warnings = validateLayoutUsage(allNodes);
+
   return {
     name,
     description,
@@ -116,5 +122,6 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
     images,
     use: searchPath,
     trackPaths,
+    warnings,
   };
 }

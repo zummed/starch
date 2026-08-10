@@ -5,9 +5,6 @@ import { parseScene, type ParsedScene } from '../../parser/parser';
 import { buildTimeline } from '../../animation/timeline';
 import { evaluateAllTracks, evaluateTrack } from '../../animation/evaluator';
 import { applyTrackValues } from '../../animation/applyTracks';
-import { runLayout, registerStrategy } from '../../layout/registry';
-import { flexStrategy } from '../../layout/flex';
-import { absoluteStrategy } from '../../layout/absolute';
 import { computeViewBox, findActiveCamera, type ViewBox } from '../../renderer/camera';
 import { emitFrame } from '../../renderer/emitter';
 import { SvgRenderBackend } from '../../renderer/svgBackend';
@@ -15,10 +12,6 @@ import type { RenderBackend } from '../../renderer/backend';
 import { colorToRgba } from '../../types/color';
 import { measureTextNodes } from '../../text/measurePass';
 import { getTextMeasurer } from '../../text/measure';
-
-// Register layout strategies (idempotent)
-registerStrategy('flex', flexStrategy);
-registerStrategy('absolute', absoluteStrategy);
 
 
 
@@ -48,12 +41,16 @@ export function useV2Diagram(props: V2DiagramProps) {
     try {
       const parsed = parseScene(props.dsl, getTextMeasurer());
       fallbackRef.current = parsed;
+      for (const warning of parsed.warnings) {
+        console.warn(warning);
+      }
       return parsed;
     } catch {
       return fallbackRef.current ?? {
         nodes: [],
         styles: {},
         trackPaths: [],
+        warnings: [],
       };
     }
   }, [props.dsl]);
@@ -70,8 +67,15 @@ export function useV2Diagram(props: V2DiagramProps) {
   const vpW = typeof viewport === 'object' && viewport ? (viewport as { width: number }).width ?? 800 : 800;
   const vpH = typeof viewport === 'object' && viewport ? (viewport as { height: number }).height ?? 500 : 500;
 
-  // Build timeline (once per DSL change) — pass nodes so slot tracks get expanded
-  const { tracks, animatedSlotNodeIds } = useMemo(() => buildTimeline(animConfig, scene.nodes), [animConfig, scene.nodes]);
+  // Build timeline (once per DSL change) — pass nodes so layout tracks get
+  // expanded and the base tree comes back with layout already solved.
+  const { tracks, baseNodes } = useMemo(() => {
+    const result = buildTimeline(animConfig, scene.nodes);
+    for (const warning of result.warnings) {
+      console.warn(warning);
+    }
+    return result;
+  }, [animConfig, scene.nodes]);
 
   // Expose camera ratio for preview container constraint (animated)
   const cameraRatio = useMemo(() => {
@@ -87,7 +91,7 @@ export function useV2Diagram(props: V2DiagramProps) {
 
   // Auto-fit viewBox: when no camera, compute bounds across all keyframe times
   const autoFitViewBox = useMemo((): ViewBox | null => {
-    if (findActiveCamera(scene.nodes)) return null; // has camera, don't auto-fit
+    if (findActiveCamera(baseNodes)) return null; // has camera, don't auto-fit
 
     // Collect sample times: 0, each keyframe time, and duration
     const times = new Set<number>([0, duration]);
@@ -96,7 +100,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const addBounds = (nodes: typeof scene.nodes, parentX: number, parentY: number) => {
+    const addBounds = (nodes: typeof baseNodes, parentX: number, parentY: number) => {
       for (const n of nodes) {
         if (n.camera) continue;
         const px = parentX + (n.transform?.x ?? 0);
@@ -127,16 +131,15 @@ export function useV2Diagram(props: V2DiagramProps) {
 
     for (const t of times) {
       const values = evaluateAllTracks(tracks, t);
-      const animated = applyTrackValues(scene.nodes, values);
+      const animated = applyTrackValues(baseNodes, values);
       measureTextNodes(animated, getTextMeasurer());
-      runLayout(animated, animatedSlotNodeIds);
       addBounds(animated, 0, 0);
     }
 
     if (minX === Infinity) return null;
     const margin = 30;
     return { x: minX - margin, y: minY - margin, w: (maxX - minX) + margin * 2, h: (maxY - minY) + margin * 2 };
-  }, [scene.nodes, tracks, duration, animConfig.keyframes]);
+  }, [baseNodes, tracks, duration, animConfig.keyframes]);
 
   const autoFitRef = useRef(autoFitViewBox);
   autoFitRef.current = autoFitViewBox;
@@ -144,12 +147,12 @@ export function useV2Diagram(props: V2DiagramProps) {
   // Store latest values in refs so render() always has current data
   const sceneRef = useRef(scene);
   const tracksRef = useRef(tracks);
-  const slotIdsRef = useRef(animatedSlotNodeIds);
+  const baseNodesRef = useRef(baseNodes);
   const vpRef = useRef({ w: vpW, h: vpH });
   const viewportOverrideRef = useRef(props.viewportOverride);
   sceneRef.current = scene;
   tracksRef.current = tracks;
-  slotIdsRef.current = animatedSlotNodeIds;
+  baseNodesRef.current = baseNodes;
   vpRef.current = { w: vpW, h: vpH };
   viewportOverrideRef.current = props.viewportOverride;
 
@@ -161,14 +164,14 @@ export function useV2Diagram(props: V2DiagramProps) {
     const backend = backendRef.current;
     if (!backend || !mountedRef.current) return;
 
-    const currentScene = sceneRef.current;
     const currentTracks = tracksRef.current;
     const { w, h } = vpRef.current;
 
     const values = evaluateAllTracks(currentTracks, t, valuesMapRef.current);
-    const animated = applyTrackValues(currentScene.nodes, values);
+    const animated = applyTrackValues(baseNodesRef.current, values);
+    // Layout itself is solved once in buildTimeline; text still needs
+    // fresh measurement every frame since animated content changes size.
     measureTextNodes(animated, getTextMeasurer());
-    runLayout(animated, slotIdsRef.current);
 
     let viewBox: ViewBox | undefined;
     if (viewportOverrideRef.current) {
@@ -222,7 +225,7 @@ export function useV2Diagram(props: V2DiagramProps) {
   // Re-render when scene/tracks/time/viewport change
   useEffect(() => {
     render(time);
-  }, [time, scene, tracks, props.viewportOverride]);
+  }, [time, scene, tracks, baseNodes, props.viewportOverride]);
 
   // Playback loop
   useEffect(() => {
@@ -271,7 +274,7 @@ export function useV2Diagram(props: V2DiagramProps) {
     }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const addBounds = (nodes: typeof currentScene.nodes, parentX: number, parentY: number) => {
+    const addBounds = (nodes: typeof baseNodesRef.current, parentX: number, parentY: number) => {
       for (const n of nodes) {
         if (n.camera) continue;
         const px = parentX + (n.transform?.x ?? 0);
@@ -302,9 +305,8 @@ export function useV2Diagram(props: V2DiagramProps) {
 
     for (const t of times) {
       const values = evaluateAllTracks(currentTracks, t);
-      const animated = applyTrackValues(currentScene.nodes, values);
+      const animated = applyTrackValues(baseNodesRef.current, values);
       measureTextNodes(animated, getTextMeasurer());
-      runLayout(animated, slotIdsRef.current);
       addBounds(animated, 0, 0);
     }
 

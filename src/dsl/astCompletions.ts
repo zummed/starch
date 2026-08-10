@@ -30,6 +30,7 @@ import {
   StrokeSchema, TransformSchema, DashSchema, LayoutSchema,
   ColorSchema, HslColorSchema, RgbColorSchema,
   NamedAlphaColorSchema, HexAlphaColorSchema,
+  LAYOUT_STRATEGY_SCHEMAS, LayoutUniversalSchema, type LayoutStrategyName,
 } from '../types/properties';
 import { AnimConfigSchema } from '../types/animation';
 import { z } from 'zod';
@@ -115,6 +116,26 @@ if (NODE_HINTS?.blockProps) {
     const fieldSchema = getPropertySchema(prop);
     if (fieldSchema && detectSchemaType(fieldSchema) === 'color') {
       COLOR_POSITIONAL_KEYWORDS.add(prop);
+    }
+  }
+}
+
+/**
+ * Keywords whose first positional arg resolves to an enum type (e.g. layout's
+ * strategy name — "flex" | "absolute" | "grid" | "circular"). These offer the
+ * enum's values directly instead of a generic snippet, so adding a value to
+ * the enum (e.g. a new layout strategy) automatically shows up here too.
+ */
+const ENUM_POSITIONAL_SCHEMAS: Record<string, z.ZodType> = {};
+for (const [schemaPath, schema] of Object.entries(ANNOTATED_SCHEMAS)) {
+  const hints = getDsl(schema);
+  if (hints?.keyword && hints.positional?.length) {
+    const firstKeys = hints.positional[0].keys;
+    if (firstKeys.length === 1) {
+      const fieldSchema = getPropertySchema(schemaPath + '.' + firstKeys[0]);
+      if (fieldSchema && detectSchemaType(fieldSchema) === 'enum') {
+        ENUM_POSITIONAL_SCHEMAS[hints.keyword] = fieldSchema;
+      }
     }
   }
 }
@@ -338,13 +359,6 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     return kwargValueCompletions(parenMatch[1], modelJson, lineText);
   }
 
-  // After `layout <type> ` the next positional is the direction enum (row/column).
-  if (/\blayout\s+\w+\s+\w*$/.test(lineText)) {
-    const dir = getPropertySchema('layout.direction');
-    const vals = dir ? getEnumValues(dir) ?? [] : [];
-    if (vals.length) return vals.map(v => ({ label: v, type: 'value' as const, detail: 'direction' }));
-  }
-
   // After @ sign: style names from model. Labels keep the leading '@' so the
   // editor's prefix filter (which includes '@' in the typed word) matches them.
   if (lineText.match(/@\w*$/) && modelJson?.styles) {
@@ -419,7 +433,8 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
 
   // Check for a keyword at the end of the line followed by a space.
   // Derived from DslHints: color-positional keywords get color completions,
-  // other positional keywords offer a snippet showing the expected format.
+  // enum-positional keywords (e.g. layout's strategy name) get the enum's
+  // values, other positional keywords offer a snippet showing the expected format.
   const keywordMatch = lineText.match(/\b(\w+)\s+\w*$/);
   if (keywordMatch) {
     const kw = keywordMatch[1];
@@ -429,6 +444,10 @@ function lineTextCompletions(lineText: string, modelJson?: any): CompletionItem[
     }
     if (COLOR_POSITIONAL_KEYWORDS.has(kw)) {
       return colorCompletions();
+    }
+    if (ENUM_POSITIONAL_SCHEMAS[kw]) {
+      const values = getEnumValues(ENUM_POSITIONAL_SCHEMAS[kw]);
+      if (values) return values.map(v => ({ label: v, type: 'value', detail: `${kw} value` }));
     }
     if (POSITIONAL_KEYWORDS.has(kw)) {
       // Offer a snippet completion showing the expected positional format
@@ -645,9 +664,15 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any, lin
             const available = getAvailableProperties(preceding.schemaPath);
             const completable = getCompletableFields(preceding.schemaPath);
             const existingKeys = collectExistingKeys(preceding, compound);
+            // Same strategy-scoping as the generic-compound branch below —
+            // this is the path actually taken for `id: layout <strategy> `
+            // completions (cursor past the compound, inside its node line).
+            const scopedKeys = preceding.schemaPath === 'layout' ? layoutStrategyScopedKeys(preceding) : null;
+            const dirItems = preceding.schemaPath === 'layout' ? layoutDirectionValueItems(preceding) : [];
             const remaining = available
               .filter(p => !existingKeys.has(p.name))
               .filter(p => !completable || completable.has(p.name))
+              .filter(p => !scopedKeys || scopedKeys.has(p.name))
               .map(p => {
                 const item: CompletionItem = { label: p.name, type: 'property', detail: p.description, scope: preceding.schemaPath };
                 const tmpl = buildKwargSnippet(preceding.schemaPath, p.name);
@@ -655,10 +680,10 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any, lin
                 return item;
               });
 
-            if (remaining.length > 0) {
+            if (remaining.length > 0 || dirItems.length > 0) {
               const nodeItems = nodePropertyCompletions(compound, cursorPastChildren, modelJson)
                 .map(item => ({ ...item, scope: 'node' }));
-              return [...alphaItem, ...remaining, ...nodeItems];
+              return [...alphaItem, ...dirItems, ...remaining, ...nodeItems];
             }
           }
         }
@@ -679,15 +704,22 @@ function nodeContextCompletions(node: AstNode, pos: number, modelJson?: any, lin
           .map(c => typeof c.value === 'string' ? c.value : '')
           .filter(Boolean),
       );
-      return available
+      // A `layout` line whose strategy token is already typed (e.g. `layout
+      // grid `) narrows to that strategy's container keys — the parent
+      // strategy isn't known at the line level, so all strategies' child
+      // hints stay offered. No token yet → fall back to the full merged set.
+      const scopedKeys = sp === 'layout' ? layoutStrategyScopedKeys(compound) : null;
+      const dirItems = sp === 'layout' ? layoutDirectionValueItems(compound) : [];
+      return [...dirItems, ...available
         .filter(p => !existingKeys.has(p.name))
         .filter(p => !completable || completable.has(p.name))
+        .filter(p => !scopedKeys || scopedKeys.has(p.name))
         .map(p => {
           const item: CompletionItem = { label: p.name, type: 'property', detail: p.description };
           const tmpl = buildKwargSnippet(sp, p.name);
           if (tmpl) item.snippetTemplate = tmpl;
           return item;
-        });
+        })];
     }
   }
 
@@ -754,6 +786,45 @@ function isNodeLine(compound: AstNode): boolean {
   const mp = compound.modelPath;
   const parts = mp.split('.');
   return parts[0] === 'objects' && parts.length === 2;
+}
+
+/**
+ * When a `layout` compound already has its strategy token typed (e.g.
+ * `layout grid `), return the keys valid for that strategy line: its own
+ * container keys, universal keys, and every strategy's child hints (the
+ * parent strategy isn't known from the line alone). Returns null when no
+ * strategy token is present yet, so the caller falls back to the full
+ * merged set.
+ */
+/**
+ * Direction enum values (row/column), offered right after a strategy token
+ * whose container schema declares `direction` (`layout flex `). They ride
+ * alongside the strategy's scoped kwarg completions — the direction slot is
+ * positional, so it never appears among the kwarg keys.
+ */
+function layoutDirectionValueItems(compound: AstNode): CompletionItem[] {
+  const typeChild = compound.children.find(c => c.schemaPath === 'layout.type');
+  const strategyName = typeof typeChild?.value === 'string' ? typeChild.value as LayoutStrategyName : undefined;
+  const strategy = strategyName ? LAYOUT_STRATEGY_SCHEMAS[strategyName] : undefined;
+  if (!strategy || !('direction' in strategy.container.shape)) return [];
+  if (compound.children.some(c => c.schemaPath === 'layout.direction')) return [];
+  const dir = getPropertySchema('layout.direction');
+  const vals = dir ? getEnumValues(dir) ?? [] : [];
+  return vals.map(v => ({ label: v, type: 'value' as const, detail: 'direction' }));
+}
+
+function layoutStrategyScopedKeys(compound: AstNode): Set<string> | null {
+  const typeChild = compound.children.find(c => c.schemaPath === 'layout.type');
+  const strategyName = typeof typeChild?.value === 'string' ? typeChild.value as LayoutStrategyName : undefined;
+  const strategy = strategyName ? LAYOUT_STRATEGY_SCHEMAS[strategyName] : undefined;
+  if (!strategy) return null;
+
+  const keys = new Set<string>(Object.keys(LayoutUniversalSchema.shape));
+  for (const k of Object.keys(strategy.container.shape)) keys.add(k);
+  for (const s of Object.values(LAYOUT_STRATEGY_SCHEMAS)) {
+    for (const k of Object.keys(s.childHints.shape)) keys.add(k);
+  }
+  return keys;
 }
 
 /**

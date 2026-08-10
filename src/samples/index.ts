@@ -467,52 +467,104 @@ objects
   l3: text "full opacity" size=10 fill gray at 370,240`,
   },
 
-  // ─── LAYOUT ────────────────────────────────────────────────────
+  // ─── LAYOUT ──────────────────────────────────────────────────────
   {
-    name: 'flex-row',
+    name: 'flex-layout',
     category: 'Layout',
-    description: 'Flex row layout — children positioned automatically with gap',
+    description: "Flex layout — the centered row's gap breathes apart and a fixed child's width reflows the grow-distributed row",
     dsl: `\
 objects
-  row: rect 400x80 fill darkslategray stroke dimgray width=1 at 200,150
-    layout flex row gap=10
+  row: rect 400x80 fill darkslategray stroke dimgray width=1 layout flex row gap=10 justify=center align=center at 250,60
     a: rect 80x50 radius=4 fill steelblue
     b: rect 80x50 radius=4 fill limegreen
-    c: rect 80x50 radius=4 fill crimson`,
-  },
-  {
-    name: 'flex-grow',
-    category: 'Layout',
-    description: 'Flex grow — distributes extra space proportionally',
-    dsl: `\
-objects
-  row: rect 400x60 fill darkslategray at 200,150
-    layout flex row gap=5
+    c: rect 80x50 radius=4 fill crimson
+
+  growRow: rect 400x60 fill darkslategray layout flex row gap=5 at 250,160
     fixed: rect 60x40 radius=4 fill steelblue
-    grows: rect 60x40 radius=4 fill limegreen
-      layout grow=1
-    fixed2: rect 60x40 radius=4 fill crimson`,
+    grows: rect 60x40 radius=4 fill limegreen layout grow=1
+    fixed2: rect 60x40 radius=4 fill crimson
+
+animate 6 loop easing=easeInOut
+  3
+    row.layout.gap: 60
+    growRow.fixed.rect.w: 180
+  6
+    row.layout.gap: 10
+    growRow.fixed.rect.w: 60`,
   },
   {
-    name: 'slot-animation',
+    name: 'flex-slot',
     category: 'Layout',
-    description: 'Animate an item between containers using slot — smooth position transition',
+    description: 'Slot animation — a mover animates between two flex columns',
     dsl: `\
 objects
-  left: fill darkslategray stroke steelblue width=1 at 120,150
-    layout flex column gap=8 padding=10
-  right: fill darkslategray stroke indianred width=1 at 350,150
-    layout flex column gap=8 padding=10
-  itemA: rect 120x30 radius=4 fill steelblue
-    layout slot=left
-  itemB: rect 120x30 radius=4 fill limegreen
-    layout slot=right
-  mover: rect 120x30 radius=4 fill goldenrod
-    layout slot=left
+  left: fill darkslategray stroke steelblue width=1 layout flex column gap=8 padding=10 at 120,300
+  right: fill darkslategray stroke indianred width=1 layout flex column gap=8 padding=10 at 380,300
+  itemA: rect 120x30 radius=4 fill steelblue layout slot=left
+  itemB: rect 120x30 radius=4 fill limegreen layout slot=right
+  mover: rect 120x30 radius=4 fill goldenrod layout slot=left
 
 animate 4 loop easing=easeInOut
   2 mover.layout.slot: right
   4 mover.layout.slot: left`,
+  },
+  {
+    name: 'grid-layout',
+    category: 'Layout',
+    description: 'Grid layout — the colSpan=2 chart narrows to one cell and the auto-placed sidebar slides across to fill the gap, align=start keeping authored heights',
+    dsl: `\
+objects
+  dashboard: rect 340x240 fill darkslategray stroke dimgray width=1 layout grid columns=3 gap=8 padding=10 align=start at 250,150
+    m1: rect 0x60 radius=4 fill steelblue
+    m2: rect 0x60 radius=4 fill limegreen
+    m3: rect 0x60 radius=4 fill crimson
+    chart: rect 0x100 radius=4 fill slategray layout gridCol=1 colSpan=2
+    sidebar: rect 0x100 radius=4 fill mediumpurple
+
+animate 6 loop easing=easeInOut
+  3 dashboard.chart.layout.colSpan: 1
+  6 dashboard.chart.layout.colSpan: 2`,
+  },
+  {
+    name: 'circular-layout',
+    category: 'Layout',
+    description: 'Circular layout — six nodes ringed evenly, the ring advancing one slot per second like a carousel',
+    dsl: `\
+objects
+  ring: ellipse 220x220 stroke slategray width=1 layout circular radius=110 startAngle=0 at 250,170
+    n1: rect 50x30 radius=4 fill steelblue
+    n2: rect 50x30 radius=4 fill coral
+    n3: rect 50x30 radius=4 fill seagreen
+    n4: rect 50x30 radius=4 fill gold
+    n5: rect 50x30 radius=4 fill mediumpurple
+    n6: rect 50x30 radius=4 fill tomato
+
+animate 6 loop easing=easeInOut
+  1 ring.layout.startAngle: 60
+  2 ring.layout.startAngle: 120
+  3 ring.layout.startAngle: 180
+  4 ring.layout.startAngle: 240
+  5 ring.layout.startAngle: 300
+  6 ring.layout.startAngle: 360`,
+  },
+  {
+    name: 'cross-strategy-slot',
+    category: 'Layout',
+    description: 'Slot animation across strategies — items move between a flex column and a grid',
+    dsl: `\
+objects
+  inbox: rect 160x180 fill darkslategray stroke steelblue width=1 layout flex column gap=8 padding=10 at 120,160
+  board: rect 240x180 fill darkslategray stroke indianred width=1 layout grid columns=2 gap=8 padding=10 at 370,160
+  task1: rect 130x30 radius=4 fill steelblue layout slot=inbox
+  task2: rect 130x30 radius=4 fill limegreen layout slot=inbox
+  task3: rect 130x30 radius=4 fill goldenrod layout slot=inbox
+
+animate 6 loop easing=easeInOut
+  2 task1.layout.slot: board
+  4 task2.layout.slot: board
+  6
+    task1.layout.slot: inbox
+    task2.layout.slot: inbox`,
   },
 
   // ─── Camera ──────────────────────────────────────────────────────

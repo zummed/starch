@@ -198,6 +198,46 @@ describe('click popup detection', () => {
       expect(result!.schemaType).toBe('object');
     });
   });
+
+  // Regression: the walker used to accumulate a document-absolute schemaPath
+  // ('objects.children.rect') for nested children, one level deeper per
+  // level of nesting, while the emitter always emits node-relative paths
+  // ('rect') regardless of depth. schemaPath is now node-relative end to
+  // end, so a nested child's own properties resolve exactly like a
+  // top-level node's — no widened array traversal needed.
+  describe('nested children (schemaPath grammar)', () => {
+    const nested = `objects
+  g: rect 600x400
+    layout grid columns=2
+    c: rect 100x100
+      fill steelblue
+      layout gridCol=1 colSpan=2`;
+
+    it('clicking a nested child\'s "rect" resolves the same as a top-level node\'s', () => {
+      const pos = nested.lastIndexOf('rect');
+      const result = detectAt(nested, pos);
+      expect(result).not.toBeNull();
+      expect(result!.schemaPath).toBe('rect');
+      expect(result!.schemaType).toBe('object');
+    });
+
+    it('clicking a nested child\'s "fill" detects color', () => {
+      const pos = nested.indexOf('fill');
+      const result = detectAt(nested, pos);
+      expect(result).not.toBeNull();
+      expect(result!.schemaPath).toBe('fill');
+      expect(result!.schemaType).toBe('color');
+    });
+
+    it('clicking a nested child\'s "gridCol" kwarg-key resolves through node-relative "layout.gridCol"', () => {
+      const pos = nested.indexOf('gridCol=');
+      const result = detectAt(nested, pos);
+      expect(result).not.toBeNull();
+      expect(result!.dslRole).toBe('kwarg-key');
+      expect(result!.schemaPath).toBe('layout.gridCol');
+      expect(result!.schemaType).toBe('number');
+    });
+  });
 });
 
 describe('template prop popup detection', () => {

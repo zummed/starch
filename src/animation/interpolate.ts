@@ -1,6 +1,15 @@
 import { isColor, colorToHsl, lerpHsl } from '../types/color';
 
-export function interpolateValue(a: unknown, b: unknown, t: number): unknown {
+/**
+ * @param t Eased progress — used for numeric and color interpolation.
+ * @param rawT Raw (un-eased) segment progress — used to decide the step
+ *   for non-interpolable values. Overshooting/oscillating easings (e.g.
+ *   easeOutBack) can push the eased t past 1 well before the segment has
+ *   actually finished; gating the step on raw progress means those easings
+ *   can no longer flip a step value mid-flight. Defaults to `t` for callers
+ *   that don't distinguish the two.
+ */
+export function interpolateValue(a: unknown, b: unknown, t: number, rawT: number = t): unknown {
   // Numeric lerp
   if (typeof a === 'number' && typeof b === 'number') {
     return a + (b - a) * t;
@@ -15,6 +24,7 @@ export function interpolateValue(a: unknown, b: unknown, t: number): unknown {
     }
   }
 
-  // Strings, booleans, arrays, etc. — step interpolation
-  return t >= 1 ? b : a;
+  // Strings, booleans, arrays, etc. — step interpolation, gated on raw
+  // progress so it only steps once the segment has actually arrived.
+  return rawT >= 1 ? b : a;
 }

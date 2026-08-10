@@ -66,7 +66,7 @@ describe('walker smoke tests for all supported samples', () => {
     // Inheritance
     'fill-inheritance',
     // Layout
-    'flex-row', 'flex-grow', 'slot-animation',
+    'flex-layout', 'flex-slot', 'grid-layout', 'circular-layout', 'cross-strategy-slot',
     // Connections (more)
     'smooth-spline', 'routed-polyline',
     // Camera

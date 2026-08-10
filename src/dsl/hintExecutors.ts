@@ -1,7 +1,7 @@
 import type { WalkContext } from './walkContext';
 import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { HslColorSchema, RgbColorSchema } from '../types/properties';
 import { ChapterSchema } from '../types/animation';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
@@ -280,14 +280,36 @@ export function executePositional(
 }
 
 /**
+ * Coerce an identifier-token kwarg value using the target field's Zod
+ * schema. Currently only boolean fields need this: 'true'/'false' identifier
+ * tokens become real booleans (e.g. `layout skip=true`) when the field
+ * resolves to z.boolean() — the schema is the single source of truth for
+ * what a kwarg's type is, rather than hand-listing which kwargs are boolean.
+ * Any other identifier (or a non-boolean field) stays a string.
+ */
+function coerceKwargValue(raw: string, ownerSchema: z.ZodType | undefined, fieldName: string): unknown {
+  if ((raw === 'true' || raw === 'false') && ownerSchema) {
+    const fieldSchema = resolveFieldSchema(ownerSchema, fieldName);
+    if (fieldSchema instanceof z.ZodBoolean) return raw === 'true';
+  }
+  return raw;
+}
+
+/**
  * Consume key=value pairs where key is in the allowed list.
  * Stops when next token is not an allowed kwarg key.
  * Emits kwarg-key and kwarg-value AST leaves.
+ *
+ * `ownerSchema`, when given, resolves each kwarg's field type for value
+ * coercion (see coerceKwargValue) — pass the object schema that declares
+ * these kwargs (e.g. LayoutSchema for `layout ...`, NodeSchema for node-level
+ * kwargs like `opacity=`).
  */
 export function executeKwargs(
   ctx: WalkContext,
   allowed: string[],
   schemaPath: string,
+  ownerSchema?: z.ZodType,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const allowedSet = new Set(allowed);
@@ -304,7 +326,7 @@ export function executeKwargs(
     let value: unknown;
     if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
     else if (valTok.type === 'string') { value = valTok.value; ctx.next(); }
-    else if (valTok.type === 'identifier') { value = valTok.value; ctx.next(); }
+    else if (valTok.type === 'identifier') { value = coerceKwargValue(valTok.value, ownerSchema, keyTok.value); ctx.next(); }
     else if (valTok.type === 'hexColor') { value = valTok.value; ctx.next(); }
     else if (valTok.type === 'parenOpen') {
       // Parenthesized value: (x,y) → [x, y] or (id) → ['id'] or (id,dx,dy) → [id, dx, dy]
@@ -448,7 +470,7 @@ export function executeSchema(
     const tok = ctx.peek()!;
     const isKwarg = ctx.peek(1)?.type === 'equals';
     if (isKwarg && kwargsSet.has(tok.value)) {
-      const kw = executeKwargs(ctx, allKwargs, schemaPath);
+      const kw = executeKwargs(ctx, allKwargs, schemaPath, schema);
       Object.assign(result, kw);
     } else if (!isKwarg && flagsSet.has(tok.value)) {
       const fl = executeFlags(ctx, allFlags, schemaPath);
@@ -698,7 +720,7 @@ export function executeNodeBody(
           const kTok = ctx.peek()!;
           const isKwarg = ctx.peek(1)?.type === 'equals';
           if (isKwarg && allKwargs.includes(kTok.value)) {
-            Object.assign(pathObj, executeKwargs(ctx, allKwargs, `${schemaPath}.path`));
+            Object.assign(pathObj, executeKwargs(ctx, allKwargs, `${schemaPath}.path`, pathSchema));
           } else if (!isKwarg && allFlags.includes(kTok.value)) {
             Object.assign(pathObj, executeFlags(ctx, allFlags, `${schemaPath}.path`));
           } else {
@@ -955,7 +977,7 @@ export function executeNodeBody(
       if (transformSchema) {
         const tHints = getDsl(transformSchema);
         if (tHints?.kwargs?.includes(tok.value)) {
-          const kw = executeKwargs(ctx, tHints.kwargs, `${schemaPath}.transform`);
+          const kw = executeKwargs(ctx, tHints.kwargs, `${schemaPath}.transform`, transformSchema);
           if (Object.keys(kw).length > 0) {
             if (!result.transform) result.transform = {};
             Object.assign(result.transform as Record<string, unknown>, kw);
@@ -969,7 +991,7 @@ export function executeNodeBody(
     // These are defined on the NodeSchema itself, not on any property sub-schema.
     const isKwarg = ctx.peek(1)?.type === 'equals';
     if (isKwarg && hints.kwargs?.includes(tok.value)) {
-      const kw = executeKwargs(ctx, hints.kwargs, schemaPath);
+      const kw = executeKwargs(ctx, hints.kwargs, schemaPath, schema);
       Object.assign(result, kw);
       continue;
     }
@@ -1074,8 +1096,12 @@ export function executeNodeBody(
           continue;
         }
 
-        // Try parsing as a child instance (dotted-id: body)
-        const child = executeInstance(ctx, schema, 'id', 'required', `${schemaPath}.children`);
+        // Try parsing as a child instance. schemaPath is passed through
+        // unchanged (not accumulated with '.children') — schemaPath is
+        // node-relative and depth-independent, matching the emitter's
+        // grammar (astEmitter always emits e.g. 'layout.grow', never
+        // 'children.layout.grow' for a nested node's own properties).
+        const child = executeInstance(ctx, schema, 'id', 'required', schemaPath);
         if (child) {
           children.push(child);
           ctx.skipNewlines();

@@ -103,8 +103,11 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   { name: 'style sigil', dsl: 'b: rect 10x10 @primary' },
   // Block-only props
   { name: 'dash full', dsl: 'b: rect 10x10\n  dash dashed length=10 gap=5' },
-  { name: 'layout block', dsl: 'r: rect 400x60\n  layout flex row gap=5 justify=center align=stretch wrap=true padding=10' },
+  { name: 'layout block', dsl: 'r: rect 400x60\n  layout flex row gap=5 justify=center align=stretch padding=10' },
   { name: 'layout inline hints', dsl: 'r: rect 60x40 layout grow=1 order=2 alignSelf=end slot=left' },
+  { name: 'layout grid full', dsl: 'g: rect 300x200\n  layout grid columns=3 rows=2 colGap=6 rowGap=4\n  c1: rect 40x40 layout gridCol=1 gridRow=2 rowSpan=2 colSpan=1' },
+  { name: 'layout circular arc', dsl: 'ring: ellipse 200x200\n  layout circular radius=80 startAngle=45 sweep=270' },
+  { name: 'layout skip', dsl: 'row: rect 200x40\n  layout flex row gap=4\n  a: rect 20x20\n  b: rect 20x20 layout skip=true' },
   // Connections
   { name: 'connection simple', dsl: 'l: a -> b' },
   { name: 'connection waypoints', dsl: 'l: a -> (250,100) -> b smooth radius=15' },

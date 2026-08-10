@@ -1,34 +1,35 @@
 import type { Node } from '../types/node';
 import type { ViewBox } from '../renderer/camera';
+import { getWorldPosition, computeSceneWorldBounds, computeSubtreeWorldBounds, type WorldBounds } from '../renderer/geometry';
 
 export interface CameraViewResult {
   x: number;  // center x
   y: number;  // center y
   w: number;  // view width
   h: number;  // view height
+  /** Set when `look` targeted a node id that doesn't resolve in `allNodes`. */
+  unresolvedLookId?: string;
 }
 
-function findNodeById(roots: Node[], id: string): Node | undefined {
-  for (const root of roots) {
-    if (root.id === id) return root;
-    const found = findNodeById(root.children, id);
-    if (found) return found;
+function unionBounds(list: Array<WorldBounds | undefined>): WorldBounds | undefined {
+  let result: WorldBounds | undefined;
+  for (const b of list) {
+    if (!b) continue;
+    if (!result) { result = { ...b }; continue; }
+    result.minX = Math.min(result.minX, b.minX);
+    result.minY = Math.min(result.minY, b.minY);
+    result.maxX = Math.max(result.maxX, b.maxX);
+    result.maxY = Math.max(result.maxY, b.maxY);
   }
-  return undefined;
-}
-
-function getNodeBounds(node: Node): { x: number; y: number; w: number; h: number } {
-  const px = node.transform?.x ?? 0;
-  const py = node.transform?.y ?? 0;
-  let w = 0, h = 0;
-  if (node.rect) { w = node.rect.w; h = node.rect.h; }
-  else if (node.ellipse) { w = node.ellipse.rx * 2; h = node.ellipse.ry * 2; }
-  return { x: px - w / 2, y: py - h / 2, w, h };
+  return result;
 }
 
 /**
  * Resolve camera settings into a view rect (center + dimensions).
  * Used by track expansion to compute concrete rect/transform values at keyframe times.
+ * `allNodes` is world-space aware: look targets, fits, and 'all' account for
+ * ancestor transforms and (for fits) descendant geometry, not just the
+ * target node's own local rect.
  */
 export function resolveCameraView(
   cameraNode: Node,
@@ -50,40 +51,33 @@ export function resolveCameraView(
   let cy = defaultViewBox.y + defaultViewBox.h / 2;
   let vw = defaultViewBox.w;
   let vh = defaultViewBox.h;
+  let unresolvedLookId: string | undefined;
 
   // Resolve look: unified camera target/fit
   const look = cam.look;
   if (look) {
     if (look === 'all' || (Array.isArray(look) && look.length > 0 && look.every(v => typeof v === 'string'))) {
-      // Fit mode: "all" or array of node IDs
-      const ids = look === 'all'
-        ? allNodes.filter(n => !n.camera).map(n => n.id)
-        : look as string[];
+      // Fit mode: "all" or array of node IDs — world-space bounds of each
+      // target's subtree, so fitting a container includes its children.
+      const bounds = look === 'all'
+        ? computeSceneWorldBounds(allNodes)
+        : unionBounds((look as string[]).map(id => computeSubtreeWorldBounds(allNodes, id)));
 
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const id of ids) {
-        const node = findNodeById(allNodes, id);
-        if (!node) continue;
-        const b = getNodeBounds(node);
-        minX = Math.min(minX, b.x);
-        minY = Math.min(minY, b.y);
-        maxX = Math.max(maxX, b.x + b.w);
-        maxY = Math.max(maxY, b.y + b.h);
-      }
-
-      if (minX !== Infinity) {
+      if (bounds) {
         const margin = 20;
-        cx = (minX + maxX) / 2;
-        cy = (minY + maxY) / 2;
-        vw = (maxX - minX) + margin * 2;
-        vh = (maxY - minY) + margin * 2;
+        cx = (bounds.minX + bounds.maxX) / 2;
+        cy = (bounds.minY + bounds.maxY) / 2;
+        vw = (bounds.maxX - bounds.minX) + margin * 2;
+        vh = (bounds.maxY - bounds.minY) + margin * 2;
       }
     } else if (typeof look === 'string') {
       // Target mode: single node ID
-      const node = findNodeById(allNodes, look);
-      if (node) {
-        cx = node.transform?.x ?? 0;
-        cy = node.transform?.y ?? 0;
+      const pos = getWorldPosition(allNodes, look);
+      if (pos) {
+        cx = pos.x;
+        cy = pos.y;
+      } else {
+        unresolvedLookId = look;
       }
     } else if (Array.isArray(look)) {
       if (typeof look[0] === 'number') {
@@ -92,10 +86,12 @@ export function resolveCameraView(
         cy = look[1] as number;
       } else if (typeof look[0] === 'string') {
         // Target mode: ["nodeId", dx, dy] offset
-        const node = findNodeById(allNodes, look[0] as string);
-        if (node) {
-          cx = (node.transform?.x ?? 0) + (look[1] as number);
-          cy = (node.transform?.y ?? 0) + (look[2] as number);
+        const pos = getWorldPosition(allNodes, look[0] as string);
+        if (pos) {
+          cx = pos.x + (look[1] as number);
+          cy = pos.y + (look[2] as number);
+        } else {
+          unresolvedLookId = look[0] as string;
         }
       }
     }
@@ -115,5 +111,5 @@ export function resolveCameraView(
     }
   }
 
-  return { x: cx, y: cy, w: vw, h: vh };
+  return { x: cx, y: cy, w: vw, h: vh, unresolvedLookId };
 }

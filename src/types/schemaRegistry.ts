@@ -52,6 +52,7 @@ export function isOptional(schema: z.ZodType): boolean {
 export function unwrap(schema: z.ZodType): z.ZodType {
   if (schema instanceof z.ZodOptional) return unwrap((schema as any)._def.innerType);
   if (schema instanceof z.ZodDefault) return unwrap((schema as any)._def.innerType);
+  if (schema instanceof z.ZodLazy) return unwrap((schema as any)._def.getter());
   return schema;
 }
 
@@ -79,7 +80,10 @@ export function getPropertySchema(path: string, rootSchema?: z.ZodType): z.ZodTy
       // Any key into record → return the value type
       current = (unwrapped as any)._def.valueType ?? (unwrapped as any)._def.type;
     } else if (unwrapped instanceof z.ZodArray) {
-      // Numeric index into array → return the element type
+      // Numeric index into array → return the element type. Non-numeric
+      // segments don't resolve — schemaPaths are node-relative (see
+      // hintExecutors/astEmitter), so a path never needs to reach through
+      // an array field (e.g. 'children') into its element's shape.
       if (/^\d+$/.test(segment)) {
         current = (unwrapped as any)._def.element ?? (unwrapped as any)._def.type;
       } else {

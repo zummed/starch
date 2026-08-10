@@ -223,6 +223,12 @@ describe('completionsAt', () => {
       const items = completionsAt(null, 0, 'box: ellipse ');
       expect(items.length).toBeLessThanOrEqual(1);
     });
+
+    it('"layout " offers strategy names (schema enum), not a generic snippet', () => {
+      const items = completionsAt(null, 0, 'box: layout ');
+      const l = labels(items);
+      expect(l).toEqual(['flex', 'absolute', 'grid', 'circular']);
+    });
   });
 
   // ─── Kwarg Value Completions ──────────────────────────────────
@@ -305,6 +311,59 @@ describe('completionsAt', () => {
       const items = completionsAt(ast, 37, 'box: rect 100x100 stroke red width=2 ');
       // width is set, so the only remaining stroke-scoped completion is alpha.
       expect(scoped(items, 'stroke')).toEqual(['a']);
+    });
+  });
+
+  // ─── Layout: Strategy-Scoped Kwarg Completions ────────────────
+  // A `layout <strategy> ` line narrows to that strategy's container keys
+  // plus every strategy's child hints (the parent strategy isn't known at
+  // the line level). No strategy token yet → full merged set (unchanged).
+
+  describe('layout strategy-scoped kwarg completions', () => {
+    function layoutKwargs(line: string): string[] {
+      const { ast: ctx } = walkDocument(line);
+      const ast = leavesToAst(ctx.astLeaves(), line.length);
+      return labels(completionsAt(ast, line.length, line));
+    }
+
+    it('"layout grid " offers grid container keys, not flex/circular-only ones', () => {
+      const l = layoutKwargs('box: layout grid ');
+      expect(l).toContain('columns');
+      expect(l).toContain('align'); // shared with flex
+      expect(l).not.toContain('justify'); // flex-only container key
+      expect(l).not.toContain('radius'); // circular-only container key
+      // Child hints from every strategy stay offered (parent unknown here).
+      expect(l).toContain('grow');
+      expect(l).toContain('gridCol');
+    });
+
+    it('"layout flex " offers flex container keys, not grid/circular-only ones', () => {
+      const l = layoutKwargs('box: layout flex ');
+      expect(l).toContain('justify');
+      expect(l).not.toContain('columns'); // grid-only container key
+      expect(l).not.toContain('radius'); // circular-only container key
+    });
+
+    it('"layout circular " offers circular container keys only', () => {
+      const l = layoutKwargs('box: layout circular ');
+      expect(l).toContain('radius');
+      expect(l).not.toContain('justify');
+      expect(l).not.toContain('columns');
+    });
+
+    it('"layout absolute " has no container keys of its own but still offers child hints', () => {
+      const l = layoutKwargs('box: layout absolute ');
+      expect(l).not.toContain('justify');
+      expect(l).not.toContain('columns');
+      expect(l).not.toContain('radius');
+      expect(l).toContain('grow');
+    });
+
+    it('no strategy token yet (child-hint-only line): full merged set, unchanged', () => {
+      const l = layoutKwargs('box: layout grow=1 ');
+      expect(l).toContain('columns');
+      expect(l).toContain('radius');
+      expect(l).toContain('justify');
     });
   });
 

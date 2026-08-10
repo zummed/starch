@@ -58,6 +58,28 @@ describe('evaluateTrack', () => {
     expect(evaluateTrack(snapKfs, 0.01)).toBe(100);
     expect(evaluateTrack(snapKfs, 2)).toBe(100);
   });
+
+  it('clamps to the true min/max time even when the array is not sorted', () => {
+    const unsorted: TrackKeyframe[] = [
+      { time: 2, value: 100, easing: 'linear' },
+      { time: 0, value: 0, easing: 'linear' },
+    ];
+    expect(evaluateTrack(unsorted, -1)).toBe(0);
+    expect(evaluateTrack(unsorted, 5)).toBe(100);
+  });
+
+  it('does not flip a step value mid-flight for an overshooting easing (easeOutBack)', () => {
+    // easeOutBack overshoots past 1 well before raw progress reaches 1 —
+    // the step must be gated on raw progress, not the eased value, or an
+    // overshoot flips the value early (and oscillating easings could flip
+    // it back and forth).
+    const kfs: TrackKeyframe[] = [
+      { time: 0, value: 'a', easing: 'linear' },
+      { time: 2, value: 'b', easing: 'easeOutBack' },
+    ];
+    expect(evaluateTrack(kfs, 1.9)).toBe('a');
+    expect(evaluateTrack(kfs, 2)).toBe('b');
+  });
 });
 
 describe('evaluateAllTracks', () => {

@@ -773,8 +773,9 @@ function renderConnection(b: AstTextBuilder, node: any, depth: number, modelPref
   // so adding a connection modifier to the schema surfaces it here for free.
   emitPathModifiers(b, node.path, modelPrefix);
 
-  // Inline props (no path, no transform for connections)
-  const connOpts: PropOpts = { fill: true, stroke: true, layout: false, transform: false };
+  // Inline props (no path, no transform for connections; hint-only layout
+  // rides inline — dropping it here silently loses grow/slot/... on re-emit)
+  const connOpts: PropOpts = { fill: true, stroke: true, layout: true, transform: false };
   if (hasNodeProps(node, connOpts)) {
     b.write(' ');
     emitNodeProps(b, node, modelPrefix, connOpts);
@@ -812,8 +813,9 @@ function renderExplicitPath(b: AstTextBuilder, node: any, depth: number, modelPr
   if (node.path.closed) b.write(' closed');
   if (node.path.smooth) b.write(' smooth');
 
-  // Inline props (no path for explicit paths)
-  const pathOpts: PropOpts = { fill: true, stroke: true, layout: false, transform: true };
+  // Inline props (no path for explicit paths; hint-only layout rides inline,
+  // same as connections)
+  const pathOpts: PropOpts = { fill: true, stroke: true, layout: true, transform: true };
   if (hasNodeProps(node, pathOpts)) {
     b.write(' ');
     emitNodeProps(b, node, modelPrefix, pathOpts);

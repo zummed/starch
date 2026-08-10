@@ -1,6 +1,6 @@
 {
   "name": "@bitsnbobs/starch",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "Animated diagram library for documenting application internals",
   "repository": {

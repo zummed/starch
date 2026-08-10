@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { applyTrackValues } from '../../animation/applyTracks';
+import { applyTrackValues, resolveTrackPath, getAtPropPath } from '../../animation/applyTracks';
 import { createNode } from '../../types/node';
+import { runLayout } from '../../layout';
 
 describe('applyTrackValues', () => {
   it('applies scalar value to nested property', () => {
@@ -73,5 +74,93 @@ describe('applyTrackValues', () => {
     const values = new Map<string, unknown>([['n.opacity', 0.5]]);
     applyTrackValues([node], values);
     expect(node.opacity).toBe(1);
+  });
+
+  it('ignores a bare nested-id path instead of applying it to the wrong node', () => {
+    // "n1" is only addressable through its actual parent ("ring.n1") —
+    // a bare-id path must not silently no-op onto some unrelated match.
+    const tree = [createNode({
+      id: 'ring',
+      children: [createNode({ id: 'n1', opacity: 0 })],
+    })];
+    const values = new Map<string, unknown>([['n1.opacity', 1]]);
+    const result = applyTrackValues(tree, values);
+    expect(result[0].children[0].opacity).toBe(0);
+  });
+
+  it('runLayout on a clone does not leak layout writes into the pristine original tree', () => {
+    // cloneNode used to shallow-spread nodes, so a flex layout write on the
+    // clone's rect/transform mutated the same object the original tree
+    // referenced. Deep-copying rect/ellipse/transform/layout in cloneNode
+    // guarantees render-time layout can't corrupt the pristine scene tree.
+    const original = [createNode({
+      id: 'c',
+      layout: { type: 'flex', direction: 'row', gap: 0 },
+      rect: { w: 200, h: 100 },
+      children: [
+        createNode({ id: 'a', rect: { w: 50, h: 30 } }),
+        createNode({ id: 'b', rect: { w: 50, h: 30 } }),
+      ],
+    })];
+
+    const clone = applyTrackValues(original, new Map());
+    runLayout(clone);
+
+    // The clone picked up a solved position from layout...
+    expect(clone[0].children[0].transform?.x).toBeDefined();
+    // ...but the original tree's children remain exactly as authored.
+    expect(original[0].children[0].transform).toBeUndefined();
+    expect(original[0].children[0].rect).toEqual({ w: 50, h: 30 });
+    expect(original[0].children[1].transform).toBeUndefined();
+    expect(original[0].children[1].rect).toEqual({ w: 50, h: 30 });
+  });
+});
+
+describe('resolveTrackPath', () => {
+  it('resolves a root-level property path', () => {
+    const tree = [createNode({ id: 'box', transform: { x: 0 } })];
+    const resolved = resolveTrackPath(tree, 'box.transform.x');
+    expect(resolved?.node.id).toBe('box');
+    expect(resolved?.propPath).toEqual(['transform', 'x']);
+  });
+
+  it('resolves through a chain of matching child ids', () => {
+    const tree = [createNode({
+      id: 'ring',
+      children: [createNode({ id: 'n1', opacity: 0 })],
+    })];
+    const resolved = resolveTrackPath(tree, 'ring.n1.opacity');
+    expect(resolved?.node.id).toBe('n1');
+    expect(resolved?.propPath).toEqual(['opacity']);
+  });
+
+  it('does not resolve a bare nested id (first segment must be a root)', () => {
+    const tree = [createNode({
+      id: 'ring',
+      children: [createNode({ id: 'n1', opacity: 0 })],
+    })];
+    expect(resolveTrackPath(tree, 'n1.opacity')).toBeUndefined();
+  });
+
+  it('returns undefined for a completely unknown root', () => {
+    const tree = [createNode({ id: 'box' })];
+    expect(resolveTrackPath(tree, 'missing.x')).toBeUndefined();
+  });
+});
+
+describe('getAtPropPath', () => {
+  it('reads a nested value', () => {
+    const node = createNode({ id: 'box', transform: { x: 42 } });
+    expect(getAtPropPath(node, ['transform', 'x'])).toBe(42);
+  });
+
+  it('returns undefined when a path segment is missing', () => {
+    const node = createNode({ id: 'box' });
+    expect(getAtPropPath(node, ['transform', 'x'])).toBeUndefined();
+  });
+
+  it('returns the node itself for an empty path', () => {
+    const node = createNode({ id: 'box' });
+    expect(getAtPropPath(node, [])).toBe(node);
   });
 });

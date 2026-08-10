@@ -76,4 +76,11 @@ describe('interpolateValue', () => {
   it('returns start value for unknown types', () => {
     expect(interpolateValue([1, 2], [3, 4], 0.5)).toEqual([1, 2]);
   });
+
+  it('steps on raw progress, not eased progress, when the two diverge', () => {
+    // Eased t past 1 (an overshooting easing) must not step early if raw
+    // progress hasn't actually reached the end of the segment yet.
+    expect(interpolateValue('a', 'b', 1.2, 0.9)).toBe('a');
+    expect(interpolateValue('a', 'b', 1.2, 1)).toBe('b');
+  });
 });

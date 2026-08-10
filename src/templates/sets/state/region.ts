@@ -49,6 +49,7 @@ export function stateRegionTemplate(id: string, props: Record<string, unknown>):
         fill: { h: 0, s: 0, l: 70 },
         transform: { x: -w / 2 + 10, y: -h / 2 + 14 },
         depth: -1,
+        layout: { skip: true },
       }),
     ],
     layout: { type: 'flex', direction, gap, padding: 30 },

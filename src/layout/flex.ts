@@ -1,29 +1,11 @@
-import type { LayoutStrategy, ChildPlacement } from './registry';
 import type { Node } from '../types/node';
+import { Variable, Expression, Constraint } from './solver';
+import type { ConstraintResult } from './solver';
+import { getNodeContentBounds } from '../renderer/geometry';
+import { resolveFlexContainer } from '../types/properties';
 
 function getNodeSize(node: Node, isRow: boolean): { main: number; cross: number } {
-  let w = 0, h = 0;
-
-  if (node.rect) {
-    w = node.rect.w;
-    h = node.rect.h;
-  } else if (node.ellipse) {
-    w = node.ellipse.rx * 2;
-    h = node.ellipse.ry * 2;
-  } else if (node.image) {
-    w = node.image.w;
-    h = node.image.h;
-  } else if (node.text && node._measured) {
-    w = node._measured.width;
-    h = node._measured.height;
-  } else if (node.text) {
-    w = (node.text.content?.length ?? 0) * (node.text.size ?? 14) * 0.6;
-    h = node.text.size ?? 14;
-  } else {
-    w = 100;
-    h = 50;
-  }
-
+  const { w, h } = getNodeContentBounds(node);
   return isRow ? { main: w, cross: h } : { main: h, cross: w };
 }
 
@@ -41,21 +23,27 @@ function getHintStr(node: Node, key: string, fallback: string): string {
   return fallback;
 }
 
-export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]): ChildPlacement[] => {
-  // Exclude structural children (depth < 0) from layout flow —
-  // they keep their manual transforms and are not flex items.
-  const layoutChildren = children.filter(c => (c.depth ?? 0) >= 0);
-  if (layoutChildren.length === 0) return [];
+/**
+ * Flex constraint strategy. Computes the same box-model math as a direct
+ * layout pass (sizes, grow, justify, align), then emits it as constraints
+ * instead of writing positions directly: the first child's main-axis center
+ * is pinned, and each subsequent child is expressed as a delta from the
+ * previous one (`c[i] - c[i-1] = delta`), so the solver actually propagates
+ * the chain rather than receiving n independent pins. Cross-axis centers
+ * and final width/height are pinned per child (no dependency between
+ * children on the cross axis).
+ */
+export function flexConstraintStrategy(container: Node, children: Node[]): ConstraintResult {
+  const constraints: Constraint[] = [];
+  const variables = new Map<string, Variable>();
 
-  const layout = container.layout!;
-  const isRow = (layout.direction ?? 'column') === 'row';
-  const gap = layout.gap ?? 0;
-  const justify = layout.justify ?? 'start';
-  const align = layout.align ?? 'start';
-  const padding = layout.padding ?? 0;
+  if (children.length === 0) return { constraints, variables };
+
+  const { direction, gap, justify, align, padding } = resolveFlexContainer(container.layout);
+  const isRow = direction === 'row';
 
   // Sort children by order hint
-  const sorted = [...layoutChildren].sort((a, b) => {
+  const sorted = [...children].sort((a, b) => {
     const oa = getHint(a, 'order', 0);
     const ob = getHint(b, 'order', 0);
     return oa - ob;
@@ -136,17 +124,20 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
   const offsetMain = -containerW / 2;
   const offsetCross = -containerH / 2;
 
-  // Auto-size: set rect dimensions from content when missing or zero
+  // Auto-size: report content-derived dimensions when the container has no
+  // fixed rect — the registry applies this to the node, we don't mutate it.
   const actualW = isRow ? containerW : containerH;
   const actualH = isRow ? containerH : containerW;
-  if (!container.rect) {
-    (container as any).rect = { w: actualW, h: actualH };
-  } else {
-    if (!container.rect.w) container.rect.w = actualW;
-    if (!container.rect.h) container.rect.h = actualH;
-  }
+  const containerSize = container.rect && container.rect.w && container.rect.h
+    ? undefined
+    : { w: actualW, h: actualH };
 
-  const placements: ChildPlacement[] = [];
+  // Per-child main/cross centers and sizes
+  const mainCenters: number[] = [];
+  const crossCenters: number[] = [];
+  const childWidths: number[] = [];
+  const childHeights: number[] = [];
+
   for (let i = 0; i < sorted.length; i++) {
     const child = sorted[i];
     const childAlign = getHintStr(child, 'alignSelf', align);
@@ -161,38 +152,63 @@ export const flexStrategy: LayoutStrategy = (container: Node, children: Node[]):
       crossPos = padding;
     }
 
-    // Position is the center of the child (rects draw centered)
     const childMainSize = finalMainSizes[i];
-    const childCrossSize = sizes[i].cross;
-    const mainCenter = mainPositions[i] + childMainSize / 2 + offsetMain;
-    const crossCenter = crossPos + childCrossSize / 2 + offsetCross;
+    const childCrossSize = childAlign === 'stretch' && maxCross > childCross ? maxCross : childCross;
 
-    const placement: ChildPlacement = {
-      id: child.id,
-      x: isRow ? mainCenter : crossCenter,
-      y: isRow ? crossCenter : mainCenter,
-    };
+    mainCenters.push(mainPositions[i] + childMainSize / 2 + offsetMain);
+    crossCenters.push(crossPos + childCrossSize / 2 + offsetCross);
 
-    // If grow changed size, report it
-    if (finalMainSizes[i] !== sizes[i].main) {
-      if (isRow) {
-        placement.w = finalMainSizes[i];
-      } else {
-        placement.h = finalMainSizes[i];
-      }
+    if (isRow) {
+      childWidths.push(childMainSize);
+      childHeights.push(childCrossSize);
+    } else {
+      childWidths.push(childCrossSize);
+      childHeights.push(childMainSize);
     }
-
-    // Stretch cross
-    if (childAlign === 'stretch' && maxCross > childCross) {
-      if (isRow) {
-        placement.h = maxCross;
-      } else {
-        placement.w = maxCross;
-      }
-    }
-
-    placements.push(placement);
   }
 
-  return placements;
-};
+  // Main axis: pin the first child, chain the rest as deltas so the solver
+  // genuinely propagates the relationship instead of receiving independent pins.
+  const mainVars = sorted.map((child, i) =>
+    new Variable(`${child.id}.${isRow ? 'centerX' : 'centerY'}`, mainCenters[i]),
+  );
+  mainVars.forEach(v => variables.set(v.name, v));
+  constraints.push(Constraint.create(
+    Expression.fromVariable(mainVars[0]),
+    Expression.fromConstant(mainCenters[0]),
+  ));
+  for (let i = 1; i < mainVars.length; i++) {
+    const delta = mainCenters[i] - mainCenters[i - 1];
+    constraints.push(Constraint.create(
+      Expression.fromVariable(mainVars[i]).minus(Expression.fromVariable(mainVars[i - 1])),
+      Expression.fromConstant(delta),
+    ));
+  }
+
+  // Cross axis + width/height: pinned per child (no inter-child dependency).
+  for (let i = 0; i < sorted.length; i++) {
+    const child = sorted[i];
+
+    const crossVar = new Variable(`${child.id}.${isRow ? 'centerY' : 'centerX'}`, crossCenters[i]);
+    variables.set(crossVar.name, crossVar);
+    constraints.push(Constraint.create(
+      Expression.fromVariable(crossVar),
+      Expression.fromConstant(crossCenters[i]),
+    ));
+
+    const varW = new Variable(`${child.id}.width`, childWidths[i]);
+    const varH = new Variable(`${child.id}.height`, childHeights[i]);
+    variables.set(varW.name, varW);
+    variables.set(varH.name, varH);
+    constraints.push(Constraint.create(
+      Expression.fromVariable(varW),
+      Expression.fromConstant(childWidths[i]),
+    ));
+    constraints.push(Constraint.create(
+      Expression.fromVariable(varH),
+      Expression.fromConstant(childHeights[i]),
+    ));
+  }
+
+  return { constraints, variables, containerSize };
+}

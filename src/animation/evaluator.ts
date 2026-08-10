@@ -37,13 +37,22 @@ export function evaluateTrack(keyframes: TrackKeyframe[], time: number): unknown
   if (keyframes.length === 0) return undefined;
   if (keyframes.length === 1) return keyframes[0].value;
 
+  // Clamp by actual min/max time, not array position — defensive: an
+  // unsorted track should still clamp to the right endpoint rather than
+  // whichever keyframe happens to sit first/last in the array (synthesized
+  // tracks are sorted before install, but this costs nothing to guarantee).
+  let first = keyframes[0];
+  let last = keyframes[0];
+  for (const kf of keyframes) {
+    if (kf.time < first.time) first = kf;
+    if (kf.time > last.time) last = kf;
+  }
+
   // Before first keyframe
-  if (time <= keyframes[0].time) return keyframes[0].value;
+  if (time <= first.time) return first.value;
 
   // After last keyframe
-  if (time >= keyframes[keyframes.length - 1].time) {
-    return keyframes[keyframes.length - 1].value;
-  }
+  if (time >= last.time) return last.value;
 
   // Find the segment
   for (let i = 1; i < keyframes.length; i++) {
@@ -55,11 +64,11 @@ export function evaluateTrack(keyframes: TrackKeyframe[], time: number): unknown
 
       const rawT = (time - prev.time) / duration;
       const easedT = applyEasing(rawT, curr.easing);
-      return interpolateValue(prev.value, curr.value, easedT);
+      return interpolateValue(prev.value, curr.value, easedT, rawT);
     }
   }
 
-  return keyframes[keyframes.length - 1].value;
+  return last.value;
 }
 
 export function evaluateAllTracks(

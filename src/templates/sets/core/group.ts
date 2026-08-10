@@ -49,6 +49,7 @@ export function groupTemplate(id: string, props: Record<string, unknown>): Node 
         fill: { h: 0, s: 0, l: 80 },
         transform: { x: -w / 2 + 10, y: -h / 2 + 10 },
         depth: -1,
+        layout: { skip: true },
       }),
     );
   }

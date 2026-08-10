@@ -79,4 +79,47 @@ describe('resolveCameraView', () => {
     );
     expect(result.w).toBeCloseTo(noZoom.w / 2, 1);
   });
+
+  // ── Stage 8: world-aware look (nesting + layout) ─────────────────────
+
+  it('targets a nested node by its world position, not its local transform', () => {
+    const child = createNode({ id: 'child', transform: { x: 30, y: 10 }, rect: { w: 10, h: 10 } });
+    const parent = createNode({ id: 'parent', transform: { x: 100, y: 50 }, children: [child] });
+    const cam = createNode({ id: 'cam', camera: { look: 'child' } });
+    const result = resolveCameraView(cam, [parent], DEFAULT_VB);
+    expect(result.x).toBe(130);
+    expect(result.y).toBe(60);
+  });
+
+  it('fits a container by id to include its children\'s world extent', () => {
+    const childA = createNode({ id: 'ca', transform: { x: -50, y: 0 }, rect: { w: 20, h: 20 } });
+    const childB = createNode({ id: 'cb', transform: { x: 50, y: 0 }, rect: { w: 20, h: 20 } });
+    const container = createNode({ id: 'group', transform: { x: 200, y: 200 }, children: [childA, childB] });
+    const cam = createNode({ id: 'cam', camera: { look: ['group'] } });
+    const result = resolveCameraView(cam, [container], DEFAULT_VB);
+    // group itself has no rect: bounds come entirely from its children,
+    // spanning world x 200-50-10=140 to 200+50+10=260.
+    expect(result.x).toBe(200);
+    expect(result.w).toBeGreaterThanOrEqual(120);
+  });
+
+  it('look "all" includes a root group whose geometry lives entirely in its children', () => {
+    const leaf = createNode({ id: 'leaf', transform: { x: 40, y: 0 }, rect: { w: 20, h: 20 } });
+    const group = createNode({ id: 'group', transform: { x: 100, y: 100 }, children: [leaf] });
+    const cam = createNode({ id: 'cam', camera: { look: 'all' } });
+    const result = resolveCameraView(cam, [group, cam], DEFAULT_VB);
+    // Bounds come from the leaf's world position (140,100), not the empty
+    // group's own (0-sized) local geometry.
+    expect(result.x).toBe(140);
+    expect(result.y).toBe(100);
+  });
+
+  it('reports an unresolved look target instead of throwing', () => {
+    const cam = createNode({ id: 'cam', camera: { look: 'ghost' } });
+    const result = resolveCameraView(cam, [], DEFAULT_VB);
+    expect(result.unresolvedLookId).toBe('ghost');
+    // Fallback behavior unchanged: centers on the default viewbox.
+    expect(result.x).toBe(400);
+    expect(result.y).toBe(300);
+  });
 });
