@@ -1,8 +1,10 @@
 name: Release
 
+# Publishing is deliberate: only a push to main (i.e. merging) releases.
+# Branch pushes get tests via ci.yml, never an npm publish.
 on:
   push:
-    branches: ['**']
+    branches: [main]
 
 permissions:
   contents: write
