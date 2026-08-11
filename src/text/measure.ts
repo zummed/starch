@@ -58,16 +58,45 @@ const canvasMeasurer: TextMeasurer = {
 
 // ─── Fallback measurer (Node.js / tests — no Canvas API) ───────
 
+/**
+ * Character widths are a guess here, but the *line structure* must not be:
+ * everything downstream reads it. The renderer emits one tspan per line, so
+ * a measurer that returns a single line renders "a\nb" as one run with a
+ * stray newline in it, and box auto-sizing takes its height from the line
+ * count. Collapsing them made every multi-line and maxWidth-wrapped label
+ * overflow its background in headless renders — while the browser, on the
+ * canvas measurer, laid the same document out correctly.
+ */
 const fallbackMeasurer: TextMeasurer = {
   measure(content, opts = {}) {
     const size = opts.size ?? 14;
     const lh = opts.lineHeight ?? size * 1.4;
     const charWidth = size * 0.6;
-    const width = content.length * charWidth;
+    const maxWidth = (opts.maxWidth !== undefined && opts.maxWidth > 0) ? opts.maxWidth : Infinity;
+
+    const lines: Array<{ text: string; width: number }> = [];
+    for (const hardLine of content.split('\n')) {
+      // Greedy wrap on whitespace, matching how the canvas measurer breaks.
+      // A single word wider than maxWidth still gets its own line rather
+      // than being split mid-word.
+      let current = '';
+      for (const word of hardLine.split(/(\s+)/)) {
+        if (word === '') continue;
+        const candidate = current + word;
+        if (current !== '' && candidate.length * charWidth > maxWidth) {
+          lines.push({ text: current.trimEnd(), width: current.trimEnd().length * charWidth });
+          current = /^\s+$/.test(word) ? '' : word;
+        } else {
+          current = candidate;
+        }
+      }
+      lines.push({ text: current.trimEnd(), width: current.trimEnd().length * charWidth });
+    }
+
     return {
-      width,
-      height: lh,
-      lines: [{ text: content, width }],
+      width: Math.max(...lines.map(line => line.width), 0),
+      height: lines.length * lh,
+      lines,
     };
   },
 };

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { geometryToSvg } from '../../renderer/geometry';
+import { geometryToSvg, computeSceneWorldBounds } from '../../renderer/geometry';
+import type { Node } from '../../types/node';
 import { createNode } from '../../types/node';
 
 describe('geometryToSvg', () => {
@@ -90,5 +91,44 @@ describe('geometryToSvg', () => {
     // Own fill (red) overrides parent fill
     expect(result!.attrs.fill).toContain('255');
     expect(result!.attrs.fill).toMatch(/^rgba?\(/);
+  });
+});
+
+/**
+ * Auto-fit framed every text node as if it were centred, whatever its
+ * `align`. The renderer meanwhile anchors it with SVG text-anchor, so a
+ * left-aligned label grew right while the frame grew left — the label ran
+ * off one edge and the other edge gained a margin of empty canvas the
+ * width of the text. It got worse the longer the label, which is why the
+ * lesson captions and the easing-comparison legend were the ones clipped.
+ */
+describe('text bounds respect alignment', () => {
+  const measured = (align: 'start' | 'middle' | 'end') => ({
+    id: 't',
+    text: { content: 'a label', size: 10, align },
+    _measured: { width: 100, height: 10 },
+    transform: { x: 200, y: 50 },
+    children: [],
+  }) as unknown as Node;
+
+  it('grows right from the anchor when align=start', () => {
+    const b = computeSceneWorldBounds([measured('start')])!;
+    expect([b.minX, b.maxX]).toEqual([200, 300]);
+  });
+
+  it('grows left from the anchor when align=end', () => {
+    const b = computeSceneWorldBounds([measured('end')])!;
+    expect([b.minX, b.maxX]).toEqual([100, 200]);
+  });
+
+  it('straddles the anchor when align=middle', () => {
+    const b = computeSceneWorldBounds([measured('middle')])!;
+    expect([b.minX, b.maxX]).toEqual([150, 250]);
+  });
+
+  it('leaves non-text geometry centred on its transform', () => {
+    const rect = { id: 'r', rect: { w: 100, h: 20 }, transform: { x: 200, y: 50 }, children: [] } as unknown as Node;
+    const b = computeSceneWorldBounds([rect])!;
+    expect([b.minX, b.maxX]).toEqual([150, 250]);
   });
 });

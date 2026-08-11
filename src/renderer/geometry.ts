@@ -94,9 +94,16 @@ function accumulateNodeBounds(node: Node, worldX: number, worldY: number, bounds
     }
   }
   if (w > 0 || h > 0) {
-    bounds.minX = Math.min(bounds.minX, worldX - w / 2);
+    // Text is anchored the way the renderer anchors it (SVG text-anchor
+    // start/middle/end), so an aligned label grows to one side only.
+    // Centring its box regardless clipped the end it actually grew towards
+    // and padded the frame with empty space on the other.
+    const extendsLeft = node.text?.align === 'start' ? 0
+      : node.text?.align === 'end' ? w
+      : w / 2;
+    bounds.minX = Math.min(bounds.minX, worldX - extendsLeft);
+    bounds.maxX = Math.max(bounds.maxX, worldX - extendsLeft + w);
     bounds.minY = Math.min(bounds.minY, worldY - h / 2);
-    bounds.maxX = Math.max(bounds.maxX, worldX + w / 2);
     bounds.maxY = Math.max(bounds.maxY, worldY + h / 2);
   }
 

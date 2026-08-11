@@ -40,7 +40,7 @@ export function findEmptyNodes(roots: Node[]): string[] {
     for (const node of nodes) {
       const children = node.children ?? [];
       const meaningful = Object.keys(node).filter(
-        key => !STRUCTURAL_KEYS.has(key) && (node as Record<string, unknown>)[key] !== undefined,
+        key => !STRUCTURAL_KEYS.has(key) && (node as unknown as Record<string, unknown>)[key] !== undefined,
       );
       if (meaningful.length === 0 && children.length === 0) {
         empty.push(node.id);
