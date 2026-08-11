@@ -69,7 +69,7 @@ describe('validateLayoutUsage', () => {
   });
 
   it('produces zero warnings for a clean, existing sample scene', () => {
-    const sample = v2Samples.find(s => s.name === 'cross-strategy-slot');
+    const sample = v2Samples.find(s => s.name === 'layout-cross-strategy');
     expect(sample).toBeDefined();
     const scene = parseScene(sample!.dsl);
     expect(validateLayoutUsage(scene.nodes)).toEqual([]);

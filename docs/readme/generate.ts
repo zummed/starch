@@ -36,11 +36,11 @@ interface Demo {
 }
 
 const demos: Demo[] = [
-  { name: 'hero', sample: 'request-flow', kind: 'gif', capture: 7 },
+  { name: 'hero', sample: '22-request-flow', kind: 'gif', capture: 7 },
   { name: 'shapes', sample: 'template-tour', kind: 'png' },
-  { name: 'animate', sample: 'staggered-cards', kind: 'gif', capture: 5 },
-  { name: 'camera', sample: 'camera-look-fit', kind: 'gif', capture: 8 },
-  { name: 'layout', sample: 'circular-layout', kind: 'gif', capture: 6 },
+  { name: 'animate', sample: '14-staggered-cards', kind: 'gif', capture: 5 },
+  { name: 'camera', sample: '20-camera-look-fit', kind: 'gif', capture: 8 },
+  { name: 'layout', sample: '17-layout-circular', kind: 'gif', capture: 6 },
 ];
 
 const { renderToSVG: renderRaw } = await import('../../src/renderStatic');

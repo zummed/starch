@@ -95,7 +95,7 @@ animate 5 loop
 
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/animate.gif" alt="Three cards dealing in one by one with spring easing" width="100%">
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGluZ2VzdDogY2FyZCAiSW5nZXN0IiBib2R5PSJyYXcgZXZlbnRzIiBjb2xvcj1zdGVlbGJsdWUgb3BhY2l0eSAwIGF0IDQwLDEyMAogIHBhcnNlOiBjYXJkICJQYXJzZSIgYm9keT0iaW50byByZWNvcmRzIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBvcGFjaXR5IDAgYXQgNDAsMTIwCiAgc3RvcmU6IGNhcmQgIlN0b3JlIiBib2R5PSJ0aW1lIHNlcmllcyIgY29sb3I9ZGFya29yYW5nZSBvcGFjaXR5IDAgYXQgNDAsMTIwCgphbmltYXRlIDUgbG9vcAogIDEKICAgIGluZ2VzdC5vcGFjaXR5OiAxCiAgICBpbmdlc3QudHJhbnNmb3JtLng6IHsgdmFsdWU6IDEzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMgogICAgcGFyc2Uub3BhY2l0eTogMQogICAgcGFyc2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDMzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMwogICAgc3RvcmUub3BhY2l0eTogMQogICAgc3RvcmUudHJhbnNmb3JtLng6IHsgdmFsdWU6IDUzMCwgZWFzaW5nOiAic3ByaW5nIiB9) · sample: `staggered-cards`
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGluZ2VzdDogY2FyZCAiSW5nZXN0IiBib2R5PSJyYXcgZXZlbnRzIiBjb2xvcj1zdGVlbGJsdWUgb3BhY2l0eSAwIGF0IDQwLDEyMAogIHBhcnNlOiBjYXJkICJQYXJzZSIgYm9keT0iaW50byByZWNvcmRzIiBjb2xvcj1tZWRpdW1zZWFncmVlbiBvcGFjaXR5IDAgYXQgNDAsMTIwCiAgc3RvcmU6IGNhcmQgIlN0b3JlIiBib2R5PSJ0aW1lIHNlcmllcyIgY29sb3I9ZGFya29yYW5nZSBvcGFjaXR5IDAgYXQgNDAsMTIwCgphbmltYXRlIDUgbG9vcAogIDEKICAgIGluZ2VzdC5vcGFjaXR5OiAxCiAgICBpbmdlc3QudHJhbnNmb3JtLng6IHsgdmFsdWU6IDEzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMgogICAgcGFyc2Uub3BhY2l0eTogMQogICAgcGFyc2UudHJhbnNmb3JtLng6IHsgdmFsdWU6IDMzMCwgZWFzaW5nOiAic3ByaW5nIiB9CiAgMwogICAgc3RvcmUub3BhY2l0eTogMQogICAgc3RvcmUudHJhbnNmb3JtLng6IHsgdmFsdWU6IDUzMCwgZWFzaW5nOiAic3ByaW5nIiB9) · sample: `14-staggered-cards`
 
 ## Camera direction
 
@@ -119,7 +119,7 @@ animate 8 loop easing=easeInOut
 
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/camera.gif" alt="A camera gliding between nodes, fitting one, two, then all of them" width="100%">
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNhbTogY2FtZXJhIGxvb2s9YWxsCiAgYTogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGNyaW1zb24gYXQgNTAsMTAwCiAgYjogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGxpbWVncmVlbiBhdCAzMDAsNTAKICBjOiByZWN0IDYweDYwIHJhZGl1cz02IGZpbGwgcm95YWxibHVlIGF0IDU1MCwzMDAKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAyIGNhbS5jYW1lcmEubG9vazogKGEpCiAgNCBjYW0uY2FtZXJhLmxvb2s6IChhLGIpCiAgNiBjYW0uY2FtZXJhLmxvb2s6IChjKQogIDggY2FtLmNhbWVyYS5sb29rOiBhbGw) · sample: `camera-look-fit`
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIGNhbTogY2FtZXJhIGxvb2s9YWxsCiAgYTogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGNyaW1zb24gYXQgNTAsMTAwCiAgYjogcmVjdCA2MHg2MCByYWRpdXM9NiBmaWxsIGxpbWVncmVlbiBhdCAzMDAsNTAKICBjOiByZWN0IDYweDYwIHJhZGl1cz02IGZpbGwgcm95YWxibHVlIGF0IDU1MCwzMDAKCmFuaW1hdGUgOCBsb29wIGVhc2luZz1lYXNlSW5PdXQKICAyIGNhbS5jYW1lcmEubG9vazogKGEpCiAgNCBjYW0uY2FtZXJhLmxvb2s6IChhLGIpCiAgNiBjYW0uY2FtZXJhLmxvb2s6IChjKQogIDggY2FtLmNhbWVyYS5sb29rOiBhbGw) · sample: `20-camera-look-fit`
 
 ## Layout engines
 
@@ -148,7 +148,7 @@ animate 6 loop easing=easeInOut
 
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/layout.gif" alt="Six nodes ringed evenly, rotating one slot per second" width="100%">
 
-[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIHJpbmc6IGVsbGlwc2UgMjIweDIyMCBzdHJva2Ugc2xhdGVncmF5IHdpZHRoPTEgbGF5b3V0IGNpcmN1bGFyIHJhZGl1cz0xMTAgc3RhcnRBbmdsZT0wIGF0IDI1MCwxNzAKICAgIG4xOiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgc3RlZWxibHVlCiAgICBuMjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGNvcmFsCiAgICBuMzogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHNlYWdyZWVuCiAgICBuNDogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGdvbGQKICAgIG41OiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgbWVkaXVtcHVycGxlCiAgICBuNjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHRvbWF0bwoKYW5pbWF0ZSA2IGxvb3AgZWFzaW5nPWVhc2VJbk91dAogIDEgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogNjAKICAyIHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDEyMAogIDMgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMTgwCiAgNCByaW5nLmxheW91dC5zdGFydEFuZ2xlOiAyNDAKICA1IHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDMwMAogIDYgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMzYw) · sample: `circular-layout`
+[▶ Open in playground](https://zummed.github.io/starch/#dsl=b2JqZWN0cwogIHJpbmc6IGVsbGlwc2UgMjIweDIyMCBzdHJva2Ugc2xhdGVncmF5IHdpZHRoPTEgbGF5b3V0IGNpcmN1bGFyIHJhZGl1cz0xMTAgc3RhcnRBbmdsZT0wIGF0IDI1MCwxNzAKICAgIG4xOiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgc3RlZWxibHVlCiAgICBuMjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGNvcmFsCiAgICBuMzogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHNlYWdyZWVuCiAgICBuNDogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIGdvbGQKICAgIG41OiByZWN0IDUweDMwIHJhZGl1cz00IGZpbGwgbWVkaXVtcHVycGxlCiAgICBuNjogcmVjdCA1MHgzMCByYWRpdXM9NCBmaWxsIHRvbWF0bwoKYW5pbWF0ZSA2IGxvb3AgZWFzaW5nPWVhc2VJbk91dAogIDEgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogNjAKICAyIHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDEyMAogIDMgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMTgwCiAgNCByaW5nLmxheW91dC5zdGFydEFuZ2xlOiAyNDAKICA1IHJpbmcubGF5b3V0LnN0YXJ0QW5nbGU6IDMwMAogIDYgcmluZy5sYXlvdXQuc3RhcnRBbmdsZTogMzYw) · sample: `17-layout-circular`
 
 ## Live editor
 
@@ -158,9 +158,12 @@ underneath. Errors show up as you type without blanking the last good frame.
 
 <img src="https://raw.githubusercontent.com/zummed/starch/main/docs/readme/playground.png" alt="The starch playground: sample browser, DSL editor, and the live diagram with playback controls" width="100%">
 
-Its sample browser is also the syntax reference — one minimal sample per feature,
-covering flex and grid layouts, slot animation between containers, splines and routed
-connectors, state-machine shapes, style animation, and camera rotation.
+Its sample browser is also the way in. The numbered samples are a course: 22 lessons
+that build one diagram a step at a time, from a single rectangle through templates,
+connections, animation, layout and camera — each one introducing a single new idea, so
+you can read a lesson as a diff against the one before it. The unnumbered samples are
+reference grids: every shape in a set side by side, all 17 easings racing, every colour
+format.
 
 Diagrams embedded in your own pages can open it too: add `editable` to a
 `<starch-diagram>` and its edit button round-trips the DSL back into the page.

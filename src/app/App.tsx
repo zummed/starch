@@ -4,12 +4,16 @@ import { V2SampleBrowser } from './components/V2SampleBrowser';
 import { TabFileManager } from './components/TabFileManager';
 import { Timeline } from './components/Timeline';
 import { StructuralEditor, type StructuralEditorHandle } from '../editor/StructuralEditor';
-import { v2Samples, type V2Sample } from '../samples/index';
+import { v2Samples, getV2Sample, DEFAULT_SAMPLE_NAME, type V2Sample } from '../samples/index';
 import type { ViewBox } from '../renderer/camera';
 import { isEmbedMode, readHashImport, useEmbedHost } from './embedSession';
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
-const DEFAULT_DSL = v2Samples[0]?.dsl || '{ objects: [] }';
+// Looked up by name, not by index: the sample list is ordered as a curriculum,
+// so v2Samples[0] is lesson 01 (a bare rect) — not what the playground should
+// open on.
+const DEFAULT_SAMPLE = getV2Sample(DEFAULT_SAMPLE_NAME) ?? v2Samples[0];
+const DEFAULT_DSL = DEFAULT_SAMPLE?.dsl || '{ objects: [] }';
 const PREFS_KEY = 'starch-v2-prefs';
 const TABS_KEY = 'starch-tabs';
 
@@ -131,7 +135,7 @@ export default function App() {
   const [panZoom, setPanZoom] = useState<{ x: number; y: number; zoom: number } | null>(null);
   const [editorWidth, setEditorWidth] = useState(initialPrefs.current.editorWidth);
   const [isDragging, setIsDragging] = useState(false);
-  const [activeSampleId, setActiveSampleId] = useState<string | null>(v2Samples[0]?.name || null);
+  const [activeSampleId, setActiveSampleId] = useState<string | null>(DEFAULT_SAMPLE?.name || null);
   const dragging = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);

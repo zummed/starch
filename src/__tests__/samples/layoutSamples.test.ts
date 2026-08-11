@@ -86,7 +86,7 @@ describe('Layout samples — real pipeline smoke test', () => {
 
 describe('flex-layout — gap-spaced centered row + grow distribution', () => {
   it('row children are spaced by gap and centered in the container', () => {
-    const { evaluateAt } = runPipeline(getSample('flex-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('15-layout-flex').dsl);
     const animated = evaluateAt(0);
 
     const a = findNode(animated, 'a')!;
@@ -105,7 +105,7 @@ describe('flex-layout — gap-spaced centered row + grow distribution', () => {
   });
 
   it('the grow child absorbs the row\'s extra space', () => {
-    const { evaluateAt } = runPipeline(getSample('flex-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('15-layout-flex').dsl);
     const animated = evaluateAt(0);
 
     const fixed = findNode(animated, 'fixed')!;
@@ -114,7 +114,7 @@ describe('flex-layout — gap-spaced centered row + grow distribution', () => {
   });
 
   it('the gap breathes apart and the fixed child\'s width reflow leaves the row\'s other fixed child in place', () => {
-    const { evaluateAt } = runPipeline(getSample('flex-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('15-layout-flex').dsl);
     const at0 = evaluateAt(0);
     const at3 = evaluateAt(3);
 
@@ -137,7 +137,7 @@ describe('flex-layout — gap-spaced centered row + grow distribution', () => {
 
 describe('flex-slot — mover animates between two flex columns', () => {
   it('mover moves at the slot keyframe while other members stay valid throughout', () => {
-    const { evaluateAt, duration } = runPipeline(getSample('flex-slot').dsl);
+    const { evaluateAt, duration } = runPipeline(getSample('18-layout-slots').dsl);
 
     const moverStart = findNode(evaluateAt(0), 'mover')!;
     const moverAtSlot = findNode(evaluateAt(2), 'mover')!;
@@ -158,7 +158,7 @@ describe('flex-slot — mover animates between two flex columns', () => {
     // (2x30 + gap 8 + padding 20), 1 member = 50. The regression this pins:
     // the base solve's t=0 sizes got baked into baseNodes and the per-time
     // solves treated them as explicit fixed sizes, so "right" never grew.
-    const { evaluateAt } = runPipeline(getSample('flex-slot').dsl);
+    const { evaluateAt } = runPipeline(getSample('18-layout-slots').dsl);
 
     const at0 = evaluateAt(0);
     expect(findNode(at0, 'left')!.rect!.h).toBeCloseTo(88);
@@ -177,7 +177,7 @@ describe('flex-slot — mover animates between two flex columns', () => {
 
 describe('grid-layout — auto-placement, colSpan, honest authored heights', () => {
   it('the colSpan=2 child spans two cells and align=start keeps authored heights', () => {
-    const { evaluateAt } = runPipeline(getSample('grid-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('16-layout-grid').dsl);
     const animated = evaluateAt(0);
 
     const m1 = findNode(animated, 'm1')!;
@@ -195,7 +195,7 @@ describe('grid-layout — auto-placement, colSpan, honest authored heights', () 
   });
 
   it('colSpan: 2 -> 1 narrows the chart to one cell and the sidebar slides left to fill the gap', () => {
-    const { evaluateAt } = runPipeline(getSample('grid-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('16-layout-grid').dsl);
     const at0 = evaluateAt(0);
     const at3 = evaluateAt(3);
     const at6 = evaluateAt(6);
@@ -217,7 +217,7 @@ describe('grid-layout — auto-placement, colSpan, honest authored heights', () 
 
 describe('circular-layout — ring of 6, stepping carousel', () => {
   it('six children sit at radius distance from the ring center, 60 degrees apart', () => {
-    const { evaluateAt } = runPipeline(getSample('circular-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('17-layout-circular').dsl);
     const animated = evaluateAt(0);
 
     const children = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'].map(id => findNode(animated, id)!);
@@ -233,7 +233,7 @@ describe('circular-layout — ring of 6, stepping carousel', () => {
   });
 
   it('the ring advances one slot per second, landing back home after a full turn', () => {
-    const { evaluateAt } = runPipeline(getSample('circular-layout').dsl);
+    const { evaluateAt } = runPipeline(getSample('17-layout-circular').dsl);
     const at0 = evaluateAt(0);
     const at1 = evaluateAt(1);
     const at6 = evaluateAt(6);
@@ -255,7 +255,7 @@ describe('circular-layout — ring of 6, stepping carousel', () => {
 
 describe('cross-strategy-slot — movers entering the grid at different times', () => {
   it('the two movers occupy different cells once both have moved', () => {
-    const { evaluateAt } = runPipeline(getSample('cross-strategy-slot').dsl);
+    const { evaluateAt } = runPipeline(getSample('layout-cross-strategy').dsl);
     const animated = evaluateAt(4); // end of task2's move (the second slot change)
 
     const task1 = findNode(animated, 'task1')!;
@@ -269,7 +269,7 @@ describe('cross-strategy-slot — movers entering the grid at different times', 
   });
 
   it('the third task (never slotted itself) gets smoothly interpolated reflow keyframes, not a snap', () => {
-    const { tracks } = runPipeline(getSample('cross-strategy-slot').dsl);
+    const { tracks } = runPipeline(getSample('layout-cross-strategy').dsl);
     const x = tracks.get('task3.transform.x')!;
     const y = tracks.get('task3.transform.y')!;
     expect(x).toBeDefined();
@@ -284,7 +284,7 @@ describe('cross-strategy-slot — movers entering the grid at different times', 
   });
 
   it('the sample description matches what renders', () => {
-    const description = getSample('cross-strategy-slot').description.toLowerCase();
+    const description = getSample('layout-cross-strategy').description.toLowerCase();
     expect(description).toContain('flex');
     expect(description).toContain('grid');
   });
@@ -295,7 +295,7 @@ describe('cross-strategy-slot — movers entering the grid at different times', 
     // resized, so task2's rect.w/h track had keyframes at 0s and 4s but a
     // gap at 2s — interpolation filled that gap by lerping task2 toward its
     // t=4 grid size the whole time it was still sitting in the flex inbox.
-    const { tracks, evaluateAt } = runPipeline(getSample('cross-strategy-slot').dsl);
+    const { tracks, evaluateAt } = runPipeline(getSample('layout-cross-strategy').dsl);
 
     const task2 = findNode(evaluateAt(2), 'task2')!;
     expect(task2.rect!.w).toBeCloseTo(130);
