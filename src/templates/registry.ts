@@ -183,6 +183,7 @@ export function expandTemplates(
   nodes: Array<Record<string, unknown>>,
   searchPath: string[] = ['core'],
   measure?: TextMeasurer,
+  warnings?: string[],
 ): Node[] {
   const result: Node[] = [];
   for (const nodeDef of nodes) {
@@ -195,18 +196,38 @@ export function expandTemplates(
           measure,
         );
         // Merge node-level properties (transform, fill, stroke, etc.)
-        // that were parsed alongside the template invocation.
+        // that were parsed alongside the template invocation. `children` is
+        // merged rather than assigned: the template's own parts (a box's bg
+        // and label) survive, and DSL-authored children are appended after
+        // them. Assigning would leave the template an empty shell and push
+        // the raw child defs into the tree unexpanded — which then crashed
+        // the tree walker on their missing `children` array.
         for (const key of Object.keys(nodeDef)) {
-          if (key === 'id' || key === 'template' || key === 'props') continue;
+          if (key === 'id' || key === 'template' || key === 'props' || key === 'children') continue;
           (node as any)[key] = nodeDef[key];
+        }
+        if (Array.isArray(nodeDef.children) && nodeDef.children.length > 0) {
+          node.children = [
+            ...node.children,
+            ...expandTemplates(
+              nodeDef.children as Array<Record<string, unknown>>,
+              searchPath,
+              measure,
+              warnings,
+            ),
+          ];
         }
         result.push(node);
         continue;
       }
+      warnings?.push(
+        `Unknown template "${nodeDef.template}" on node "${nodeDef.id}" — ` +
+        `searched sets: ${searchPath.join(', ')}`,
+      );
     }
     // Not a template — pass through as a regular node
     const children = Array.isArray(nodeDef.children)
-      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>, searchPath, measure)
+      ? expandTemplates(nodeDef.children as Array<Record<string, unknown>>, searchPath, measure, warnings)
       : [];
     result.push(createNode({ ...nodeDef, children } as NodeInput));
   }

@@ -24,7 +24,14 @@ function collectLeafPaths(obj: Record<string, unknown>, prefix: string, paths: s
 }
 
 function walkNode(node: Node, parentPath: string | null, paths: string[]): void {
-  const nodePath = parentPath ? `${parentPath}.${node.id}` : node.id;
+  // Template parts are created with ids already qualified by their parent
+  // (a box named `c1` builds `c1.bg`), so prefixing again would advertise
+  // `c1.c1.bg.fill`. Only add the parent prefix when it isn't already there.
+  const nodePath = !parentPath
+    ? node.id
+    : node.id.startsWith(`${parentPath}.`)
+      ? node.id
+      : `${parentPath}.${node.id}`;
   const ownKeys = node._ownKeys ?? new Set<string>();
 
   // Scalar properties — only if explicitly declared

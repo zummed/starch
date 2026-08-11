@@ -3,7 +3,7 @@ import { createNode } from '../types/node';
 import type { AnimConfig } from '../types/animation';
 import { expandTemplates } from '../templates/registry';
 import type { TextMeasurer } from '../text/measure';
-import { validateTree } from '../tree/validate';
+import { validateTree, findEmptyNodes } from '../tree/validate';
 import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
 import { walkDocument } from '../dsl/schemaWalker';
@@ -93,7 +93,8 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
 
   // Expand templates, then migrate old stroke format in objects
   const searchPath = (raw.use as string[] | undefined) ?? ['core'];
-  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath, measure);
+  const warnings: string[] = [];
+  const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath, measure, warnings);
 
   // Convert styles to first-class nodes
   const styleNodes = stylesToNodes(styles);
@@ -109,7 +110,17 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
 
   // Misapplied layout props (e.g. a grid hint on a flex child) don't fail
   // parsing — they warn, same policy as timeline warnings.
-  const warnings = validateLayoutUsage(allNodes);
+  warnings.push(...validateLayoutUsage(allNodes));
+
+  // Silent-failure guards. The walker drops what it can't match rather than
+  // erroring, so without these a typo'd property, an unknown template or an
+  // entirely non-starch document all parse "successfully" and render blank.
+  for (const id of findEmptyNodes(allNodes)) {
+    warnings.push(`Node "${id}" has no properties — check for a typo in its shape or property name`);
+  }
+  if (trimmed.length > 0 && allNodes.length === 0) {
+    warnings.push('Document parsed to zero nodes — nothing here was recognised as starch');
+  }
 
   return {
     name,

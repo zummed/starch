@@ -73,7 +73,7 @@ objects
 
 An `animate` block sets property values at points in time; starch interpolates between
 them. Any property animates — position, color, opacity, layout, camera — and each track
-can pick its own curve from 18 easings (`spring` here).
+can pick its own curve from 17 easings (`spring` here).
 
 ```
 objects
@@ -202,6 +202,27 @@ starch                         # or install the `starch` command
 ```
 
 Both serve it at `http://localhost:4600` and open a browser (`--port <n>`, `--no-open`).
+
+## Checking a document
+
+`starch check` parses a document and reports anything it had to drop:
+
+```bash
+starch check diagram.starch        # a file, or several
+cat diagram.starch | starch check -    # or stdin
+starch check diagram.starch --json     # machine-readable
+```
+
+It exits non-zero when a document fails to parse **or** produces a warning. Warnings
+matter as much as errors here: the parser drops what it can't match rather than
+failing, so a warning means the diagram that renders is not the one that was written —
+a misspelled shape or property name shows up as `Node "api" has no properties`.
+
+The same check is available programmatically as
+[`parseScene`](#parsescene--checking-and-inspecting-a-document), which needs no DOM —
+use that to validate starch inside your own app, or to expose a checking tool to
+whatever is generating the diagrams.
+
 To work on starch itself:
 
 ```bash
@@ -253,11 +274,13 @@ polyline, `a -> b bend=1` bends smoothly, and `smooth` fits a spline through way
 **Animation.** `animate <duration> [loop] [easing=...]` opens the timeline. Each
 keyframe is a time — absolute (`2`), or relative to the previous one (`+1`), optionally
 with `delay=0.5` — followed by `target.property: value` lines. Values hold between
-keyframes, and dot-paths reach anything: `card.badge.fill`, `row.layout.gap`,
-`cam.camera.zoom`. A value can also be `{ value: 480, easing: "bounce" }` to ease one
-track differently. Easings: `linear`, `easeIn/Out/InOut`, `easeIn/Out/InOutCubic`,
-`easeIn/Out/InOutQuart`, `easeIn/OutBack`, `bounce`, `elastic`, `spring`, `snap`,
-`step`, `cut`.
+keyframes, and dot-paths reach anything: `row.layout.gap`, `cam.camera.zoom`, and the
+parts inside a shape — a `card` named `c` exposes `c.bg`, `c.header`, `c.divider` and
+`c.body`, so `c.header.fill` animates its header. `parseScene(dsl).trackPaths` lists
+every path a document offers. A value can also be `{ value: 480, easing: "bounce" }` to
+ease one track differently. Easings: `linear`, `easeIn/Out/InOut`,
+`easeIn/Out/InOutCubic`, `easeIn/Out/InOutQuart`, `easeIn/OutBack`, `bounce`,
+`elastic`, `spring`, `snap`, `step`.
 
 **Camera.** `cam: camera look=(300,170) zoom=1.5 ratio=1.78` — `look` accepts a point,
 an object id (the camera follows it), `(id,dx,dy)` for an offset, a list `(a,b)` to fit
@@ -352,9 +375,14 @@ const svg = renderToSVG(dsl);              // final frame
 const svgAtStart = renderToSVG(dsl, { time: 0 });
 ```
 
-`renderToSVG` throws on invalid DSL. It needs a DOM (browser, or happy-dom/jsdom in
-Node) — the README images above are generated exactly this way
-([docs/readme/build.sh](docs/readme/build.sh)).
+`renderToSVG` needs a DOM (browser, or happy-dom/jsdom in Node) — the README images
+above are generated exactly this way ([docs/readme/build.sh](docs/readme/build.sh)).
+
+It throws on malformed DSL, but it does **not** report warnings: a document with a
+misspelled shape name renders successfully, just missing that shape. A clean render is
+therefore not proof the diagram is right — check with
+[`parseScene`](#parsescene--checking-and-inspecting-a-document) or `starch check` when
+the DSL was generated rather than hand-written.
 
 ### Errors
 
@@ -449,12 +477,58 @@ Starch.StarchDiagram;                  // the classes themselves
 Starch.StarchDiagramElement;
 ```
 
+### `parseScene` — checking and inspecting a document
+
+`parseScene(dsl)` is the programmatic form of `starch check`. It needs **no DOM**, so it
+runs anywhere — a build step, a CI job, a server, or a tool your own app exposes to an
+AI agent:
+
+```js
+import { parseScene } from '@bitsnbobs/starch';
+
+const scene = parseScene(dsl);
+
+scene.warnings;    // string[] — empty means the diagram matches what was written
+scene.trackPaths;  // string[] — every dot-path this document can animate
+scene.nodes;       // the resolved node tree
+scene.animate;     // the parsed timeline, if the document has one
+scene.name;        // and description, background, viewport, images, use
+```
+
+Two fields matter most when generating starch programmatically:
+
+**`warnings`** is the correctness signal. The parser drops what it can't match rather
+than throwing, so a non-empty `warnings` means the rendered diagram is *not* the one
+that was written — a misspelled shape or property shows up as `Node "api" has no
+properties`, and a document with nothing recognisable in it reports `zero nodes`. Treat
+a warning as a failure. Malformed structure (a duplicate id, two geometry fields on one
+node) still throws, so wrap the call:
+
+```js
+function check(dsl) {
+  try {
+    const { warnings } = parseScene(dsl);
+    return { ok: warnings.length === 0, errors: [], warnings };
+  } catch (err) {
+    return { ok: false, errors: [err.message], warnings: [] };
+  }
+}
+```
+
+**`trackPaths`** answers "what can I animate here?" — it lists every path the document
+exposes, including the parts inside shapes (`c1.bg.fill`, `c1.label.fill` for a box
+named `c1`), so you never have to guess a dot-path.
+
+To go all the way to an image, [`renderToSVG(dsl, { time })`](#static-svg) returns an
+SVG string — but unlike `parseScene` it requires a DOM, and it renders a document with
+warnings without complaint, so check first.
+
 ### Lower-level exports
 
-The core entry also exports the pipeline pieces (`parseScene`, `buildTimeline`,
-`evaluateAllTracks`, `applyTrackValues`, `emitFrame`, `SvgRenderBackend`,
-`computeViewBox`, `computeAutoFitViewBox`, layout and text-measurement utilities) for
-building custom renderers or tooling on top.
+The core entry also exports the pipeline pieces (`buildTimeline`, `evaluateAllTracks`,
+`applyTrackValues`, `emitFrame`, `SvgRenderBackend`, `computeViewBox`,
+`computeAutoFitViewBox`, layout and text-measurement utilities) for building custom
+renderers or tooling on top.
 
 ## Development
 

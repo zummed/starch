@@ -42,7 +42,12 @@ const PROPERTY_CATEGORIES: Record<string, PropertyDescriptor['category']> = {
 };
 
 function getDescription(schema: z.ZodType): string {
-  return schema.description ?? '';
+  // `.describe()` is nearly always applied before `.optional()`/`.default()`,
+  // so the text sits on the inner schema and the wrapper reports undefined.
+  // Check the wrapper first (for the rarer describe-after-wrap), then unwrap —
+  // without this every description in the registry is unreachable and every
+  // editor completion renders with an empty detail line.
+  return schema.description ?? unwrap(schema).description ?? '';
 }
 
 export function isOptional(schema: z.ZodType): boolean {
@@ -389,7 +394,8 @@ export const DocumentSchema = z.object({
 export function getPropertyDescription(path: string, rootSchema?: z.ZodType): string | undefined {
   const schema = getPropertySchema(path, rootSchema);
   if (!schema) return undefined;
-  return schema.description;
+  // Same wrapper problem as getDescription — look through optional/default.
+  return schema.description ?? unwrap(schema).description;
 }
 
 /**

@@ -28,7 +28,11 @@ export function resolveTrackPath(roots: Node[], path: string): ResolvedTrackPath
       continue;
     }
     if (!current) break;
-    const child = current.children.find(c => c.id === segments[i]);
+    // A child is addressed by its bare segment (`ring.n1`), or — for template
+    // parts, whose ids are already qualified by their parent — by the segment
+    // appended to the parent's id (`c1.bg` reached from `c1` via "bg").
+    const qualified = `${current.id}.${segments[i]}`;
+    const child = current.children.find(c => c.id === segments[i] || c.id === qualified);
     if (!child) break;
     current = child;
     propStart = i + 1;
