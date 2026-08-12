@@ -26,6 +26,7 @@ import { NodeSchema } from '../types/node';
 import { DocumentSchema } from '../types/schemaRegistry';
 import { registerBuiltinTemplates } from '../templates/index';
 import { listSets, type ShapeSet } from '../templates/registry';
+import { blockEntryField } from './schemaIntrospect';
 
 export interface StarchGuideOptions {
   /**
@@ -117,6 +118,24 @@ function shapeSetSection(set: ShapeSet): string {
     const usage = usageLine(name, definition.props);
     if (usage) {
       out.push('```', usage, '```');
+      // Shapes whose content is a list take it from the indented block, so
+      // the usage line above cannot show it — it isn't a kwarg.
+      const block = blockEntryField(definition.props);
+      if (block) {
+        out.push(
+          `Set \`${block.key}\` from the indented block beneath the line — ` +
+          (block.shape === 'row'
+            ? 'one row per line, each cell a quoted string:'
+            : 'one quoted string per line:'),
+          '',
+          '```',
+          `${name.split('.').pop()}1: ${name}`,
+          ...(block.shape === 'row'
+            ? ['  "Ada" "36"', '  "Lin" "29"']
+            : ['  "First line"', '  "Second line"']),
+          '```',
+        );
+      }
     } else {
       // No dsl() hints, so there is no positional form. Scalar `key=value`
       // still parses — the kwarg loop accepts any key — but the kwarg
@@ -414,9 +433,15 @@ export function getStarchGuide(options: StarchGuideOptions = {}): string {
     '`WxH` in a form below is an optional literal size, written like `120x50`; leave it out',
     'and the shape sizes itself. Everything after the shape name is optional.',
     '',
-    '**Put a shape\'s own properties before `at x,y`.** Everything after `at` belongs to the',
-    'object rather than the shape, so `box "X" at 150,40 color=red` loses the colour, while',
-    '`box "X" color=red at 150,40` keeps it. This is the single easiest mistake to make.',
+    'A shape\'s own properties can be written anywhere on its line, before or after `at x,y`.',
+    'Names the object itself owns always go to the object rather than the shape: `at`, `dash`,',
+    '`layout`, `opacity`, `depth`, `visible` and `style` (the written-out form of `@name`)',
+    'position and style the object, whatever shape it is.',
+    '',
+    '`fill` and `stroke` go by how they are written. Bare — `fill steelblue`, `stroke gray',
+    'width=2` — they are the object\'s, and children inherit them. With an `=` they are the',
+    'shape\'s own, on the shapes that list them below: `box "X" fill=azure` paints that box\'s',
+    'background and nothing else.',
     '',
     'A boolean can be written bare or explicitly — `dashed` and `dashed=true` are the same,',
     'and `dashed=false` turns it off.',

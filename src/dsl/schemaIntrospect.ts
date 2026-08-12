@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { getDsl } from './dslMeta';
 import type { DslHints } from './dslMeta';
 
@@ -54,4 +54,43 @@ export function resolveFieldSchema(schema: z.ZodType, field: string): z.ZodType 
 export function objectShape(schema: z.ZodType): Record<string, z.ZodType> | null {
   const shape = (unwrap(schema) as any).shape;
   return shape ?? null;
+}
+
+export interface BlockEntryField {
+  /** The field the indented lines populate. */
+  key: string;
+  /** 'line' — one string per line; 'row' — the line's strings become a row. */
+  shape: 'line' | 'row';
+}
+
+/**
+ * The field a shape fills from the indented block beneath its line, if it
+ * declares one: `children: { lines: 'block' }` on the props schema.
+ *
+ * The entry syntax is not declared anywhere — it is read off the field's own
+ * Zod type, so `z.array(z.string())` takes one string per line and
+ * `z.array(z.array(z.string()))` takes a row of strings per line. The schema
+ * is the grammar here as everywhere else; a shape gets block content by
+ * declaring the field it lands in.
+ */
+export function blockEntryField(propsSchema: z.ZodType | undefined): BlockEntryField | null {
+  if (!propsSchema) return null;
+  const hints = getDsl(findDslSchema(unwrap(propsSchema)));
+  const shape = objectShape(propsSchema);
+  if (!hints?.children || !shape) return null;
+  const elementOf = (s: z.ZodType): z.ZodType | null => {
+    const arr = unwrap(s) as any;
+    if (!(arr instanceof z.ZodArray)) return null;
+    const el = (arr.element ?? arr._def?.element) as z.ZodType | undefined;
+    return el ? unwrap(el) : null;
+  };
+  for (const [key, mode] of Object.entries(hints.children)) {
+    if (mode !== 'block' || !shape[key]) continue;
+    const element = elementOf(shape[key]);
+    if (!element) continue;
+    if (element instanceof z.ZodString) return { key, shape: 'line' };
+    const cell = elementOf(element);
+    if (cell instanceof z.ZodString) return { key, shape: 'row' };
+  }
+  return null;
 }

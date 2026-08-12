@@ -8,6 +8,7 @@ import type { HslColor } from '../../../types/properties';
 export const stateInitialProps = dsl(z.object({
   color: z.string().describe('Color').optional(),
   r: z.number().min(1).describe('Radius').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   kwargs: ['color', 'r'],
 });

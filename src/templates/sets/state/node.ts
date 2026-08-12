@@ -14,6 +14,7 @@ export const stateNodeProps = dsl(z.object({
   h: z.number().min(1).describe('Height').optional(),
   color: z.string().describe('Color').optional(),
   minWidth: z.number().min(0).describe('Min auto-size width').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   positional: [
     { keys: ['name'], format: 'quoted' },

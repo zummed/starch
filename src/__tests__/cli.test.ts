@@ -80,9 +80,11 @@ describe.skipIf(!existsSync('dist/starch.js'))('starch check', () => {
   });
 
   it('fails a document whose shape name is misspelled', async () => {
+    // The misspelling is kept as the template so the warning can name it,
+    // rather than being dropped and reported as an empty node.
     const result = await check('api: bax "API" color=steelblue\n');
     expect(result.code).toBe(1);
-    expect(result.stderr).toMatch(/"api" has no properties/i);
+    expect(result.stderr).toMatch(/unknown template "bax" on node "api"/i);
   });
 
   it('fails a document that is not starch at all', async () => {
@@ -96,7 +98,7 @@ describe.skipIf(!existsSync('dist/starch.js'))('starch check', () => {
     expect(result.code).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.ok).toBe(false);
-    expect(parsed.results[0].warnings[0]).toMatch(/has no properties/i);
+    expect(parsed.results[0].warnings[0]).toMatch(/unknown template "nothing"/i);
   });
 });
 

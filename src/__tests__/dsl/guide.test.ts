@@ -71,11 +71,30 @@ describe('getStarchGuide', () => {
     }
   });
 
-  it('warns that shape properties must precede `at`', () => {
-    // `box "X" at 150,40 color=red` drops the colour: anything after `at` is
-    // read as an object-level property, not a shape prop. Every cold reader
-    // that hit this wrote a document that parsed but rendered wrong.
-    expect(getStarchGuide()).toContain('before `at x,y`');
+  it('distinguishes bare fill/stroke from the `=` form', () => {
+    // `fill=azure` is now a declared shape prop on the shapes that have one,
+    // while bare `fill azure` is still the object's — the guide claimed both
+    // always went to the object.
+    const guide = getStarchGuide();
+    expect(guide).toContain('`fill` and `stroke` go by how they are written');
+    expect(guide).toContain('`style`');
+  });
+
+  it('says shape properties can go on either side of `at`', () => {
+    // They could not, once: everything after `at` was dropped, and the guide
+    // had to warn about it. The walker reads the whole line in one pass now,
+    // so the guide must not still be teaching the workaround.
+    const guide = getStarchGuide();
+    expect(guide).toContain('before or after `at x,y`');
+    expect(guide).not.toContain('before `at x,y`');
+  });
+
+  it('teaches block content for the shapes that take it', () => {
+    // textblock/codeblock lines and table rows are set from the indented
+    // block, which no usage line can show — they are not kwargs.
+    const guide = getStarchGuide();
+    expect(guide).toContain('Set `lines` from the indented block');
+    expect(guide).toContain('Set `rows` from the indented block');
   });
 
   it('teaches both connection forms, and both parse', () => {

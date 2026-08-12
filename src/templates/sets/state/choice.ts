@@ -8,6 +8,7 @@ import type { HslColor } from '../../../types/properties';
 export const stateChoiceProps = dsl(z.object({
   color: z.string().describe('Color').optional(),
   size: z.number().min(1).describe('Diamond size').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   kwargs: ['color', 'size'],
 });

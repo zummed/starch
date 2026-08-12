@@ -334,6 +334,10 @@ export class SvgRenderBackend implements RenderBackend {
       el.removeAttribute('font-weight');
     }
     el.setAttribute('font-family', mono ? 'monospace' : 'sans-serif');
+    // SVG collapses leading, trailing and repeated whitespace unless told not
+    // to. A codeblock is mostly indentation, so every line of it was rendered
+    // flush left however it was written.
+    el.setAttribute('xml:space', 'preserve');
     applyHalo(el, fill, halo ?? null);
 
     if (lines && lines.length > 1) {

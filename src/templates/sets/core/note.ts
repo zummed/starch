@@ -13,6 +13,7 @@ export const noteProps = dsl(z.object({
   color: z.string().describe('Color (stroke; fill derived)').optional(),
   maxWidth: z.number().min(1).describe('Max auto-size width before text wraps').optional(),
   minWidth: z.number().min(0).describe('Min auto-size width').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   positional: [
     { keys: ['text'], format: 'quoted' },

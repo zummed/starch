@@ -28,4 +28,6 @@ export interface Token {
   line: number;
   col: number;
   offset: number;
+  /** Source offset just past the token — the token's span is [offset, end). */
+  end: number;
 }

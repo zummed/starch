@@ -11,6 +11,10 @@ export const circleProps = dsl(z.object({
   r: z.number().min(1).describe('Radius').optional(),
   textSize: z.number().min(1).describe('Font size').optional(),
   color: z.string().describe('Color').optional(),
+  colour: z.string().describe('Alias for color').optional(),
+  strokeWidth: z.number().min(0).describe('Outline width in pixels').optional(),
+  fill: z.string().describe('Body fill colour, overriding the one derived from color').optional(),
+  stroke: z.string().describe('Outline colour, overriding the one derived from color').optional(),
 }), {
   positional: [
     { keys: ['text'], format: 'quoted' },

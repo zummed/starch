@@ -74,7 +74,8 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
   registerBuiltinTemplates();
 
   const trimmed = input.trim();
-  const raw = walkDocument(trimmed).model;
+  const walked = walkDocument(trimmed);
+  const raw = walked.model;
 
   const name = typeof raw.name === 'string' ? raw.name : undefined;
   const description = typeof raw.description === 'string' ? raw.description : undefined;
@@ -94,7 +95,10 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
 
   // Expand templates, then migrate old stroke format in objects
   const searchPath = (raw.use as string[] | undefined) ?? ['core'];
-  const warnings: string[] = [];
+  // Text the walker couldn't account for — a mistyped property, a stray token.
+  // It drops those rather than failing (the editor re-parses every keystroke,
+  // so half-typed lines must not throw), which is only acceptable if it says so.
+  const warnings: string[] = [...walked.ast.warnings];
   const expanded = expandTemplates((raw.objects ?? []).map(migrateNode), searchPath, measure, warnings);
 
   // Convert styles to first-class nodes

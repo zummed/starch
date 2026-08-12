@@ -62,7 +62,9 @@ function buildDecorations(doc: any): DecorationSet {
     }
 
     const from = tok.offset + offset;
-    const to = from + tok.value.length;
+    // The token's own recorded span: `value.length` undershoots by one per
+    // escape in a string, so `"say \"hi\""` highlighted short of its quote.
+    const to = tok.end + offset;
     if (from >= to) continue;
 
     let cls: string;
@@ -85,11 +87,9 @@ function buildDecorations(doc: any): DecorationSet {
         }
       }
     } else if (tok.type === 'string') {
-      // String tokens don't include quotes in value, but we want to highlight the quotes too.
-      // The token offset points to the opening quote. value length doesn't include quotes.
+      // tok.end already covers the quotes and any escapes.
       cls = 'dsl-string';
-      // Extend range to cover quotes
-      decorations.push(Decoration.inline(from, to + 2, { class: cls }));
+      decorations.push(Decoration.inline(from, to, { class: cls }));
       continue;
     } else if (tok.type === 'hexColor') {
       cls = 'dsl-color';
@@ -97,7 +97,7 @@ function buildDecorations(doc: any): DecorationSet {
       // Highlight @styleName — the @ and the following identifier
       const next = tokens[i + 1];
       if (next && next.type === 'identifier') {
-        const end = next.offset + next.value.length + offset;
+        const end = next.end + offset;
         decorations.push(Decoration.inline(from, end, { class: 'dsl-style-ref' }));
         i++; // skip the identifier
         continue;

@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import type { Node, PointRef } from '../../../types/node';
-import { createNode } from '../../../types/node';
+import { createNode, PointRefSchema } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { AnchorSchema } from '../../../types/properties';
 import type { AnchorPoint } from '../../../types/anchor';
 import { dsl } from '../../../dsl/dslMeta';
 import type { TextMeasurer } from '../../../text/measure';
@@ -22,6 +23,15 @@ export const arrowProps = dsl(z.object({
   dashed: z.boolean().describe('Dashed line').optional(),
   gap: z.number().describe('Gap from node edge').optional(),
   color: z.string().describe('Color').optional(),
+  colour: z.string().describe('Alias for color').optional(),
+  strokeWidth: z.number().min(0).describe('Outline width in pixels').optional(),
+  drawProgress: z.number().min(0).max(1).describe('Animated draw progress — 0 hides the line, 1 fully drawn').optional(),
+  radius: z.number().min(0).describe('Corner rounding radius for routed polylines in pixels').optional(),
+  closed: z.boolean().describe('Close the route into a loop').optional(),
+  fromAnchor: AnchorSchema.describe('Anchor on the start node — named ("N","E",...) or an (x, y) tuple').optional(),
+  toAnchor: AnchorSchema.describe('Anchor on the end node — named ("N","E",...) or an (x, y) tuple').optional(),
+  route: z.array(PointRefSchema).describe('Waypoints between from and to — set by the `a -> x -> b` form').optional(),
+  stroke: z.string().describe('Outline colour, overriding the one derived from color').optional(),
 }), {
   positional: [
     { keys: ['route'], format: 'arrow' },
@@ -51,12 +61,16 @@ export function arrowTemplate(id: string, props: Record<string, unknown>, measur
   const gap = (props.gap as number) ?? 4;
 
   let stroke: HslColor = { h: 0, s: 0, l: 60 };
+  // A named colour arrives as a string and needs parsing — arrow was the one
+  // shape that took the object form only, so `arrow color=steelblue` drew a
+  // default grey line and said nothing. Every sample arrow was the wrong
+  // colour. `line`, `box` and the rest have always parsed strings here.
   if (props.colour || props.color) {
     const raw = (props.colour ?? props.color) as unknown;
-    stroke = typeof raw === 'object' ? raw as HslColor : stroke;
+    stroke = typeof raw === 'string' ? parseColor(raw) : raw as HslColor;
   }
   if (props.stroke) {
-    stroke = typeof props.stroke === 'object' ? props.stroke as HslColor : stroke;
+    stroke = typeof props.stroke === 'string' ? parseColor(props.stroke) : props.stroke as HslColor;
   }
   const strokeWidth = (props.strokeWidth as number) ?? 2;
 

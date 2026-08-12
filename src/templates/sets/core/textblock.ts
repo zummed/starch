@@ -3,14 +3,21 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const textblockProps = z.object({
-  lines: z.array(z.string()).describe('Lines of text'),
+export const textblockProps = dsl(z.object({
+  lines: z.array(z.string()).describe('Lines of text — one quoted string per indented line'),
   size: z.number().describe('Font size').optional(),
   lineHeight: z.number().describe('Line height').optional(),
   mono: z.boolean().describe('Monospace font').optional(),
   bold: z.boolean().describe('Bold text').optional(),
   color: z.string().describe('Text color').optional(),
+  colour: z.string().describe('Alias for color').optional(),
+  align: z.enum(['start', 'middle', 'end']).describe('Horizontal alignment of the lines').optional(),
+}), {
+  kwargs: ['size', 'lineHeight', 'color', 'align'],
+  flags: ['mono', 'bold'],
+  children: { lines: 'block' },
 });
 
 export function textblockTemplate(id: string, props: Record<string, unknown>): Node {

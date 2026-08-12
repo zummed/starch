@@ -115,10 +115,10 @@ describe('animation targets', () => {
 });
 
 describe('round-trip under real conditions', () => {
-  // The shared round-trip harness walks documents with no shape sets
-  // registered, so it cannot represent `arrow a -> b` (which needs the
-  // registry to be told apart from a bare route). parseScene always
-  // registers, so the form is checked here instead.
+  // This used to be the only round-trip run with shape sets registered — the
+  // shared harness ran without them, so a shape's whole line was dropped by
+  // both parses and drifted identically. The harness registers now, and
+  // FEATURE_CORPUS covers this form, so what is left here is the pointer.
   it('re-emits a positional connection back to itself', () => {
     registerBuiltinTemplates();
     const dsl = 'objects\n  c: arrow a -> b label="calls"';

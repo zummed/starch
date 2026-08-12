@@ -14,6 +14,7 @@ export const cardProps = dsl(z.object({
   color: z.string().describe('Color (sets stroke + faded fill)').optional(),
   maxWidth: z.number().min(1).describe('Max auto-size width before body wraps').optional(),
   minWidth: z.number().min(0).describe('Min auto-size width').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   positional: [
     { keys: ['title'], format: 'quoted' },

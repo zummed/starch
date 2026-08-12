@@ -12,11 +12,13 @@ import { v2Samples } from '../../samples/index';
 
 describe('parse diagnostics', () => {
   it('warns when a shape name is misspelled', () => {
-    // The walker drops an unrecognised shape name outright rather than
-    // recording it as a template, so what survives is a node stripped of
-    // everything the author wrote — which the empty-node check catches.
+    // A name in the shape position that no set defines is still recorded as
+    // the template, so the warning can name the misspelling instead of
+    // reporting the empty node it leaves behind. It is reported once: the
+    // props can't be read either, but repeating that adds nothing.
     const scene = parseScene('api: bax "API" color=steelblue');
-    expect(scene.warnings.join('\n')).toMatch(/"api" has no properties/i);
+    expect(scene.warnings.join('\n')).toMatch(/unknown template "bax" on node "api"/i);
+    expect(scene.warnings).toHaveLength(1);
   });
 
   it('warns when a node ends up with no properties', () => {

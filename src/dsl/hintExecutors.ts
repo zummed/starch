@@ -1,11 +1,12 @@
 import type { WalkContext } from './walkContext';
+import type { Token } from './types';
 import type { PositionalHint } from './dslMeta';
 import { getDsl } from './dslMeta';
 import { z } from 'zod';
 import { HslColorSchema, RgbColorSchema } from '../types/properties';
 import { ChapterSchema } from '../types/animation';
 import { getSetNames, getShapeNames, getShapePropsSchema } from '../templates/registry';
-import { unwrap, findDslSchema, resolveFieldSchema } from './schemaIntrospect';
+import { unwrap, findDslSchema, resolveFieldSchema, blockEntryField } from './schemaIntrospect';
 
 /**
  * Consume tokens for a positional hint. Returns an object populating the
@@ -41,13 +42,25 @@ export function executePositional(
     const [k1, k2] = hint.keys;
     result[k1] = transform(parseFloat(m[1]));
     if (k2) result[k2] = transform(parseFloat(m[2]));
+    // One leaf per number, each spanning only its own digits. A single leaf
+    // over the whole `200x120` token claimed to be the width, so an editor
+    // writing a new width through it replaced the height as well.
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k1}`,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.offset + m[1].length,
       value: result[k1],
       dslRole: 'value',
     });
+    if (k2) {
+      ctx.emitLeaf({
+        schemaPath: `${schemaPath}.${k2}`,
+        from: tok.offset + m[1].length + 1, // past the 'x'
+        to: tok.end,
+        value: result[k2],
+        dslRole: 'value',
+      });
+    }
     return result;
   }
 
@@ -61,7 +74,7 @@ export function executePositional(
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k}`,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.end,
       value: result[k],
       dslRole: 'value',
     });
@@ -86,7 +99,7 @@ export function executePositional(
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k}`,
       from: tok.offset,
-      to: tok.offset + tok.value.length + 2, // include quotes
+      to: tok.end, // the token's span, quotes included
       value: tok.value,
       dslRole: 'value',
     });
@@ -110,7 +123,7 @@ export function executePositional(
       ctx.emitLeaf({
         schemaPath: `${schemaPath}.${k}`,
         from: tok.offset,
-        to: tok.offset + tok.value.length,
+        to: tok.end,
         value: result[k],
         dslRole: 'value',
       });
@@ -127,7 +140,7 @@ export function executePositional(
       ctx.emitLeaf({
         schemaPath: `${schemaPath}.${k}`,
         from: tok.offset,
-        to: tok.offset + tok.value.length,
+        to: tok.end,
         value: result[k],
         dslRole: 'value',
       });
@@ -209,13 +222,15 @@ export function executePositional(
     if (!ctx.is('bracketOpen')) return null;
     const openTok = ctx.next()!; // consume [
     while (!ctx.atEnd() && !ctx.is('bracketClose')) {
-      if (ctx.is('identifier')) {
+      // Quoted members as well as bare, so a list can hold anything with a
+      // space or punctuation in it — `cols=["First name", "Age"]`.
+      if (ctx.is('identifier') || ctx.is('string')) {
         const itemTok = ctx.next()!;
         items.push(itemTok.value);
         ctx.emitLeaf({
           schemaPath: `${schemaPath}.${k}`,
           from: itemTok.offset,
-          to: itemTok.offset + itemTok.value.length,
+          to: itemTok.end,
           value: itemTok.value,
           dslRole: 'value',
         });
@@ -251,7 +266,7 @@ export function executePositional(
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${k}`,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.end,
       value: result[k],
       dslRole: 'value',
     });
@@ -272,7 +287,7 @@ export function executePositional(
   ctx.emitLeaf({
     schemaPath: `${schemaPath}.${k}`,
     from: tok.offset,
-    to: tok.offset + tok.value.length,
+    to: tok.end,
     value: result[k],
     dslRole: 'value',
   });
@@ -293,6 +308,60 @@ function coerceKwargValue(raw: string, ownerSchema: z.ZodType | undefined, field
     if (fieldSchema instanceof z.ZodBoolean) return raw === 'true';
   }
   return raw;
+}
+
+/**
+ * Read the value half of a `key=value` pair, whatever its token shape.
+ *
+ * One value grammar, two callers: node-level kwargs and template props. They
+ * used to be separate copies, and drifted — the template copy never coerced
+ * booleans, so `dashed=false` stored the string "false" and drew a dashed
+ * line. Returns null when the next token cannot open a value.
+ */
+function readKwargValue(
+  ctx: WalkContext,
+  ownerSchema: z.ZodType | undefined,
+  key: string,
+): { value: unknown; tok: Token; to: number } | null {
+  const valTok = ctx.peek();
+  if (!valTok) return null;
+  const to = valTok.end;
+  if (valTok.type === 'number') { ctx.next(); return { value: parseFloat(valTok.value), tok: valTok, to }; }
+  if (valTok.type === 'string') { ctx.next(); return { value: valTok.value, tok: valTok, to }; }
+  if (valTok.type === 'identifier') { ctx.next(); return { value: coerceKwargValue(valTok.value, ownerSchema, key), tok: valTok, to }; }
+  if (valTok.type === 'hexColor') { ctx.next(); return { value: valTok.value, tok: valTok, to }; }
+  // Parenthesized value: (x,y) → [x, y] or (id) → ['id'] or (id,dx,dy) → [id, dx, dy]
+  if (valTok.type === 'parenOpen') {
+    const items = parseKwargTuple(ctx);
+    // Span the whole tuple, not just the `(` — the anchor widget writes
+    // `(x,y)` back over this range and would otherwise leave the tail behind.
+    return { value: items, tok: valTok, to: ctx.peek(-1)?.end ?? to };
+  }
+  // Bracket list: ["Name", "Age"] → ['Name', 'Age']. A list-valued prop had no
+  // spelling at all before, so `cols` could only be set from JSON.
+  if (valTok.type === ('bracketOpen' as typeof valTok.type)) {
+    const items = parseKwargList(ctx);
+    const closed = ctx.peek(-1);
+    return { value: items, tok: valTok, to: closed?.end ?? to };
+  }
+  return null;
+}
+
+/** Parse a bracket list value: `[a, "b c", 3]` → ['a', 'b c', 3]. */
+function parseKwargList(ctx: WalkContext): unknown[] {
+  const items: unknown[] = [];
+  if (!ctx.is('bracketOpen' as any)) return items;
+  ctx.next(); // consume [
+  while (!ctx.atEnd() && !ctx.is('bracketClose' as any)) {
+    const tok = ctx.peek();
+    if (!tok) break;
+    if (tok.type === 'number') items.push(parseFloat(ctx.next()!.value));
+    else if (tok.type === 'identifier' || tok.type === 'string') items.push(ctx.next()!.value);
+    else if (tok.type === 'comma') ctx.next();
+    else break;
+  }
+  if (ctx.is('bracketClose' as any)) ctx.next(); // consume ]
+  return items;
 }
 
 /**
@@ -321,31 +390,22 @@ export function executeKwargs(
     ctx.next(); // consume key
     ctx.next(); // consume =
 
-    const valTok = ctx.peek();
-    if (!valTok) break;
-    let value: unknown;
-    if (valTok.type === 'number') { value = parseFloat(valTok.value); ctx.next(); }
-    else if (valTok.type === 'string') { value = valTok.value; ctx.next(); }
-    else if (valTok.type === 'identifier') { value = coerceKwargValue(valTok.value, ownerSchema, keyTok.value); ctx.next(); }
-    else if (valTok.type === 'hexColor') { value = valTok.value; ctx.next(); }
-    else if (valTok.type === 'parenOpen') {
-      // Parenthesized value: (x,y) → [x, y] or (id) → ['id'] or (id,dx,dy) → [id, dx, dy]
-      value = parseKwargTuple(ctx);
-    }
-    else break;
+    const read = readKwargValue(ctx, ownerSchema, keyTok.value);
+    if (!read) break;
+    const { value, tok: valTok, to: valTo } = read;
 
     result[keyTok.value] = value;
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${keyTok.value}`,
       from: keyTok.offset,
-      to: keyTok.offset + keyTok.value.length,
+      to: keyTok.end,
       value: keyTok.value,
       dslRole: 'kwarg-key',
     });
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${keyTok.value}`,
       from: valTok.offset,
-      to: valTok.offset + valTok.value.length,
+      to: valTo,
       value,
       dslRole: 'kwarg-value',
     });
@@ -398,7 +458,7 @@ export function executeFlags(
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.${tok.value}`,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.end,
       value: true,
       dslRole: 'flag',
     });
@@ -439,7 +499,7 @@ export function executeSchema(
     ctx.emitLeaf({
       schemaPath,
       from: kwTok.offset,
-      to: kwTok.offset + kwTok.value.length,
+      to: kwTok.end,
       value: kwTok.value,
       dslRole: 'keyword',
     });
@@ -565,17 +625,17 @@ export function executeInstance(
   const idTok = ctx.peek()!;
 
   // Consume id tokens (with dots)
-  ctx.next(); // consume first identifier
+  let lastIdTok = ctx.next()!; // consume first identifier
   while (ctx.is('dot' as any)) {
     ctx.next(); // consume dot
-    ctx.next(); // consume next identifier
+    lastIdTok = ctx.next() ?? lastIdTok; // consume next identifier
   }
   if (hasColon) ctx.next(); // consume colon
 
   ctx.emitLeaf({
     schemaPath: `${schemaPath}.${idKey}`,
     from: idTok.offset,
-    to: idTok.offset + id.length,
+    to: lastIdTok.end,
     value: id,
     dslRole: 'value',
   });
@@ -583,20 +643,27 @@ export function executeInstance(
   const result: Record<string, unknown> = { [idKey]: id };
 
   // Parse the body using the instance schema (NodeSchema-like)
-  const body = executeNodeBody(ctx, instanceSchema, schemaPath);
+  const body = executeNodeBody(ctx, instanceSchema, schemaPath, id);
   if (body) Object.assign(result, body);
 
   return result;
 }
 
 /**
- * Parse template props: first positionals (from DslHints on the shape's
- * props schema), then flags, then key=val kwargs. Returns the merged props object.
+ * Parse the positional props that follow a shape name (from DslHints on the
+ * shape's props schema) — `box "Label"`, `arrow a -> b`.
+ *
+ * Everything after the positionals (`key=value` and bare flags) is read by
+ * executeNodeBody's single inline loop, alongside node-level properties.
+ * This used to be a second flags/kwargs loop here, which terminated at the
+ * first token it didn't recognise: `box "X" at 150,40 color=red` parsed the
+ * transform and then dropped `color=red` on the floor, because template-prop
+ * parsing had already finished and never resumed.
  *
  * For arrow-format positionals, the route array is split into
  * from (first), to (last), and route (intermediates).
  */
-function parseTemplateProps(
+function parseTemplatePositionals(
   ctx: WalkContext,
   templateName: string,
   schemaPath: string,
@@ -635,61 +702,81 @@ function parseTemplateProps(
     }
   }
 
-  // Flags and kwargs interleaved, the way executeSchema reads them at node
-  // level. They used to be two loops in sequence, so a bare flag written
-  // after any kwarg was unreachable and fell through to become the id of a
-  // new object — `arrow from=a to=b dashed` silently parsed as two nodes.
-  while (!ctx.atEnd() && ctx.is('identifier')) {
-    const keyTok = ctx.peek()!;
-    const isKwarg = ctx.peek(1)?.type === 'equals';
+  return props;
+}
 
-    if (!isKwarg) {
-      if (!hints?.flags?.includes(keyTok.value)) break;
-      ctx.next();
-      props[keyTok.value] = true;
-      ctx.emitLeaf({
-        schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
-        from: keyTok.offset,
-        to: keyTok.offset + keyTok.value.length,
-        value: true,
-        dslRole: 'flag',
-      });
-      continue;
-    }
+/**
+ * Read one template prop — `key=value` or a bare boolean flag — into `props`.
+ * Returns false when the token is not a template prop, leaving the cursor
+ * untouched so the caller can try something else or stop.
+ *
+ * A prop the shape's schema doesn't declare is still stored (templates read a
+ * few keys they never declared, and a document shouldn't stop working because
+ * of that) but it warns, because the overwhelmingly likelier cause is a typo
+ * that would otherwise vanish without trace.
+ */
+function readTemplateProp(
+  ctx: WalkContext,
+  templateName: string,
+  props: Record<string, unknown>,
+  schemaPath: string,
+): boolean {
+  const keyTok = ctx.peek();
+  if (!keyTok || keyTok.type !== 'identifier') return false;
 
-    ctx.next(); // consume key
-    ctx.next(); // consume =
-    const valTok = ctx.peek();
-    if (!valTok) break;
-    let val: unknown;
-    if (valTok.type === 'number') { val = parseFloat(valTok.value); ctx.next(); }
-    else if (valTok.type === 'string') { val = valTok.value; ctx.next(); }
-    // Coerced against the props schema, so a `z.boolean()` prop written
-    // `dashed=false` becomes the boolean false rather than the string
-    // "false" — which every template truthiness-checks, and so drew a
-    // dashed line for `dashed=false`.
-    else if (valTok.type === 'identifier') { val = coerceKwargValue(valTok.value, propsSchema, keyTok.value); ctx.next(); }
-    else if (valTok.type === 'hexColor') { val = valTok.value; ctx.next(); }
-    else if (valTok.type === ('parenOpen' as typeof valTok.type)) { val = parseKwargTuple(ctx); }
-    else break;
-    props[keyTok.value] = val;
+  const propsSchema = getShapePropsSchema(templateName);
+  const hints = propsSchema ? getDsl(propsSchema) : undefined;
+  const declared = propsSchema ? Object.keys((propsSchema as z.ZodObject<any>).shape ?? {}) : [];
+  const leafPath = `${schemaPath}.tplprops:${templateName}.${keyTok.value}`;
+
+  // Bare flag: `dashed`, `mono`. Boolean-ness comes from the schema, so a
+  // shape gets flags by declaring z.boolean() — no second list to maintain.
+  if (ctx.peek(1)?.type !== 'equals') {
+    const isFlag = hints?.flags?.includes(keyTok.value)
+      || (propsSchema ? resolveFieldSchema(propsSchema, keyTok.value) instanceof z.ZodBoolean : false);
+    if (!isFlag) return false;
+    ctx.next();
+    props[keyTok.value] = true;
     ctx.emitLeaf({
-      schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+      schemaPath: leafPath,
       from: keyTok.offset,
-      to: keyTok.offset + keyTok.value.length,
-      value: keyTok.value,
-      dslRole: 'kwarg-key',
+      to: keyTok.end,
+      value: true,
+      dslRole: 'flag',
     });
-    ctx.emitLeaf({
-      schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
-      from: valTok.offset,
-      to: valTok.offset + valTok.value.length,
-      value: val,
-      dslRole: 'kwarg-value',
-    });
+    return true;
   }
 
-  return props;
+  ctx.next(); // consume key
+  ctx.next(); // consume =
+  // Coerced against the props schema, so a `z.boolean()` prop written
+  // `dashed=false` becomes the boolean false rather than the string "false" —
+  // which every template truthiness-checks, and so drew a dashed line.
+  const read = readKwargValue(ctx, propsSchema, keyTok.value);
+  if (!read) {
+    ctx.warn(`${templateName} "${keyTok.value}=" has no value`);
+    ctx.skipToNewline(); // else the unread tail warns again, less usefully
+    return true;
+  }
+  if (declared.length > 0 && !declared.includes(keyTok.value)) {
+    ctx.warn(`Unknown property "${keyTok.value}" for shape "${templateName}" — it will be passed through unused`);
+  }
+  props[keyTok.value] = read.value;
+  ctx.emitLeaf({
+    schemaPath: leafPath,
+    from: keyTok.offset,
+    to: keyTok.end,
+    value: keyTok.value,
+    dslRole: 'kwarg-key',
+  });
+  ctx.emitLeaf({
+    schemaPath: leafPath,
+    from: read.tok.offset,
+    to: read.to,
+    value: read.value,
+    dslRole: 'kwarg-value',
+  });
+  return true;
 }
 
 /**
@@ -706,11 +793,15 @@ export function executeNodeBody(
   ctx: WalkContext,
   schema: z.ZodType,
   schemaPath: string,
+  nodeId?: string,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const hints = getDsl(schema);
   if (!hints) return result;
 
+  // Template props accumulate here rather than on `result` directly: the
+  // positionals land before the inline loop runs and the rest during it.
+  const templateProps: Record<string, unknown> = {};
   const geometry = hints.geometry ?? [];
   const inlineProps = hints.inlineProps ?? [];
   const blockProps = hints.blockProps ?? [];
@@ -763,7 +854,7 @@ export function executeNodeBody(
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.template`,
       from: templateKwTok.offset,
-      to: templateKwTok.offset + templateKwTok.value.length,
+      to: templateKwTok.end,
       value: 'template',
       dslRole: 'keyword',
     });
@@ -774,19 +865,19 @@ export function executeNodeBody(
       const tok = ctx.next()!;
       templateName = tok.value;
       templateNameFrom = tok.offset;
-      templateNameTo = tok.offset + tok.value.length;
+      templateNameTo = tok.end;
     } else if (ctx.is('identifier')) {
       const tok = ctx.next()!;
       templateName = tok.value;
       templateNameFrom = tok.offset;
-      templateNameTo = tok.offset + tok.value.length;
+      templateNameTo = tok.end;
       // Handle dotted template names: `core.box`, `state.node`
       while (ctx.is('dot' as any)) {
         ctx.next(); // consume dot
         if (ctx.is('identifier')) {
           const partTok = ctx.next()!;
           templateName += '.' + partTok.value;
-          templateNameTo = partTok.offset + partTok.value.length;
+          templateNameTo = partTok.end;
         }
       }
     }
@@ -799,8 +890,7 @@ export function executeNodeBody(
         value: templateName,
         dslRole: 'value',
       });
-      const props = parseTemplateProps(ctx, templateName, schemaPath);
-      if (Object.keys(props).length > 0) result.props = props;
+      Object.assign(templateProps, parseTemplatePositionals(ctx, templateName, schemaPath));
     }
     // Fall through to inline parsing loop so node-level properties
     // like 'at' (transform), opacity, fill, etc. are still parsed.
@@ -809,13 +899,19 @@ export function executeNodeBody(
   // ── Implicit template syntax ──────────────────────────────────
   // Allows `mybox: core.box text="Hello"` or `mybox: box text="Hello"`
   // without the explicit `template` keyword.
-  if (!result.path && ctx.is('identifier')) {
+  // A quoted name is accepted here as well as bare, because the explicit
+  // `template "name"` form accepts one and the click-to-edit popup writes a
+  // string back as a string: editing a shape name in the editor produced
+  // `c: "arrow" from=a to=b`, which nothing could read, and the whole line
+  // was re-read as phantom objects.
+  if (!result.path && (ctx.is('identifier') || ctx.is('string'))) {
     const tok = ctx.peek()!;
+    const quotedName = tok.type === 'string';
     let implicitTemplateName: string | undefined;
     const setNames = getSetNames();
 
     // Check for dotted name: `core.box`, `state.node`
-    if (setNames.includes(tok.value) && ctx.peek(1)?.type === ('dot' as any)) {
+    if (!quotedName && setNames.includes(tok.value) && ctx.peek(1)?.type === ('dot' as any)) {
       const setName = tok.value;
       const shapeNames = getShapeNames(setName);
       const shapeTok = ctx.peek(2);
@@ -833,15 +929,50 @@ export function executeNodeBody(
       }
     }
 
+    // A name in the shape position that no set defines, carrying props: an
+    // unknown shape. Nothing else can be written here — geometry, `at`,
+    // `fill` and the node's own kwargs and flags are all excluded below — so
+    // reading it as a shape keeps the misspelling in the model, where
+    // expandTemplates names it and the editor can still click it. Left
+    // unclaimed it leaked onto the token stream to be re-read as the id of a
+    // phantom object.
+    //
+    // A bare word with nothing after it is deliberately excluded: `box.fill:
+    // red` is far likelier a property that landed in the wrong place than a
+    // shape called `red`, and the empty-node warning says so more usefully.
+    const dotted = !quotedName && ctx.peek(1)?.type === ('dot' as any) && ctx.peek(2)?.type === 'identifier';
+    const nameLen = dotted ? 3 : 1;
+    const afterName = ctx.peek(nameLen);
+    const sameLineProps = !!afterName && afterName.type !== 'newline'
+      && afterName.type !== 'indent' && afterName.type !== 'dedent' && afterName.type !== 'eof';
+    // An indented block counts as content too — a codeblock carries nothing
+    // on its own line, all of it is in the block underneath.
+    let scan = nameLen;
+    while (ctx.peek(scan)?.type === 'newline') scan++;
+    const hasPropsAhead = sameLineProps || ctx.peek(scan)?.type === ('indent' as any);
+    if (!implicitTemplateName && !result.template && hasPropsAhead
+        && !geometry.includes(tok.value)
+        && ctx.peek(1)?.type !== 'equals'
+        && ctx.peek(1)?.type !== 'colon'
+        && !(hints.kwargs ?? []).includes(tok.value)
+        && !(hints.flags ?? []).includes(tok.value)
+        && findInlinePropField(schema, inlineProps, tok.value) === null) {
+      implicitTemplateName = dotted ? `${tok.value}.${ctx.peek(2)!.value}` : tok.value;
+    }
+
     if (implicitTemplateName) {
       // Consume the template name tokens
       let nameFrom = tok.offset;
-      let nameTo = tok.offset + tok.value.length;
+      let nameTo = tok.end;
       ctx.next(); // consume first identifier
-      if (implicitTemplateName.includes('.')) {
+      // A quoted name arrives as ONE token however many dots it holds, so the
+      // dotted path must not run for it — `n: "state.node" label="Idle"` ate
+      // `label` and `=` as the dot and shape name, then silently rebound the
+      // next string to the positional. The popup writes this form.
+      if (!quotedName && implicitTemplateName.includes('.')) {
         ctx.next(); // consume dot
         const partTok = ctx.next()!; // consume shape name
-        nameTo = partTok.offset + partTok.value.length;
+        nameTo = partTok.end;
       }
       result.template = implicitTemplateName;
       ctx.emitLeaf({
@@ -851,8 +982,7 @@ export function executeNodeBody(
         value: implicitTemplateName,
         dslRole: 'value',
       });
-      const props = parseTemplateProps(ctx, implicitTemplateName, schemaPath);
-      if (Object.keys(props).length > 0) result.props = props;
+      Object.assign(templateProps, parseTemplatePositionals(ctx, implicitTemplateName, schemaPath));
       // Fall through to inline parsing loop for node-level properties.
     }
   }
@@ -870,7 +1000,7 @@ export function executeNodeBody(
         ctx.emitLeaf({
           schemaPath: `${schemaPath}.${hints.sigil.key}`,
           from: atTok.offset,
-          to: nameTok.offset + nameTok.value.length,
+          to: nameTok.end,
           value: nameTok.value,
           dslRole: 'sigil',
         });
@@ -883,12 +1013,59 @@ export function executeNodeBody(
     // Skip geometry keyword 'path' if we already parsed a route above
     if (result.path && tok.value === 'path') break;
 
+    // `key=value` never opens a keyword-led construct: geometry, `at`, `fill`,
+    // `stroke`, `dash` and `layout` are all written bare, and only the kwargs
+    // and flags the schema names (`opacity=`, `visible=`) take an `=`. Without
+    // this test, a template prop was captured by whichever node construct
+    // happened to share its name — `text=API`, which the emitter produces for
+    // every box, re-parsed as an empty text geometry and lost the label.
+    const nextIsEquals = ctx.peek(1)?.type === 'equals';
+    const keywordLed = !nextIsEquals
+      || (hints.kwargs?.includes(tok.value) ?? false)
+      || (hints.flags?.includes(tok.value) ?? false);
+
+    // `style=primary` — the written-out spelling of the `@primary` sigil, and
+    // an object property like any other. Every shape used to forward a
+    // `props.style` of its own to get here; one route means one meaning.
+    if (hints.sigil && nextIsEquals && tok.value === hints.sigil.key) {
+      const keyTok = ctx.next()!; // key
+      ctx.next();                 // '='
+      const valTok = ctx.peek();
+      if (valTok?.type === 'identifier' || valTok?.type === 'string') {
+        ctx.next();
+        result[hints.sigil.key] = valTok.value;
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.${keyTok.value}`,
+          from: keyTok.offset,
+          to: keyTok.end,
+          value: keyTok.value,
+          dslRole: 'kwarg-key',
+        });
+        ctx.emitLeaf({
+          schemaPath: `${schemaPath}.${keyTok.value}`,
+          from: valTok.offset,
+          to: valTok.end,
+          value: valTok.value,
+          dslRole: 'kwarg-value',
+        });
+        continue;
+      }
+      // Say what is actually wrong — there may well be a value, just not a
+      // name — and drop only the value, so the properties after it still read.
+      ctx.warn(`${nodeId ? `"${nodeId}": ` : ''}"${keyTok.value}=" needs the name of a style`);
+      if (valTok && valTok.type !== 'newline' && valTok.type !== 'indent'
+          && valTok.type !== 'dedent' && valTok.type !== 'eof') {
+        ctx.next();
+      }
+      continue;
+    }
+
     // Inline layout hints: `layout grow=1 slot=container` on the node's own
     // line (e.g. a flex child). The emitter produces these for layout objects
     // that carry only inline hint keys (grow/order/alignSelf/slot), so the
     // walker must accept them symmetrically. Block layout (`layout flex row`
     // on an indented line) is handled later in the indented-block loop.
-    if (tok.value === 'layout' && ctx.peek(1)?.type !== 'colon' && ctx.peek(1)?.type !== ('dot' as any)) {
+    if (keywordLed && tok.value === 'layout' && ctx.peek(1)?.type !== 'colon' && ctx.peek(1)?.type !== ('dot' as any)) {
       const layoutSchema = resolveFieldSchema(schema, 'layout');
       if (layoutSchema) {
         const parsed = executeSchema(ctx, layoutSchema, `${schemaPath}.layout`);
@@ -900,7 +1077,7 @@ export function executeNodeBody(
     }
 
     // Try geometry keywords (rect, ellipse, path, etc.)
-    if (geometry.includes(tok.value)) {
+    if (keywordLed && geometry.includes(tok.value)) {
       const geomSchema = resolveFieldSchema(schema, tok.value);
       if (geomSchema) {
         const geom = executeSchema(ctx, geomSchema, `${schemaPath}.${tok.value}`);
@@ -916,7 +1093,7 @@ export function executeNodeBody(
     // Try inline props by matching field name or schema keyword
     // e.g. 'fill' matches field 'fill', 'stroke' matches field 'stroke',
     // 'at' matches field 'transform' (which has keyword 'at')
-    const inlinePropField = findInlinePropField(schema, inlineProps, tok.value);
+    const inlinePropField = keywordLed ? findInlinePropField(schema, inlineProps, tok.value) : null;
     if (inlinePropField !== null) {
       const { fieldName } = inlinePropField;
       // Special handling for 'fill' — color union, no wrapping schema
@@ -925,7 +1102,7 @@ export function executeNodeBody(
         ctx.emitLeaf({
           schemaPath: `${schemaPath}.fill`,
           from: tok.offset,
-          to: tok.offset + tok.value.length,
+          to: tok.end,
           value: 'fill',
           dslRole: 'keyword',
         });
@@ -962,7 +1139,7 @@ export function executeNodeBody(
           ctx.emitLeaf({
             schemaPath: `${schemaPath}.${fieldName}`,
             from: valTok.offset,
-            to: valTok.offset + valTok.value.length,
+            to: valTok.end,
             value: result[fieldName],
             dslRole: 'value',
           });
@@ -974,7 +1151,7 @@ export function executeNodeBody(
           ctx.emitLeaf({
             schemaPath: `${schemaPath}.${fieldName}`,
             from: valTok.offset,
-            to: valTok.offset + valTok.value.length,
+            to: valTok.end,
             value: valTok.value,
             dslRole: 'value',
           });
@@ -986,7 +1163,10 @@ export function executeNodeBody(
       if (isNodeFlag) {
         // Flag without value — fall through to flag handler below.
       } else {
-        // Truly unrecognized — skip rest of line to prevent token leakage.
+        // A recognised keyword whose value didn't parse (`at` with nothing
+        // after it). Skip the rest of the line to prevent token leakage, and
+        // say so rather than dropping it without a word.
+        ctx.warn(`${nodeId ? `"${nodeId}": ` : ''}could not read "${ctx.lineTailFrom(tok.offset)}"`);
         ctx.skipToNewline();
         break;
       }
@@ -1031,7 +1211,7 @@ export function executeNodeBody(
         ctx.emitLeaf({
           schemaPath: `${schemaPath}.${keyTok.value}`,
           from: valTok.offset,
-          to: valTok.offset + valTok.value.length,
+          to: valTok.end,
           value: result[keyTok.value],
           dslRole: 'kwarg-value',
         });
@@ -1045,8 +1225,36 @@ export function executeNodeBody(
       continue;
     }
 
+    // Template props, last so that every node-level construct above wins the
+    // name: `opacity=0.5` on a box is the node's opacity, not a prop the box
+    // template would silently ignore. Reaching here means nothing at node
+    // level claimed the token, which is exactly when it belongs to the shape.
+    if (typeof result.template === 'string'
+        && readTemplateProp(ctx, result.template, templateProps, schemaPath)) {
+      continue;
+    }
+
     // Not a recognized token — break (inline parsing stops)
     break;
+  }
+
+  // Nothing on a node's line should go unread. What's left here is a typo, a
+  // property belonging to some other shape, or syntax from another dialect.
+  // Left on the token stream it was re-read as the start of a new object —
+  // `box "X" at 150,40 color=red` produced phantom nodes named `color` and
+  // `red` — so consume it and report it instead.
+  const leftover = ctx.peek();
+  if (leftover && leftover.type !== 'newline' && leftover.type !== 'indent'
+      && leftover.type !== 'dedent' && leftover.type !== 'eof') {
+    // Unless the shape itself is unknown — then its props can't be read
+    // because nothing declares their grammar, and "Unknown template" is the
+    // one warning worth printing. Saying both would bury the useful one.
+    const unknownShape = typeof result.template === 'string'
+      && getShapePropsSchema(result.template) === undefined;
+    if (!unknownShape) {
+      ctx.warn(`${nodeId ? `"${nodeId}": ` : ''}could not read "${ctx.lineTailFrom(leftover.offset)}"`);
+    }
+    ctx.skipToNewline();
   }
 
   // ── Indented block (block properties + children) ───────────────
@@ -1058,6 +1266,62 @@ export function executeNodeBody(
     while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
       ctx.skipNewlines();
       if (ctx.is('dedent' as any)) break;
+
+      // Content lines: an indented run of quoted strings filling the field
+      // the shape declares as its block child — textblock/codeblock `lines`,
+      // table `rows`. Quoted rather than raw so punctuation, `//`, `=` and
+      // leading spaces survive: the lexer already reads a string literal
+      // exactly, and a raw-line mode would mean a second way to lex.
+      if (ctx.is('string')) {
+        const templateName = typeof result.template === 'string' ? result.template : undefined;
+        const entry = templateName ? blockEntryField(getShapePropsSchema(templateName)) : null;
+        const startTok = ctx.peek()!;
+        const knownShape = templateName ? getShapePropsSchema(templateName) !== undefined : false;
+        if (!entry) {
+          // An unknown shape is already reported by name; saying its content
+          // was unreadable too would only bury that.
+          if (!templateName || knownShape) {
+            ctx.warn(
+              templateName
+                ? `${templateName} takes no block content, so "${ctx.lineTailFrom(startTok.offset)}" was not read`
+                : `could not read "${ctx.lineTailFrom(startTok.offset)}"`,
+            );
+          }
+          ctx.skipToNewline();
+          ctx.skipNewlines();
+          continue;
+        }
+        const cells: string[] = [];
+        const leafPath = `${schemaPath}.tplprops:${templateName}.${entry.key}`;
+        while (ctx.is('string')) {
+          const cellTok = ctx.next()!;
+          cells.push(cellTok.value);
+          ctx.emitLeaf({
+            schemaPath: leafPath,
+            from: cellTok.offset,
+            to: cellTok.end,
+            value: cellTok.value,
+            dslRole: 'value',
+          });
+        }
+        const bucket = (templateProps[entry.key] ??= []) as unknown[];
+        if (entry.shape === 'row') {
+          bucket.push(cells);
+        } else {
+          if (cells.length > 1) {
+            ctx.warn(`${templateName} takes one line per line — "${ctx.lineTailFrom(startTok.offset)}" holds ${cells.length}`);
+          }
+          bucket.push(...cells);
+        }
+        const tail = ctx.peek();
+        if (tail && tail.type !== 'newline' && tail.type !== 'indent'
+            && tail.type !== 'dedent' && tail.type !== 'eof') {
+          ctx.warn(`${templateName} content must be quoted — could not read "${ctx.lineTailFrom(tail.offset)}"`);
+          ctx.skipToNewline();
+        }
+        ctx.skipNewlines();
+        continue;
+      }
 
       // Distinguish block properties from child nodes:
       // A block property is an identifier in blockProps that is NOT followed by a colon
@@ -1077,7 +1341,7 @@ export function executeNodeBody(
             ctx.emitLeaf({
               schemaPath: `${schemaPath}.fill`,
               from: fillTok.offset,
-              to: fillTok.offset + fillTok.value.length,
+              to: fillTok.end,
               value: 'fill',
               dslRole: 'keyword',
             });
@@ -1094,6 +1358,13 @@ export function executeNodeBody(
             }
           } else {
             // Other block prop (stroke, dash, layout, etc.)
+            // A recognised block-property keyword whose body doesn't parse —
+            // `stroke` on its own line with no colour. Dropping the line was
+            // silent, which is the same hole the node's own line no longer has.
+            const drop = () => {
+              ctx.warn(`${nodeId ? `"${nodeId}": ` : ''}could not read "${ctx.lineTailFrom(firstTok.offset)}"`);
+              ctx.skipToNewline();
+            };
             const inlinePropField = findInlinePropField(schema, [...inlineProps, ...blockProps], fieldName);
             if (inlinePropField) {
               const propSchema = resolveFieldSchema(schema, inlinePropField.fieldName);
@@ -1106,13 +1377,13 @@ export function executeNodeBody(
                     result[inlinePropField.fieldName] = parsed;
                   }
                 } else {
-                  ctx.skipToNewline();
+                  drop();
                 }
               } else {
-                ctx.skipToNewline();
+                drop();
               }
             } else {
-              ctx.skipToNewline();
+              drop();
             }
           }
           ctx.skipNewlines();
@@ -1132,13 +1403,26 @@ export function executeNodeBody(
         }
       }
 
-      // Can't parse — skip token to avoid infinite loop
-      ctx.next();
+      // Can't parse. Report the line and drop it whole: skipping one token at
+      // a time said nothing and left the rest to be misread piecemeal.
+      const strayTok = ctx.peek();
+      if (strayTok && strayTok.type !== 'newline' && strayTok.type !== 'indent'
+          && strayTok.type !== 'dedent' && strayTok.type !== 'eof') {
+        ctx.warn(`${nodeId ? `"${nodeId}": ` : ''}could not read "${ctx.lineTailFrom(strayTok.offset)}"`);
+        ctx.skipToNewline();
+      } else {
+        ctx.next();
+      }
     }
 
     if (ctx.is('dedent' as any)) ctx.next();
     if (children.length > 0) result.children = children;
   }
+
+  // Assigned last: block content lands in templateProps during the indented
+  // block above, so a shape whose only props are its content lines still gets
+  // them.
+  if (Object.keys(templateProps).length > 0) result.props = templateProps;
 
   return result;
 }
@@ -1308,11 +1592,11 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): Keyfr
       if (!ctx.is('number')) { ctx.next(); continue; }
       const t = ctx.next()!;
       kf.plus = parseFloat(t.value);
-      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.plus, dslRole: 'value' });
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.end, value: kf.plus, dslRole: 'value' });
     } else if (ctx.is('number')) {
       const t = ctx.next()!;
       kf.time = parseFloat(t.value);
-      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.offset + t.value.length, value: kf.time, dslRole: 'value' });
+      ctx.emitLeaf({ schemaPath: `${kfPath}.time`, from: t.offset, to: t.end, value: kf.time, dslRole: 'value' });
     } else {
       ctx.next();
       continue;
@@ -1326,14 +1610,14 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): Keyfr
         if (ctx.is('identifier')) {
           const e = ctx.next()!;
           kf.easing = e.value;
-          ctx.emitLeaf({ schemaPath: `${kfPath}.easing`, from: e.offset, to: e.offset + e.value.length, value: e.value, dslRole: 'value' });
+          ctx.emitLeaf({ schemaPath: `${kfPath}.easing`, from: e.offset, to: e.end, value: e.value, dslRole: 'value' });
         }
       } else if (key === 'delay') {
         ctx.next(); ctx.next();
         if (ctx.is('number')) {
           const d = ctx.next()!;
           kf.delay = parseFloat(d.value);
-          ctx.emitLeaf({ schemaPath: `${kfPath}.delay`, from: d.offset, to: d.offset + d.value.length, value: kf.delay, dslRole: 'value' });
+          ctx.emitLeaf({ schemaPath: `${kfPath}.delay`, from: d.offset, to: d.end, value: kf.delay, dslRole: 'value' });
         }
       } else {
         break;
@@ -1405,7 +1689,7 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
   if (valTok.type === 'identifier' && (valTok.value === 'true' || valTok.value === 'false')) {
     const b = valTok.value === 'true';
     ctx.next();
-    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value: b, dslRole: 'value' });
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.end, value: b, dslRole: 'value' });
     return { key, value: b };
   }
 
@@ -1424,10 +1708,10 @@ function parseChangeInline(ctx: WalkContext): { key: string | null; value: unkno
   let value: unknown;
   if (valTok.type === 'number') {
     value = parseFloat(valTok.value); ctx.next();
-    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.end, value, dslRole: 'value' });
   } else if (valTok.type === 'string' || valTok.type === 'identifier' || valTok.type === 'hexColor') {
     value = valTok.value; ctx.next();
-    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.offset + valTok.value.length, value, dslRole: 'value' });
+    ctx.emitLeaf({ schemaPath: valSchemaPath, from: valTok.offset, to: valTok.end, value, dslRole: 'value' });
   }
 
   // Check for inline easing after value: `box.x: 500 easing=linear`
@@ -1515,7 +1799,7 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
     ctx.emitLeaf({
       schemaPath,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.end,
       value: tok.value,
       dslRole: 'value',
     });
@@ -1561,7 +1845,7 @@ export function executeColor(ctx: WalkContext, schemaPath: string): unknown {
     ctx.emitLeaf({
       schemaPath,
       from: tok.offset,
-      to: tok.offset + tok.value.length,
+      to: tok.end,
       value: tok.value,
       dslRole: 'value',
     });

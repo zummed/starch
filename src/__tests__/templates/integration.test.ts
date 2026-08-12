@@ -118,13 +118,16 @@ objects
   });
 
   it('parses arrow with kwargs: arrow from=a to=b', () => {
-    // NOTE: positional `arrow a -> b` conflicts with the primitive arrow/route
-    // detection which fires first. Arrow templates use kwargs for from/to.
-    const scene = parseScene(`
-      a: box 10x10
-      b: box 10x10
-      conn: arrow from=a to=b label="go"
-    `);
+    // Written flush-left on purpose: parseScene trims the document, so an
+    // indented literal leaves the first line at column 0 and the rest inside
+    // an indented block — which makes b and conn children of a. The box lines
+    // also need their `text` positional; `box 10x10` skips it, and a skipped
+    // positional stops the ones after it, so the size was never read.
+    const scene = parseScene([
+      'a: box "A" 10x10',
+      'b: box "B" 10x10',
+      'conn: arrow from=a to=b label="go"',
+    ].join('\n'));
     const ids = scene.nodes.map(n => n.id);
     expect(ids).toContain('conn');
     const conn = scene.nodes.find(n => n.id === 'conn')!;
@@ -157,5 +160,24 @@ objects
     const b = scene.nodes.find(n => n.id === 'b');
     expect(b).toBeDefined();
     expect(b!.children.find(c => c.id === 'b.label')?.text?.content).toBe('Explicit');
+  });
+
+  it('colours an arrow from a named colour', () => {
+    // arrow was the one shape that took the object form of a colour only, so
+    // `color=steelblue` left the line the default grey and said nothing —
+    // every arrow in every sample was the wrong colour.
+    const scene = parseScene([
+      'a: box "A" at 0,0',
+      'b: box "B" at 200,0',
+      'c: arrow from=a to=b color=steelblue',
+    ].join('\n'));
+    const route = scene.nodes.find(n => n.id === 'c')!.children.find(x => x.id === 'c.route')!;
+    const plain = parseScene([
+      'a: box "A" at 0,0',
+      'b: box "B" at 200,0',
+      'c: arrow from=a to=b',
+    ].join('\n')).nodes.find(n => n.id === 'c')!.children.find(x => x.id === 'c.route')!;
+    expect(route.stroke!.color).not.toEqual(plain.stroke!.color);
+    expect(route.stroke!.color).toMatchObject({ h: 207 });
   });
 });

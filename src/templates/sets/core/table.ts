@@ -3,12 +3,20 @@ import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
+import { dsl } from '../../../dsl/dslMeta';
 
-export const tableProps = z.object({
-  cols: z.array(z.string()).describe('Column headers'),
-  rows: z.array(z.array(z.string())).describe('Row data'),
+export const tableProps = dsl(z.object({
+  cols: z.array(z.string()).describe('Column headers — a bracket list, e.g. ["Name", "Age"]'),
+  rows: z.array(z.array(z.string())).describe('Row data — one indented line per row, cells as quoted strings'),
   colWidth: z.number().describe('Column width').optional(),
   rowHeight: z.number().describe('Row height').optional(),
+  strokeWidth: z.number().describe('Grid line width').optional(),
+  headerFill: z.string().describe('Header row background colour').optional(),
+  headerColor: z.string().describe('Header row text colour').optional(),
+  stroke: z.string().describe('Outline colour, overriding the one derived from color').optional(),
+}), {
+  kwargs: ['cols', 'colWidth', 'rowHeight', 'strokeWidth', 'headerFill', 'headerColor'],
+  children: { rows: 'block' },
 });
 
 export function tableTemplate(id: string, props: Record<string, unknown>): Node {
@@ -30,6 +38,14 @@ export function tableTemplate(id: string, props: Record<string, unknown>): Node 
   const totalH = (rows.length + 1) * rowHeight;
   const children: Node[] = [];
 
+  // A child's transform is measured from its parent's centre, and the
+  // background sits centred on it — so the grid is laid out from the table's
+  // top-left corner, which is half its size away in each direction. Laying it
+  // out from 0,0 instead put the corner of the header on the middle of the
+  // background and pushed every cell down and to the right of its column.
+  const left = -totalW / 2;
+  const top = -totalH / 2;
+
   // Background
   children.push(createNode({
     id: `${id}.bg`,
@@ -43,7 +59,7 @@ export function tableTemplate(id: string, props: Record<string, unknown>): Node 
     id: `${id}.header`,
     rect: { w: totalW, h: rowHeight },
     fill: headerFill,
-    transform: { x: totalW / 2, y: rowHeight / 2 },
+    transform: { x: 0, y: top + rowHeight / 2 },
   }));
 
   // Header text
@@ -52,7 +68,7 @@ export function tableTemplate(id: string, props: Record<string, unknown>): Node 
       id: `${id}.h${ci}`,
       text: { content: col, size: 12, bold: true, align: 'middle' },
       fill: headerColor,
-      transform: { x: ci * colWidth + colWidth / 2, y: rowHeight / 2 },
+      transform: { x: left + ci * colWidth + colWidth / 2, y: top + rowHeight / 2 },
     }));
   });
 
@@ -63,7 +79,10 @@ export function tableTemplate(id: string, props: Record<string, unknown>): Node 
         id: `${id}.r${ri}c${ci}`,
         text: { content: cell, size: 12, align: 'middle' },
         fill: { h: 0, s: 0, l: 80 },
-        transform: { x: ci * colWidth + colWidth / 2, y: (ri + 1) * rowHeight + rowHeight / 2 },
+        transform: {
+          x: left + ci * colWidth + colWidth / 2,
+          y: top + (ri + 1) * rowHeight + rowHeight / 2,
+        },
       }));
     });
   });

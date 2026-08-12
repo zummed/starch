@@ -11,6 +11,7 @@ export const pillProps = dsl(z.object({
   w: z.number().min(1).describe('Width').optional(),
   h: z.number().min(1).describe('Height').optional(),
   color: z.string().describe('Color (sets stroke + faded fill)').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   positional: [
     { keys: ['text'], format: 'quoted' },

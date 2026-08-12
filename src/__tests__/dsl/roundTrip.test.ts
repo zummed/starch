@@ -4,7 +4,14 @@ import { buildAstFromModel } from '../../dsl/astEmitter';
 import { emptyFormatHints } from '../../dsl/formatHints';
 import { flattenLeaves } from '../../dsl/astTypes';
 import { v2Samples } from '../../samples';
+import { registerBuiltinTemplates } from '../../templates/index';
 
+// Under the conditions parseScene creates. Without this the registry is empty,
+// so `card "Ingest" body="..."` parses to a bare `{id}` with the whole line
+// dropped — and round-trips perfectly, because both parses drop it equally.
+// The harness was proving the contract only for the grammar that doesn't
+// involve shapes, which is most of what the editor actually edits.
+registerBuiltinTemplates();
 
 /**
  * The round-trip harness — the reliability contract for "object definitions
@@ -119,7 +126,7 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   { name: 'explicit path', dsl: 'tri: path (0,-40) (40,30) (-40,30) closed smooth fill purple' },
   // Templates
   { name: 'template explicit', dsl: 'conn: template arrow from=a to=b label="sends data" colour=darkgray' },
-  { name: 'template with transform', dsl: 'n: template state.node label="Idle" color=steelblue at 0,100' },
+  { name: 'template with transform', dsl: 'n: template state.node name="Idle" color=steelblue at 0,100' },
   // Nesting
   { name: 'nested children', dsl: 'card: rect 160x100 at 200,150\n  title: text "Hello" size=14\n  badge: ellipse 8x8' },
   { name: 'dotted child ids', dsl: 'g: at 100,100\n  g.bg: rect 100x50 fill blue\n  g.label: text "hi" fill white' },
@@ -152,6 +159,25 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   { name: 'state marker kwargs', dsl: 'use [core, state]\n\nobjects\n  s: initial color=whitesmoke r=9\n  f: final r=11\n  ch: choice size=24' },
   { name: 'node flag explicit', dsl: 'objects\n  t: text "hi" bold=true' },
   { name: 'chapters block before keyframes', dsl: 'animate 8\n  chapters\n    chapter "Start" at 0\n    chapter "End" at 5\n  1 box.opacity: 1' },
+  // Shape props on either side of `at`. Everything after `at` used to be
+  // dropped, so these drifted the moment the emitter put a prop back in its
+  // canonical position ahead of the transform.
+  { name: 'props after at', dsl: 'objects\n  b: box "X" at 150,40 color=red' },
+  { name: 'props before and after at', dsl: 'objects\n  b: box "X" color=red at 150,40 radius=6' },
+  { name: 'positional connection with label', dsl: 'objects\n  c: arrow a -> b label="calls"' },
+  { name: 'state marker after at', dsl: 'objects\n  s: initial at 10,10 r=9' },
+  { name: 'dotted shape with props after at', dsl: 'objects\n  n: state.node name="Idle" at 0,100 color=steelblue' },
+  // Node kwargs keep their meaning on a shape: `opacity` belongs to the node
+  // even though the emitter writes it in among the props.
+  { name: 'node kwarg shorthand on a shape', dsl: 'objects\n  b: box "B" color=red opacity 0 at 10,10' },
+  { name: 'node kwarg and prop together', dsl: 'objects\n  b: box "X" color=red opacity=0.5' },
+  { name: 'floating transform kwarg on a shape', dsl: 'objects\n  b: box "X" rotation=45' },
+  // Block content. These props had no spelling at all, so they could only be
+  // set from JSON — and one emit/parse cycle destroyed them.
+  { name: 'textblock lines', dsl: 'objects\n  n: textblock size=13 at 40,60\n    "First line"\n    "Second, with \\"quotes\\" and = signs"' },
+  { name: 'codeblock lines keep punctuation', dsl: 'objects\n  c: codeblock\n    "def f(x): // comment"\n    "    return [x, {y: 1}]"' },
+  { name: 'table rows and bracket-list cols', dsl: 'objects\n  t: table cols=["Name", "Age"] colWidth=90\n    "Ada" "36"\n    "Lin" "29"' },
+  { name: 'block content beside a child node', dsl: 'objects\n  n: textblock size=12\n    "one"\n    "two"\n    n.tag: rect 4x4' },
 ];
 
 describe('round-trip: feature corpus', () => {
@@ -174,6 +200,14 @@ const MODEL_CORPUS: Array<{ name: string; model: any }> = [
   { name: 'hsl (non-named) fill', model: { objects: [{ id: 'b', rect: { w: 10, h: 10 }, fill: { h: 123, s: 45, l: 67 } }] } },
   { name: 'transform anchor tuple', model: { objects: [{ id: 'b', rect: { w: 10, h: 10 }, transform: { x: 1, y: 2, anchor: [0.5, -0.5] } }] } },
   { name: 'connection anchor tuple', model: { objects: [{ id: 'l', path: { route: ['a', 'b'], fromAnchor: [0, 1] } }] } },
+  // The shapes a JSON-authored document could set but the DSL could not write
+  // back: formatScalar flattened the rows into one comma-joined tuple and
+  // coerced "36" to a number on the way back in.
+  { name: 'table rows stay a grid of strings', model: { objects: [{ id: 't', template: 'table', props: { cols: ['Name', 'Age'], rows: [['Ada', '36'], ['Lin', '29']] } }] } },
+  { name: 'codeblock lines survive punctuation', model: { objects: [{ id: 'c', template: 'codeblock', props: { lines: ['def f():', '    return "x"  // done'] } }] } },
+  // A bare `2024` in a bracket list re-parses as the number 2024, so a column
+  // headed by a year changed type on every emit.
+  { name: 'numeric-looking list members stay strings', model: { objects: [{ id: 't', template: 'table', props: { cols: ['2024', '2025'], rows: [['revenue', '10']] } }] } },
 ];
 
 describe('round-trip: model-first (popup edits)', () => {

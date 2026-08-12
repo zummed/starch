@@ -273,6 +273,26 @@ and `camera`. On top of them, templates auto-size around their label: `box`, `ci
 `pill`, `card`, `note`, `group`, `textblock`, `codeblock`, `table` — and a state-machine
 set (`state.node`, `state.initial`, `state.final`, `state.choice`, `state.region`,
 enabled with `use [core, state]`). Both `color` and `colour` are accepted everywhere.
+A shape's properties can go anywhere on its line, on either side of `at x,y`; the names
+the object itself owns (`at`, `dash`, `layout`, `opacity`, `depth`, `visible`, and `style`
+as the written-out form of `@name`) always set the object rather than the shape. `fill` and
+`stroke` go by spelling: bare (`fill steelblue`) they are the object's and children inherit
+them, with an `=` (`box "X" fill=azure`) they set that shape's own.
+
+**Shapes whose content is a list** take it from the indented block beneath the line —
+one quoted string per line for `textblock` and `codeblock`, one row of quoted cells for
+`table`. Quoting is what lets a line hold `//`, `=`, brackets or leading indentation
+without any of it being read as syntax.
+
+```starch
+notes: textblock size=13 at 40,60
+  "One quoted string per line."
+  "Punctuation, = signs and // all survive."
+
+t: table cols=["Shape", "Content"] colWidth=110 at 300,60
+  "textblock" "lines"
+  "table" "rows"
+```
 
 **Arrows and lines.** `arrow from=a to=b label="..." color=...` connects object edges
 (not centers) with an arrowhead; `line` is the same without the head. The `a -> b`

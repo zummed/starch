@@ -28,7 +28,13 @@ export function tokenize(input: string): Token[] {
   }
 
   function makeToken(type: TokenType, value: string, startLine: number, startCol: number, startOffset: number): Token {
-    return { type, value, line: startLine, col: startCol, offset: startOffset };
+    // `end` is the cursor at emit time, so it is the token's true source span
+    // — which `offset + value.length` is not for anything the lexer decodes:
+    // a quoted string's value drops its quotes, and "a\nb" is four characters
+    // shorter in the value than on the page. Leaf spans built by arithmetic on
+    // the value mis-sliced those strings, and an editor writing back through
+    // one corrupted the line.
+    return { type, value, line: startLine, col: startCol, offset: startOffset, end: pos };
   }
 
   function emit(type: TokenType, value: string, startLine: number, startCol: number, startOffset: number): void {
@@ -70,9 +76,13 @@ export function tokenize(input: string): Token[] {
     // Check what comes before
     if (tokens.length === 0) return true;
     const prev = tokens[tokens.length - 1];
+    // `identifier` included so a keyword-led coordinate keeps its sign: `at
+    // -5,-6` read the minus as an unknown character and silently dropped it,
+    // placing the object at x=5. `->` is not affected — it has no digit after
+    // the minus, so this test fails and the arrow token is read instead.
     const negPreceders: TokenType[] = [
       'newline', 'indent', 'dedent', 'parenOpen', 'comma', 'equals',
-      'colon', 'arrow', 'braceOpen',
+      'colon', 'arrow', 'braceOpen', 'identifier',
     ];
     return negPreceders.includes(prev.type);
   }

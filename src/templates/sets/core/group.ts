@@ -12,6 +12,7 @@ export const groupProps = dsl(z.object({
   color: z.string().describe('Color').optional(),
   direction: z.enum(['row', 'column']).describe('Flex layout direction').optional(),
   gap: z.number().min(0).describe('Gap between children').optional(),
+  colour: z.string().describe('Alias for color').optional(),
 }), {
   positional: [
     { keys: ['label'], format: 'quoted' },

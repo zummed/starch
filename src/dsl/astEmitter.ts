@@ -4,7 +4,8 @@ import type { AstNode } from './astTypes';
 import { createAstNode } from './astTypes';
 import type { z } from 'zod';
 import type { PositionalHint } from './dslMeta';
-import { getConstructHints } from './schemaIntrospect';
+import { getConstructHints, blockEntryField, objectShape, unwrap } from './schemaIntrospect';
+import { getShapePropsSchema } from '../templates/registry';
 import {
   RectGeomSchema, EllipseGeomSchema, TextGeomSchema, ImageGeomSchema, CameraSchema, PathGeomSchema,
 } from '../types/node';
@@ -636,6 +637,10 @@ function renderNode(b: AstTextBuilder, node: any, depth: number, modelPrefix: st
     }
   }
 
+  // A shape's block content sits between its properties and its children,
+  // where the walker reads it back from.
+  emitTemplateBlockEntries(b, node, depth + 1, modelPrefix);
+
   // Children
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
@@ -844,20 +849,72 @@ function emitGeometry(b: AstTextBuilder, node: any, modelPrefix: string): void {
 
 // ─── Template Emission ───────────────────────────────────────────
 
+/** Whether a shape's prop is declared as a list of plain strings. */
+function isStringListProp(propsSchema: any, key: string): boolean {
+  const field = propsSchema ? objectShape(propsSchema)?.[key] : undefined;
+  if (!field) return false;
+  const arr = unwrap(field) as any;
+  const element = arr?.element ?? arr?._def?.element;
+  return !!element && (unwrap(element) as any)?._def?.type === 'string';
+}
+
+/** Format one template prop — a string list as a bracket list, else a scalar. */
+function formatProp(propsSchema: any, key: string, value: unknown): string {
+  if (Array.isArray(value) && isStringListProp(propsSchema, key)) {
+    // Members are quoted unless they read back as the same string. A bare
+    // `2024` re-parses as the number 2024, so a column headed by a year
+    // changed type every time the document was emitted.
+    const bare = (v: unknown) => typeof v === 'string' && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(v);
+    return `[${value.map(v => (bare(v) ? String(v) : quoteString(String(v)))).join(', ')}]`;
+  }
+  return formatScalar(value);
+}
+
 function emitTemplate(b: AstTextBuilder, node: any, modelPrefix: string): void {
   b.openCompound('template', `${modelPrefix}.template`);
   b.writeNode('template', 'keyword', 'template', `${modelPrefix}.template`, 'template');
   b.write(' ');
   b.writeNode(String(node.template), 'value', 'template', `${modelPrefix}.template`, node.template);
   if (node.props) {
+    // The shape's block content is written as indented lines, not as a kwarg:
+    // formatScalar flattened `rows` into one comma-joined tuple, so a table
+    // that had been through one emit no longer had rows at all.
+    const propsSchema = getShapePropsSchema(String(node.template));
+    const blockKey = blockEntryField(propsSchema)?.key;
     for (const [k, v] of Object.entries(node.props)) {
+      if (k === blockKey) continue;
       b.write(' ');
       b.writeNode(k, 'kwarg-key', `props.${k}`, `${modelPrefix}.props.${k}`, k);
       b.write('=');
-      b.writeNode(formatScalar(v), 'kwarg-value', `props.${k}`, `${modelPrefix}.props.${k}`, v);
+      b.writeNode(formatProp(propsSchema, k, v), 'kwarg-value', `props.${k}`, `${modelPrefix}.props.${k}`, v);
     }
   }
   b.closeCompound();
+}
+
+/**
+ * Write a shape's block content — one indented line per entry, each cell a
+ * quoted string. quoteString is the exact inverse of the lexer's readString,
+ * so what comes back is what went in, punctuation and indentation included.
+ */
+function emitTemplateBlockEntries(b: AstTextBuilder, node: any, depth: number, modelPrefix: string): void {
+  if (!node.template) return;
+  const entry = blockEntryField(getShapePropsSchema(String(node.template)));
+  if (!entry) return;
+  const value = node.props?.[entry.key];
+  if (!Array.isArray(value) || value.length === 0) return;
+
+  const indent = '  '.repeat(depth);
+  const schemaPath = `props.${entry.key}`;
+  const modelPath = `${modelPrefix}.props.${entry.key}`;
+  for (const item of value) {
+    b.write(`\n${indent}`);
+    const cells = entry.shape === 'row' && Array.isArray(item) ? item : [item];
+    cells.forEach((cell: unknown, i: number) => {
+      if (i > 0) b.write(' ');
+      b.writeNode(quoteString(String(cell)), 'value', schemaPath, modelPath, cell);
+    });
+  }
 }
 
 /** Emit the node "head" — geometry or template. Returns true if anything was written. */

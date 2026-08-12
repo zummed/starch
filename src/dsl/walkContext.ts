@@ -25,10 +25,28 @@ export class WalkContext {
   private pathStack: string[] = [];
   private leaves: AstLeaf[] = [];
 
+  /**
+   * Text the walker could not account for. The walker drops what it can't
+   * match rather than failing, which is the right policy for an editor that
+   * re-parses on every keystroke — but dropping it silently is not, so every
+   * discard records what was lost here and parseScene reports it.
+   */
+  readonly warnings: string[] = [];
+
   constructor(
     private tokens: Token[],
     public readonly text: string,
   ) {}
+
+  warn(message: string): void {
+    this.warnings.push(message);
+  }
+
+  /** Raw source from `offset` to the end of its line, for warning messages. */
+  lineTailFrom(offset: number): string {
+    const end = this.text.indexOf('\n', offset);
+    return this.text.slice(offset, end === -1 ? this.text.length : end).trim();
+  }
 
   peek(offset = 0): Token | undefined {
     return this.tokens[this.pos + offset];

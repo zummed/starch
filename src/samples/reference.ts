@@ -169,7 +169,24 @@ objects
 
   p_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 640,900
   p_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 840,900
-  p: arrow from=p_src to=p_dst label="plate" labelBg=plate color=steelblue`,
+  p: arrow from=p_src to=p_dst label="plate" labelBg=plate color=steelblue
+
+  // ─── block content row ─────────────────────────
+  // These three take their content from the indented block beneath the line:
+  // one quoted string per line, or one row of quoted cells for a table.
+  blk_l: text "textblock / codeblock / table" size=10 fill gray at 0,980
+
+  tb: textblock size=13 color=whitesmoke at 0,1050
+    "A textblock is a run of lines,"
+    "one quoted string per line."
+
+  cb: codeblock size=12 at 300,1050
+    "def render(scene):"
+    "    return draw(scene)  // no escaping needed"
+
+  tbl: table cols=["Shape", "Content"] colWidth=110 at 750,1050
+    "textblock" "lines"
+    "table" "rows"`,
   },
   {
     name: 'state-shapes',

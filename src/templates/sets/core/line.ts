@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Node, PointRef } from '../../../types/node';
-import { createNode } from '../../../types/node';
+import { createNode, PointRefSchema } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 import { dsl } from '../../../dsl/dslMeta';
@@ -19,6 +19,11 @@ export const lineProps = dsl(z.object({
   bend: z.number().describe('Bend amount').optional(),
   dashed: z.boolean().describe('Dashed line').optional(),
   color: z.string().describe('Color').optional(),
+  colour: z.string().describe('Alias for color').optional(),
+  strokeWidth: z.number().min(0).describe('Outline width in pixels').optional(),
+  drawProgress: z.number().min(0).max(1).describe('Animated draw progress — 0 hides the line, 1 fully drawn').optional(),
+  route: z.array(PointRefSchema).describe('Waypoints between from and to — set by the `a -> x -> b` form').optional(),
+  stroke: z.string().describe('Outline colour, overriding the one derived from color').optional(),
 }), {
   positional: [
     { keys: ['route'], format: 'arrow' },

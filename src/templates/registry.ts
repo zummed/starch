@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { Node, NodeInput } from '../types/node';
-import { createNode } from '../types/node';
+import { createNode, NodeSchema } from '../types/node';
+import { getDsl } from '../dsl/dslMeta';
+import { resolveFieldSchema, unwrap } from '../dsl/schemaIntrospect';
 import type { TextMeasurer } from '../text/measure';
 
 export type TemplateDefinition = {
@@ -33,7 +35,71 @@ export interface ShapeSet {
 
 const shapeSets = new Map<string, ShapeSet>();
 
+/**
+ * Names the node level claims before a shape's props get a look at them.
+ * Derived from the schemas rather than listed by hand, so the reservation
+ * cannot drift from what the walker actually does.
+ */
+function reservedPropNames(): Set<string> {
+  const nodeHints = getDsl(NodeSchema) ?? {};
+  const transformHints = getDsl(resolveFieldSchema(NodeSchema, 'transform')!) ?? {};
+  return new Set([
+    ...(nodeHints.kwargs ?? []),
+    ...(nodeHints.flags ?? []),
+    ...(transformHints.kwargs ?? []),
+    ...(nodeHints.sigil ? [nodeHints.sigil.key] : []),
+  ]);
+}
+
+/**
+ * Names that open a construct on a node line — `rect`, `at`, `fill`. A prop
+ * may share one when it takes a value (`fill=red` is unambiguous), but not
+ * when it is a boolean: a bare `rect` on the line is read as geometry, and
+ * the flag would never arrive.
+ */
+function keywordLedNames(): Set<string> {
+  const nodeHints = getDsl(NodeSchema) ?? {};
+  const names = new Set<string>([
+    ...(nodeHints.geometry ?? []),
+    ...(nodeHints.inlineProps ?? []),
+    ...(nodeHints.blockProps ?? []),
+    'template',
+  ]);
+  for (const field of nodeHints.inlineProps ?? []) {
+    const schema = resolveFieldSchema(NodeSchema, field);
+    const keyword = schema ? getDsl(schema)?.keyword : undefined;
+    if (keyword) names.add(keyword); // e.g. `at` for transform
+  }
+  return names;
+}
+
 export function registerSet(set: ShapeSet): void {
+  // A prop sharing a name with a node-level kwarg or flag would never reach
+  // the shape: the walker resolves `opacity=0.5` on a box to the node, and it
+  // has to, or every shape would have to re-implement opacity. Catching the
+  // collision at registration turns a prop that silently never arrives into
+  // an error the shape's author sees the first time they run the tests.
+  const reserved = reservedPropNames();
+  const keywordLed = keywordLedNames();
+  for (const [shapeName, def] of set.shapes) {
+    const shape = (def.props.shape ?? {}) as Record<string, z.ZodType>;
+    for (const [propName, propSchema] of Object.entries(shape)) {
+      if (reserved.has(propName)) {
+        throw new Error(
+          `Shape "${set.name}.${shapeName}" declares a prop named "${propName}", which the ` +
+          `node level already claims — rename the prop, or read node.${propName} instead.`,
+        );
+      }
+      if (keywordLed.has(propName) && unwrap(propSchema) instanceof z.ZodBoolean) {
+        throw new Error(
+          `Shape "${set.name}.${shapeName}" declares a boolean prop named "${propName}", which ` +
+          `opens a construct on a node's line — written bare it would be read as ${propName}, ` +
+          `never as the prop. Rename it.`,
+        );
+      }
+    }
+  }
+
   shapeSets.set(set.name, set);
   for (const [shapeName, def] of set.shapes) {
     templates.set(`${set.name}.${shapeName}`, def.template);
