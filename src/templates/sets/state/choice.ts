@@ -1,12 +1,15 @@
 import { z } from 'zod';
+import { dsl } from '../../../dsl/dslMeta';
 import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 
-export const stateChoiceProps = z.object({
+export const stateChoiceProps = dsl(z.object({
   color: z.string().describe('Color').optional(),
   size: z.number().min(1).describe('Diamond size').optional(),
+}), {
+  kwargs: ['color', 'size'],
 });
 
 export function stateChoiceTemplate(id: string, props: Record<string, unknown>): Node {

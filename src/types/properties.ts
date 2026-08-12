@@ -69,8 +69,8 @@ export const StrokeSchema = dsl(z.object({
 });
 
 export const TransformSchema = dsl(z.object({
-  x: z.number().describe('X position in pixels (number)').default(0),
-  y: z.number().describe('Y position in pixels (number)').default(0),
+  x: z.number().describe('X of the object\'s centre in pixels — `at x,y` places the centre, not a corner').default(0),
+  y: z.number().describe('Y of the object\'s centre in pixels — `at x,y` places the centre, not a corner').default(0),
   rotation: z.number().describe('Rotation angle in degrees (number)').default(0),
   scale: z.number().min(0).max(10).describe('Uniform scale factor (number, 0-10, default 1)').default(1),
   anchor: AnchorSchema.describe('Pivot point — named anchor string or (x, y) tuple').optional(),

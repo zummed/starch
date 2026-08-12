@@ -8,6 +8,7 @@ import { generateTrackPaths } from '../tree/walker';
 import { registerBuiltinTemplates } from '../templates/index';
 import { walkDocument } from '../dsl/schemaWalker';
 import { validateLayoutUsage } from '../layout';
+import { buildTimeline } from '../animation/timeline';
 
 export interface ParsedScene {
   name?: string;
@@ -111,6 +112,21 @@ export function parseScene(input: string, measure?: TextMeasurer): ParsedScene {
   // Misapplied layout props (e.g. a grid hint on a flex child) don't fail
   // parsing — they warn, same policy as timeline warnings.
   warnings.push(...validateLayoutUsage(allNodes));
+
+  // Timeline diagnostics. buildTimeline has always detected animation
+  // aimed at a node that doesn't exist, but nothing merged its warnings
+  // here, so `starch check` and parseScene both passed a document whose
+  // entire animate block was silently dropped. Building the timeline costs
+  // a fraction of the parse it follows. A throw here is not the document's
+  // structure failing, so it degrades to a warning rather than losing the
+  // tree the caller asked for.
+  if (animate) {
+    try {
+      warnings.push(...buildTimeline(animate, allNodes).warnings);
+    } catch (err) {
+      warnings.push(`Animation could not be built: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   // Silent-failure guards. The walker drops what it can't match rather than
   // erroring, so without these a typo'd property, an unknown template or an

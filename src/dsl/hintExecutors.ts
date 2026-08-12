@@ -472,6 +472,13 @@ export function executeSchema(
     if (isKwarg && kwargsSet.has(tok.value)) {
       const kw = executeKwargs(ctx, allKwargs, schemaPath, schema);
       Object.assign(result, kw);
+    } else if (isKwarg && flagsSet.has(tok.value)) {
+      // `bold=true` — the explicit spelling of a flag. Only the bare form
+      // parsed here, so `text "hi" bold=true` dropped the rest of the line
+      // into phantom objects, while templates accepted only the explicit
+      // form. Both levels now take both spellings, and executeKwargs
+      // coerces against the schema so `=false` genuinely means false.
+      Object.assign(result, executeKwargs(ctx, allFlags, schemaPath, schema));
     } else if (!isKwarg && flagsSet.has(tok.value)) {
       const fl = executeFlags(ctx, allFlags, schemaPath);
       Object.assign(result, fl);
@@ -603,6 +610,11 @@ function parseTemplateProps(
   // Parse positionals if the schema declares them
   if (hints?.positional) {
     for (const posHint of hints.positional) {
+      // An `arrow`-format positional reads a route, and its waypoint parser
+      // accepts any bare identifier. Without an actual `->` on the line it
+      // would swallow the next token — `arrow dashed from=a to=b` set
+      // route=['dashed'] and lost the flag with no warning at all.
+      if (posHint.format === 'arrow' && !hasArrowAhead(ctx)) break;
       const posResult = executePositional(ctx, posHint, `${schemaPath}.tplprops:${templateName}`);
       if (posResult) {
         Object.assign(props, posResult);
@@ -623,37 +635,43 @@ function parseTemplateProps(
     }
   }
 
-  // Parse flags if declared
-  if (hints?.flags) {
-    while (!ctx.atEnd() && ctx.is('identifier')) {
-      const flagTok = ctx.peek()!;
-      if (!hints.flags.includes(flagTok.value)) break;
-      if (ctx.peek(1)?.type === 'equals') break; // it's a kwarg, not a flag
+  // Flags and kwargs interleaved, the way executeSchema reads them at node
+  // level. They used to be two loops in sequence, so a bare flag written
+  // after any kwarg was unreachable and fell through to become the id of a
+  // new object — `arrow from=a to=b dashed` silently parsed as two nodes.
+  while (!ctx.atEnd() && ctx.is('identifier')) {
+    const keyTok = ctx.peek()!;
+    const isKwarg = ctx.peek(1)?.type === 'equals';
+
+    if (!isKwarg) {
+      if (!hints?.flags?.includes(keyTok.value)) break;
       ctx.next();
-      props[flagTok.value] = true;
+      props[keyTok.value] = true;
       ctx.emitLeaf({
-        schemaPath: `${schemaPath}.tplprops:${templateName}.${flagTok.value}`,
-        from: flagTok.offset,
-        to: flagTok.offset + flagTok.value.length,
+        schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
+        from: keyTok.offset,
+        to: keyTok.offset + keyTok.value.length,
         value: true,
         dslRole: 'flag',
       });
+      continue;
     }
-  }
 
-  // Parse key=val kwargs (existing pattern, works for all shapes)
-  while (!ctx.atEnd() && ctx.is('identifier') && ctx.peek(1)?.type === 'equals') {
-    const keyTok = ctx.next()!;
+    ctx.next(); // consume key
     ctx.next(); // consume =
     const valTok = ctx.peek();
     if (!valTok) break;
     let val: unknown;
-    if (valTok.type === 'number') val = parseFloat(valTok.value);
-    else if (valTok.type === 'string') val = valTok.value;
-    else if (valTok.type === 'identifier') val = valTok.value;
-    else if (valTok.type === 'hexColor') val = valTok.value;
+    if (valTok.type === 'number') { val = parseFloat(valTok.value); ctx.next(); }
+    else if (valTok.type === 'string') { val = valTok.value; ctx.next(); }
+    // Coerced against the props schema, so a `z.boolean()` prop written
+    // `dashed=false` becomes the boolean false rather than the string
+    // "false" — which every template truthiness-checks, and so drew a
+    // dashed line for `dashed=false`.
+    else if (valTok.type === 'identifier') { val = coerceKwargValue(valTok.value, propsSchema, keyTok.value); ctx.next(); }
+    else if (valTok.type === 'hexColor') { val = valTok.value; ctx.next(); }
+    else if (valTok.type === ('parenOpen' as typeof valTok.type)) { val = parseKwargTuple(ctx); }
     else break;
-    ctx.next();
     props[keyTok.value] = val;
     ctx.emitLeaf({
       schemaPath: `${schemaPath}.tplprops:${templateName}.${keyTok.value}`,
@@ -702,7 +720,12 @@ export function executeNodeBody(
   // Handles: `a -> b`, `(a,10,20) -> (b,-5,0)`, `(250,100) -> b`, etc.
   // This must be checked BEFORE geometry keywords so that node IDs like 'a'
   // are not misidentified as geometry.
-  if ((ctx.is('identifier') || ctx.is('parenOpen' as any)) && hasArrowAhead(ctx)) {
+  // A shape name opening the line means the template form — `c: arrow a -> b
+  // label="x"`, whose own hints know how to read the route into from/to.
+  // Without this the route branch consumed the word `arrow` as the first
+  // waypoint, and the rest of the line re-parsed as a second object, which
+  // surfaced as a baffling `Duplicate ID: "a"`.
+  if ((ctx.is('identifier') || ctx.is('parenOpen' as any)) && hasArrowAhead(ctx) && !startsWithShapeName(ctx, geometry)) {
     const pathSchema = resolveFieldSchema(schema, 'path');
     if (pathSchema) {
       // Use the route variant hints directly (no keyword, format: 'arrow')
@@ -1124,6 +1147,24 @@ export function executeNodeBody(
  * Detect if the current token starts an arrow/route connection.
  * Peeks ahead on the current line for an arrow token.
  */
+/**
+ * True when the line opens with a registered shape name (`arrow`, `state.node`)
+ * rather than a node id. Only consulted to decide whether a line containing
+ * `->` is a template with route endpoints or a bare route primitive; a node
+ * genuinely named after a shape loses the bare form, which is a fair trade
+ * for `arrow a -> b` meaning what everyone reads it as.
+ */
+function startsWithShapeName(ctx: WalkContext, geometry: string[]): boolean {
+  const tok = ctx.peek();
+  if (!tok || tok.type !== 'identifier' || geometry.includes(tok.value)) return false;
+  const setNames = getSetNames();
+  if (setNames.includes(tok.value) && ctx.peek(1)?.type === ('dot' as any)) {
+    const shapeTok = ctx.peek(2);
+    return shapeTok?.type === 'identifier' && getShapeNames(tok.value).includes(shapeTok.value);
+  }
+  return setNames.some(setName => getShapeNames(setName).includes(tok.value));
+}
+
 function hasArrowAhead(ctx: WalkContext): boolean {
   let offset = 0;
   while (true) {
@@ -1225,6 +1266,30 @@ export function parseKeyframesBlock(ctx: WalkContext, schemaPath: string): Keyfr
   while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
     ctx.skipNewlines();
     if (ctx.is('dedent' as any)) break;
+
+    // A `chapters` header opening an indented run of `chapter` lines. Only
+    // the inline form was handled, so the header fell through to the
+    // skip-a-token branch and its sub-block's dedent closed the whole
+    // animate block — every keyframe written after a chapters block was
+    // dropped out of the animation and re-read as a top-level object.
+    if (ctx.is('identifier', 'chapters')) {
+      ctx.next();
+      ctx.skipNewlines();
+      if (ctx.is('indent' as any)) {
+        ctx.next();
+        while (!ctx.atEnd() && !ctx.is('dedent' as any)) {
+          ctx.skipNewlines();
+          if (ctx.is('dedent' as any)) break;
+          if (!ctx.is('identifier', 'chapter')) { ctx.next(); continue; }
+          const ch = executeSchema(ctx, ChapterSchema, `${chaptersBase}.${chapters.length}`);
+          if (ch && ch.name !== undefined) chapters.push(ch);
+          ctx.skipNewlines();
+        }
+        if (ctx.is('dedent' as any)) ctx.next();
+      }
+      ctx.skipNewlines();
+      continue;
+    }
 
     // Chapter marker line: `chapter "Name" at <time>`. Emit under the resolvable
     // "<name>.chapters.<i>" path so name/time are clickable.

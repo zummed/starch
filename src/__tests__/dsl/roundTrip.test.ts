@@ -5,6 +5,7 @@ import { emptyFormatHints } from '../../dsl/formatHints';
 import { flattenLeaves } from '../../dsl/astTypes';
 import { v2Samples } from '../../samples';
 
+
 /**
  * The round-trip harness — the reliability contract for "object definitions
  * drive everything right through to the idea".
@@ -139,6 +140,18 @@ const FEATURE_CORPUS: Array<{ name: string; dsl: string }> = [
   { name: 'animate relative + chapters', dsl: 'animate 6\n  chapter "Start" at 0\n  chapter "End" at 5\n  0 box.opacity: 0\n  +1 box.opacity: 1' },
   { name: 'animate keyframe delay', dsl: 'animate 4\n  1 delay=0.5  box.opacity: 1' },
   { name: 'animate multi-change', dsl: 'animate 4\n  2  cam.camera.look: all\n    cam.camera.zoom: 1.5' },
+  // Template booleans. These used to store the STRING "true"/"false", so a
+  // model carrying a real boolean emitted text that parsed back to a string
+  // and drifted on the first cycle — and `dashed=false` drew a dashed line.
+  { name: 'template flag explicit true', dsl: 'objects\n  c: arrow from=a to=b dashed=true' },
+  { name: 'template flag explicit false', dsl: 'objects\n  c: arrow from=a to=b dashed=false' },
+  { name: 'template flag bare', dsl: 'objects\n  c: arrow from=a to=b dashed' },
+  { name: 'template flag before kwargs', dsl: 'objects\n  c: arrow dashed from=a to=b' },
+  { name: 'template flags mixed with kwargs', dsl: 'objects\n  c: arrow from=a to=b label="x" smooth arrowStart=true' },
+  // Shapes that only just gained hints.
+  { name: 'state marker kwargs', dsl: 'use [core, state]\n\nobjects\n  s: initial color=whitesmoke r=9\n  f: final r=11\n  ch: choice size=24' },
+  { name: 'node flag explicit', dsl: 'objects\n  t: text "hi" bold=true' },
+  { name: 'chapters block before keyframes', dsl: 'animate 8\n  chapters\n    chapter "Start" at 0\n    chapter "End" at 5\n  1 box.opacity: 1' },
 ];
 
 describe('round-trip: feature corpus', () => {

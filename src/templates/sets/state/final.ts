@@ -1,12 +1,15 @@
 import { z } from 'zod';
+import { dsl } from '../../../dsl/dslMeta';
 import type { Node } from '../../../types/node';
 import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 
-export const stateFinalProps = z.object({
+export const stateFinalProps = dsl(z.object({
   color: z.string().describe('Color').optional(),
   r: z.number().min(1).describe('Radius').optional(),
+}), {
+  kwargs: ['color', 'r'],
 });
 
 export function stateFinalTemplate(id: string, props: Record<string, unknown>): Node {
