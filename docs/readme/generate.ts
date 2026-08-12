@@ -61,12 +61,34 @@ if (process.argv.includes('--urls')) {
 }
 
 /** Inkscape (SVG 1.1) rejects CSS3 rgba() paints — split into rgb() + opacity attrs. */
-function inkscapeSafe(svg: string): string {
+function rgbaToRgb(svg: string): string {
   return svg.replace(
     /(fill|stroke|stop-color)="rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)"/g,
     (_m, attr, r, g, b, a) =>
       a === '1' ? `${attr}="rgb(${r},${g},${b})"` : `${attr}="rgb(${r},${g},${b})" ${attr}-opacity="${a}"`,
   );
+}
+
+/**
+ * A label halo is a narrow stroke plus a blurred copy that carries it outward
+ * (see applyHalo in the SVG backend). Inkscape ignores CSS filter functions
+ * outright — rendering with and without them is pixel-identical — so only the
+ * narrow stroke survives and an arrow reads straight through its own label.
+ * Nothing here renders the blur, so spend it on the stroke it was widening.
+ */
+function haloToStroke(svg: string): string {
+  return svg.replace(/<text\b[^>]*>/g, tag => {
+    const blur = tag.match(/filter="drop-shadow\(0 0 ([\d.]+)px/);
+    if (!blur) return tag;
+    return tag
+      .replace(/ filter="[^"]*"/, '')
+      .replace(/stroke-width="([\d.]+)"/, (_m, w) => `stroke-width="${Number(w) + Number(blur[1])}"`);
+  });
+}
+
+/** Every transform the rasterizer needs, applied to a frame on its way out. */
+function inkscapeSafe(svg: string): string {
+  return haloToStroke(rgbaToRgb(svg));
 }
 
 /**
