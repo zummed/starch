@@ -12,6 +12,7 @@ const USAGE = `Usage: starch [command] [options]
 Commands:
   (none)              Serve the Starch playground locally
   check <file...>     Parse each file and report errors and warnings
+  grammar             Print the DSL description, generated from the schemas
 
 Serve options:
   --port <n>   Port to listen on (default: 4600; 0 picks a free port)
@@ -20,6 +21,9 @@ Serve options:
 Check options:
   --json       Emit machine-readable JSON instead of text
   -            Read the document from stdin instead of a file
+
+Grammar options:
+  --set <name> Document only this shape set (repeatable; default all)
 
 Exit codes:
   0  every document parsed with no errors and no warnings
@@ -160,10 +164,42 @@ async function runCheck(argv) {
   process.exit(failed.length > 0 ? 1 : 0);
 }
 
+/**
+ * Print the generated DSL description. The point is that an app storing
+ * .starch documents — or an agent writing them — can get the syntax without
+ * having starch as a dependency: `starch grammar > STARCH.md`.
+ */
+async function runGrammar(argv) {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    process.stdout.write(USAGE);
+    process.exit(0);
+  }
+  const distEntry = fileURLToPath(new URL('../dist/starch.js', import.meta.url));
+  if (!existsSync(distEntry)) {
+    process.stderr.write('build not found — in a dev checkout run: npm run build\n');
+    process.exit(1);
+  }
+  const { getStarchGuide } = await import(distEntry);
+  const sets = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--set' && argv[i + 1]) sets.push(argv[++i]);
+  }
+  try {
+    process.stdout.write(getStarchGuide(sets.length > 0 ? { sets } : undefined));
+  } catch (err) {
+    process.stderr.write(`${err.message}\n`);
+    process.exit(1);
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2);
   if (argv[0] === 'check') {
     runCheck(argv.slice(1));
+    return;
+  }
+  if (argv[0] === 'grammar') {
+    runGrammar(argv.slice(1));
     return;
   }
 

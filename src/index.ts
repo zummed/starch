@@ -14,6 +14,10 @@ export type { PlaygroundMessage, HostMessage } from './editing';
 export { parseScene } from './parser/parser';
 export type { ParsedScene } from './parser/parser';
 
+// ── Describing the DSL to whatever is writing it ──
+export { getStarchGuide } from './dsl/guide';
+export type { StarchGuideOptions } from './dsl/guide';
+
 // ── Animation ──
 export { buildTimeline } from './animation/timeline';
 export { evaluateAllTracks, evaluateTrack } from './animation/evaluator';

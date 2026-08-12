@@ -226,6 +226,11 @@ The same check is available programmatically as
 use that to validate starch inside your own app, or to expose a checking tool to
 whatever is generating the diagrams.
 
+The other half of that loop is `starch grammar`, which prints the DSL — generated from
+the schemas, so it matches the version you have — for a model that has to write starch
+without having it installed. See
+[`getStarchGuide`](#getstarchguide--handing-the-dsl-to-whatever-writes-it).
+
 To work on starch itself:
 
 ```bash
@@ -273,6 +278,10 @@ enabled with `use [core, state]`). Both `color` and `colour` are accepted everyw
 (not centers) with an arrowhead; `line` is the same without the head. The `a -> b`
 form takes waypoints and curve options: `a -> (250,100) -> b radius=15` routes a
 polyline, `a -> b bend=1` bends smoothly, and `smooth` fits a spline through waypoints.
+A label rides the midpoint of the route and stays legible over whatever it crosses: by
+default a soft halo hugs the glyphs, `labelBg=plate` sets it on an opaque slab instead,
+and `labelBg=none` leaves it bare. `labelMaxWidth=120` wraps a long label onto more
+lines rather than letting it run the length of the connection.
 
 **Animation.** `animate <duration> [loop] [easing=...]` opens the timeline. Each
 keyframe is a time — absolute (`2`), or relative to the previous one (`+1`), optionally
@@ -525,6 +534,42 @@ named `c1`), so you never have to guess a dot-path.
 To go all the way to an image, [`renderToSVG(dsl, { time })`](#static-svg) returns an
 SVG string — but unlike `parseScene` it requires a DOM, and it renders a document with
 warnings without complaint, so check first.
+
+### `getStarchGuide` — handing the DSL to whatever writes it
+
+Starch is often written by a model rather than a person, and that model usually doesn't
+have starch installed — an app that stores `.starch` documents is asked to produce one
+by an agent that has never seen the syntax. `getStarchGuide()` returns that syntax as a
+markdown string, so the app can forward it from its own tool without depending on
+anything in here:
+
+```js
+import { getStarchGuide } from '@bitsnbobs/starch';
+
+getStarchGuide();                    // ~11 KB of markdown, every registered set
+getStarchGuide({ sets: ['core'] });  // just the shapes you let documents use
+getStarchGuide({ examples: false }); // drop the worked examples
+```
+
+It needs no DOM and does no parsing. The same text is available without installing the
+package at all:
+
+```bash
+starch grammar > STARCH.md
+starch grammar --set core
+```
+
+**It is generated, not written.** The shape inventory comes from the template registry,
+property names and their descriptions from the schemas' `.describe()`, each shape's
+writing form from the same `dsl()` hints the parser reads, the easing list from
+`EasingNameSchema`, the strategy tables from `LAYOUT_STRATEGY_SCHEMAS`. Adding a
+property to a schema adds it to the guide; renaming one stops the old name being
+taught. Only the invariants no schema encodes — that ids are globally unique, that
+indentation nests, how keyframe times read — are prose. A test parses every example in
+the guide and fails on a single warning, so it can't teach syntax that doesn't work.
+
+Pair it with `parseScene`: forward the guide so the model knows what to write, then
+check what comes back and hand the warnings straight to it.
 
 ### Lower-level exports
 
