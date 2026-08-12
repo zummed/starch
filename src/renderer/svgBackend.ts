@@ -6,7 +6,7 @@
  * each frame and only their attributes are updated, avoiding the cost of
  * creating and removing DOM nodes every frame.
  */
-import type { RenderBackend, RendererInfo, RgbaColor, StrokeStyle, PathSegment } from './backend';
+import type { RenderBackend, RendererInfo, RgbaColor, StrokeStyle, HaloStyle, PathSegment } from './backend';
 import { rgbaToCSS } from './colorConvert';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -46,6 +46,42 @@ function applyFillStroke(el: SVGElement, fill: RgbaColor | null, stroke: StrokeS
     el.removeAttribute('stroke-dasharray');
     el.removeAttribute('stroke-linecap');
   }
+}
+
+/**
+ * Paint a text element's fill plus its halo.
+ *
+ * The halo is two effects layered, because neither alone reads well: a solid
+ * stroke behind the fill guarantees the occlusion right at the glyph — a
+ * blur alone lets a line show through the gaps in tight letter pairs — and
+ * a blurred copy carries it outward with a soft falloff, so the backing
+ * doesn't terminate in the hard lump a wide stroke leaves.
+ *
+ * The blur is stacked twice: one drop-shadow of a thin glyph is too faint to
+ * hide anything, and repeating it builds the alpha up near the letterforms
+ * while still fading to nothing at the edge.
+ */
+function applyHalo(el: SVGElement, fill: RgbaColor, halo: HaloStyle | null): void {
+  if (!halo) {
+    el.setAttribute('fill', rgbaToCSS(fill));
+    el.removeAttribute('stroke');
+    el.removeAttribute('stroke-width');
+    el.removeAttribute('stroke-linejoin');
+    el.removeAttribute('paint-order');
+    el.removeAttribute('filter');
+    return;
+  }
+
+  const color = rgbaToCSS(halo.color);
+  el.setAttribute('fill', rgbaToCSS(fill));
+  el.setAttribute('stroke', color);
+  el.setAttribute('stroke-width', String(halo.width));
+  // Behind the fill, and round-joined so sharp corners — the apex of an A,
+  // the spur of a K — don't spike out through the halo.
+  el.setAttribute('paint-order', 'stroke');
+  el.setAttribute('stroke-linejoin', 'round');
+  const shadow = `drop-shadow(0 0 ${halo.blur}px ${color})`;
+  el.setAttribute('filter', `${shadow} ${shadow}`);
 }
 
 /**
@@ -285,7 +321,7 @@ export class SvgRenderBackend implements RenderBackend {
     this._advanceCursor();
   }
 
-  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean, lines?: Array<{ text: string; width: number }>, lineHeight?: number): void {
+  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean, lines?: Array<{ text: string; width: number }>, lineHeight?: number, halo?: HaloStyle | null): void {
     const parent = this._currentGroup();
     const cursor = this._currentCursor();
     const el = obtainChild(parent, cursor, 'text');
@@ -298,7 +334,7 @@ export class SvgRenderBackend implements RenderBackend {
       el.removeAttribute('font-weight');
     }
     el.setAttribute('font-family', mono ? 'monospace' : 'sans-serif');
-    el.setAttribute('fill', rgbaToCSS(fill));
+    applyHalo(el, fill, halo ?? null);
 
     if (lines && lines.length > 1) {
       const lh = lineHeight ?? size * 1.4;

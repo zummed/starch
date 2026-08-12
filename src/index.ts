@@ -21,7 +21,7 @@ export { applyTrackValues, applyTrackValuesMut, cloneNodeTree } from './animatio
 
 // ── Rendering ──
 export { SvgRenderBackend } from './renderer/svgBackend';
-export type { RenderBackend, RgbaColor, StrokeStyle, PathSegment } from './renderer/backend';
+export type { RenderBackend, RgbaColor, StrokeStyle, PathSegment, HaloStyle } from './renderer/backend';
 export { emitFrame } from './renderer/emitter';
 export { computeViewBox, findActiveCamera, computeAutoFitViewBox } from './renderer/camera';
 export type { ViewBox } from './renderer/camera';

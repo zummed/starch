@@ -4,12 +4,16 @@ import { createNode } from '../../../types/node';
 import { parseColor } from '../../../types/color';
 import type { HslColor } from '../../../types/properties';
 import { dsl } from '../../../dsl/dslMeta';
+import type { TextMeasurer } from '../../../text/measure';
+import { pathLabelNode, type LabelBacking } from './pathLabel';
 
 export const lineProps = dsl(z.object({
   from: z.string().describe('Start point'),
   to: z.string().describe('End point'),
   label: z.string().describe('Label text').optional(),
   labelSize: z.number().describe('Label font size').optional(),
+  labelBg: z.enum(['halo', 'plate', 'none']).describe('Label backing — close-fitting halo (default), opaque plate, or none').optional(),
+  labelMaxWidth: z.number().describe('Wrap the label at this width in pixels').optional(),
   arrow: z.boolean().describe('Show arrowhead').optional(),
   smooth: z.boolean().describe('Smooth curves').optional(),
   bend: z.number().describe('Bend amount').optional(),
@@ -19,11 +23,11 @@ export const lineProps = dsl(z.object({
   positional: [
     { keys: ['route'], format: 'arrow' },
   ],
-  kwargs: ['label', 'labelSize', 'bend', 'color'],
+  kwargs: ['label', 'labelSize', 'labelBg', 'labelMaxWidth', 'bend', 'color'],
   flags: ['arrow', 'smooth', 'dashed'],
 });
 
-export function lineTemplate(id: string, props: Record<string, unknown>): Node {
+export function lineTemplate(id: string, props: Record<string, unknown>, measure?: TextMeasurer): Node {
   const from = props.from as PointRef;
   const to = props.to as PointRef;
   const smooth = (props.smooth as boolean) ?? false;
@@ -69,12 +73,17 @@ export function lineTemplate(id: string, props: Record<string, unknown>): Node {
   }
 
   if (label) {
-    children.push(createNode({
-      id: `${id}.label`,
-      text: { content: label, size: labelSize, align: 'middle' },
-      fill: { h: 0, s: 0, l: 80 },
-      transform: { pathFollow: `${id}.route`, pathProgress: 0.5 },
-    }));
+    children.push(pathLabelNode(
+      `${id}.label`,
+      label,
+      { path: `${id}.route`, progress: 0.5 },
+      {
+        size: labelSize,
+        backing: (props.labelBg as LabelBacking) ?? 'halo',
+        maxWidth: props.labelMaxWidth as number | undefined,
+      },
+      measure,
+    ));
   }
 
   return createNode({

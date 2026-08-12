@@ -236,6 +236,9 @@ function emitNode(
   } else if (node.ellipse) {
     backend.drawEllipse(node.ellipse.rx, node.ellipse.ry, fillRgba, strokeStyle);
   } else if (node.text) {
+    // The halo is the node's own and never inherited: a stroke on a shape is
+    // its outline, and containers that hold a label (group's dashed border,
+    // for one) would otherwise ring their own text in the border colour.
     backend.drawText(
       node.text.content,
       node.text.size ?? 14,
@@ -245,6 +248,9 @@ function emitNode(
       node.text.mono ?? false,
       node._measured?.lines,
       node.text.lineHeight,
+      node._halo
+        ? { color: colorToRgba(node._halo.color), width: node._halo.width, blur: node._halo.blur }
+        : null,
     );
   } else if (node.path) {
     const resolved = resolvePathGeometry(node.path, allRoots);

@@ -23,6 +23,17 @@ export interface StrokeStyle {
   dash?: { length: number; gap: number; pattern?: string };
 }
 
+/**
+ * Backing painted behind glyphs. `width` is the solid core (an SVG stroke
+ * width, so it extends half that far out from the outline); `blur` is how
+ * far it fades beyond the core.
+ */
+export interface HaloStyle {
+  color: RgbaColor;
+  width: number;
+  blur: number;
+}
+
 export type PathSegment =
   | { type: 'moveTo'; x: number; y: number }
   | { type: 'lineTo'; x: number; y: number }
@@ -55,7 +66,7 @@ export interface RenderBackend {
   // Draw commands
   drawRect(w: number, h: number, radius: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
   drawEllipse(rx: number, ry: number, fill: RgbaColor | null, stroke: StrokeStyle | null): void;
-  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean, lines?: Array<{ text: string; width: number }>, lineHeight?: number): void;
+  drawText(content: string, size: number, fill: RgbaColor, align: 'start' | 'middle' | 'end', bold: boolean, mono: boolean, lines?: Array<{ text: string; width: number }>, lineHeight?: number, halo?: HaloStyle | null): void;
   drawPath(segments: PathSegment[], fill: RgbaColor | null, stroke: StrokeStyle | null, drawProgress?: number): void;
   drawImage(src: string, w: number, h: number, fit: 'contain' | 'cover' | 'fill'): void;
 }

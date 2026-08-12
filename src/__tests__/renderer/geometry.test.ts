@@ -132,3 +132,23 @@ describe('text bounds respect alignment', () => {
     expect([b.minX, b.maxX]).toEqual([150, 250]);
   });
 });
+
+describe('route waypoints count toward the scene bounds', () => {
+  const scene = (route: unknown[]) => ([
+    { id: 'a', rect: { w: 40, h: 20 }, transform: { x: 100, y: 100 }, children: [] },
+    { id: 'b', rect: { w: 40, h: 20 }, transform: { x: 300, y: 100 }, children: [] },
+    { id: 'c', children: [{ id: 'c.route', path: { route }, children: [] }] },
+  ] as unknown as Node[]);
+
+  it('includes a waypoint that routes outside the nodes', () => {
+    // Without this the auto-fit frame stops at the nodes and the detour
+    // renders clipped — visible as a connection with its middle missing.
+    const b = computeSceneWorldBounds(scene(['a', [200, 260], 'b']))!;
+    expect(b.maxY).toBe(260);
+  });
+
+  it('ignores waypoints that name a node', () => {
+    const b = computeSceneWorldBounds(scene(['a', 'b']))!;
+    expect(b.maxY).toBe(110);
+  });
+});

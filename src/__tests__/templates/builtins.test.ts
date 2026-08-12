@@ -56,7 +56,8 @@ describe('lineTemplate', () => {
 
     const labelChild = node.children.find(c => c.id === 'conn.label');
     expect(labelChild).toBeDefined();
-    expect(labelChild!.text!.content).toBe('calls');
+    const labelText = labelChild!.children.find(c => c.id === 'conn.label.text');
+    expect(labelText!.text!.content).toBe('calls');
   });
 
   it('creates a dashed line', () => {

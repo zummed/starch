@@ -30,65 +30,59 @@ export function measureTextNodes(roots: Node[], measurer: TextMeasurer): void {
   }
 }
 
+/** Measure `node`'s text against `maxWidth`, reusing the cached result. */
+function measureInto(node: Node, measurer: TextMeasurer, maxWidth: number | undefined): void {
+  const t = node.text!;
+  const key = measureKey(t.content, t.size, t.bold, t.mono, t.lineHeight, maxWidth);
+  if ((node as any)._measureKey === key && node._measured) return;
+  node._measured = measurer.measure(t.content, {
+    size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
+  });
+  (node as any)._measureKey = key;
+}
+
+/**
+ * Width the children of `node` wrap at, or undefined when `node` isn't a text
+ * container. An explicit `_textMaxWidth` wins outright — a template that set
+ * it knows its own padding, and it's the only source for containers whose
+ * backing isn't a rect or ellipse (a halo-backed label has no backing shape
+ * at all).
+ */
+function wrapWidth(node: Node): number | undefined {
+  if (node._textMaxWidth !== undefined) return node._textMaxWidth;
+
+  const padX = node._textPad?.x ?? DEFAULT_PAD_X;
+  const rectChild = node.children.find(c => c.rect && c.rect.w > 0);
+  if (rectChild) return rectChild.rect!.w - padX * 2;
+
+  const ellipseChild = node.children.find(c => c.ellipse && c.ellipse.rx > 0);
+  if (ellipseChild) return ellipseChild.ellipse!.rx * 2 * 0.7 - padX;
+
+  return undefined;
+}
+
 function walkNode(node: Node, measurer: TextMeasurer): void {
   // Depth-first so parent shapes have up-to-date child measurements
   for (const child of node.children) {
     walkNode(child, measurer);
   }
 
-  // Text nodes inside a shape — wrap within the shape's width
-  if (node.children.length >= 2) {
-    const textChildren = node.children.filter(c => c.text);
-
-    if (textChildren.length > 0) {
-      const rectChild = node.children.find(c => c.rect && c.rect.w > 0);
-      if (rectChild) {
-        const padX = node._textPad?.x ?? DEFAULT_PAD_X;
-        const maxWidth = node._textMaxWidth ?? (rectChild.rect!.w - padX * 2);
-        if (maxWidth > 0) {
-          for (const textChild of textChildren) {
-            const t = textChild.text!;
-            const key = measureKey(t.content, t.size, t.bold, t.mono, t.lineHeight, maxWidth);
-            if ((textChild as any)._measureKey === key && textChild._measured) continue;
-            textChild._measured = measurer.measure(t.content, {
-              size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
-            });
-            (textChild as any)._measureKey = key;
-          }
+  // Text nodes inside a container — wrap within the container's width
+  const textChildren = node.children.filter(c => c.text);
+  if (textChildren.length > 0) {
+    const maxWidth = wrapWidth(node);
+    if (maxWidth !== undefined) {
+      if (maxWidth > 0) {
+        for (const textChild of textChildren) {
+          measureInto(textChild, measurer, maxWidth);
         }
-        return;
       }
-
-      const ellipseChild = node.children.find(c => c.ellipse && c.ellipse.rx > 0);
-      if (ellipseChild) {
-        const padX = node._textPad?.x ?? DEFAULT_PAD_X;
-        const maxWidth = node._textMaxWidth ?? (ellipseChild.ellipse!.rx * 2 * 0.7 - padX);
-        if (maxWidth > 0) {
-          for (const textChild of textChildren) {
-            const t = textChild.text!;
-            const key = measureKey(t.content, t.size, t.bold, t.mono, t.lineHeight, maxWidth);
-            if ((textChild as any)._measureKey === key && textChild._measured) continue;
-            textChild._measured = measurer.measure(t.content, {
-              size: t.size, bold: t.bold, mono: t.mono, lineHeight: t.lineHeight, maxWidth,
-            });
-            (textChild as any)._measureKey = key;
-          }
-        }
-        return;
-      }
+      return;
     }
   }
 
   // Standalone text node — measure natural width for flex layout / bounds
   if (node.text) {
-    const key = measureKey(node.text.content, node.text.size, node.text.bold, node.text.mono, node.text.lineHeight, undefined);
-    if ((node as any)._measureKey === key && node._measured) return;
-    node._measured = measurer.measure(node.text.content, {
-      size: node.text.size,
-      bold: node.text.bold,
-      mono: node.text.mono,
-      lineHeight: node.text.lineHeight,
-    });
-    (node as any)._measureKey = key;
+    measureInto(node, measurer, node._textMaxWidth);
   }
 }

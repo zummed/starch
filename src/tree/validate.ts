@@ -21,7 +21,7 @@ function collectIds(nodes: Node[], ids: Set<string>): void {
 
 /** Node keys that carry no authored meaning on their own. */
 const STRUCTURAL_KEYS = new Set([
-  'id', 'visible', 'children', '_isStyle', '_ownKeys', '_styleKeys', '_textMaxWidth',
+  'id', 'visible', 'children', '_isStyle', '_ownKeys', '_styleKeys', '_textMaxWidth', '_halo',
 ]);
 
 /**

@@ -170,6 +170,18 @@ export type PointRef = z.infer<typeof PointRefSchema>;
 export type PathGeom = z.infer<typeof PathGeomSchema>;
 export type ImageGeom = z.infer<typeof ImageGeomSchema>;
 
+/**
+ * Backing painted behind glyphs so text stays readable over whatever it
+ * crosses. `width` is the solid core that guarantees the occlusion; `blur`
+ * is how far it fades out beyond that, so the backing doesn't read as a
+ * hard lump around the letters. Mirrors text-halo-width / text-halo-blur.
+ */
+export interface TextHalo {
+  color: Color;
+  width: number;
+  blur: number;
+}
+
 // NodeInput matches what users/parsers provide (optional children, optional visible)
 export interface NodeInput {
   id: string;
@@ -194,6 +206,7 @@ export interface NodeInput {
   props?: Record<string, unknown>;
   _textPad?: { x: number; y: number };
   _textMaxWidth?: number;  // effective text wrap width; set by templates, read by measurement pass
+  _halo?: TextHalo;        // glyph halo behind text; set by templates, read by the renderer
   _measured?: {
     width: number;
     height: number;
@@ -233,6 +246,7 @@ export interface Node {
   };
   _textPad?: { x: number; y: number };
   _textMaxWidth?: number;
+  _halo?: TextHalo;
 }
 
 export function createNode(input: NodeInput): Node {

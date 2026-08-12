@@ -129,7 +129,7 @@ objects
 
   req: arrow from=client to=api label="request" color=slategray
   qry: arrow from=api to=db label="query" gap=6 color=slategray
-  back: db -> client gap=6 stroke dimgray width=1
+  back: db -> client bend=-1.4 gap=6 stroke dimgray width=1
 
   hint: text "arrow from=/to= and the a -> b shorthand build the same thing" size=11 fill dimgray at 380,250`,
   },

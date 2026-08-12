@@ -6,12 +6,15 @@ import type { HslColor } from '../../../types/properties';
 import type { AnchorPoint } from '../../../types/anchor';
 import { dsl } from '../../../dsl/dslMeta';
 import type { TextMeasurer } from '../../../text/measure';
+import { pathLabelNode, type LabelBacking } from './pathLabel';
 
 export const arrowProps = dsl(z.object({
   from: z.string().describe('Start point (node ID or x,y)'),
   to: z.string().describe('End point (node ID or x,y)'),
   label: z.string().describe('Label text').optional(),
   labelSize: z.number().describe('Label font size').optional(),
+  labelBg: z.enum(['halo', 'plate', 'none']).describe('Label backing — close-fitting halo (default), opaque plate, or none').optional(),
+  labelMaxWidth: z.number().describe('Wrap the label at this width in pixels').optional(),
   arrow: z.boolean().describe('Show end arrowhead').optional(),
   arrowStart: z.boolean().describe('Show start arrowhead').optional(),
   smooth: z.boolean().describe('Smooth curves').optional(),
@@ -23,7 +26,7 @@ export const arrowProps = dsl(z.object({
   positional: [
     { keys: ['route'], format: 'arrow' },
   ],
-  kwargs: ['label', 'labelSize', 'bend', 'gap', 'color'],
+  kwargs: ['label', 'labelSize', 'labelBg', 'labelMaxWidth', 'bend', 'gap', 'color'],
   flags: ['arrow', 'arrowStart', 'smooth', 'dashed'],
 });
 
@@ -103,35 +106,19 @@ export function arrowTemplate(id: string, props: Record<string, unknown>, measur
     }));
   }
 
-  // Label with background
+  // Label, riding the midpoint of the route
   if (label) {
-    const labelPadX = 6;
-    const labelPadY = 3;
-    let labelW = label.length * labelSize * 0.6 + labelPadX * 2;
-    let labelH = labelSize + labelPadY * 2;
-    if (measure) {
-      const m = measure.measure(label, { size: labelSize });
-      labelW = Math.ceil(m.width + labelPadX * 2);
-      labelH = Math.ceil(m.height + labelPadY * 2);
-    }
-    children.push(createNode({
-      id: `${id}.label`,
-      transform: { pathFollow: `${id}.route`, pathProgress: 0.5 },
-      _textMaxWidth: labelW - labelPadX * 2,
-      children: [
-        createNode({
-          id: `${id}.label.bg`,
-          rect: { w: labelW, h: labelH, radius: 3 },
-          fill: { h: 0, s: 0, l: 8 },
-          opacity: 0.85,
-        }),
-        createNode({
-          id: `${id}.label.text`,
-          text: { content: label, size: labelSize, align: 'middle' },
-          fill: { h: 0, s: 0, l: 80 },
-        }),
-      ],
-    }));
+    children.push(pathLabelNode(
+      `${id}.label`,
+      label,
+      { path: `${id}.route`, progress: 0.5 },
+      {
+        size: labelSize,
+        backing: (props.labelBg as LabelBacking) ?? 'halo',
+        maxWidth: props.labelMaxWidth as number | undefined,
+      },
+      measure,
+    ));
   }
 
   return createNode({

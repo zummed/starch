@@ -93,6 +93,22 @@ function accumulateNodeBounds(node: Node, worldX: number, worldY: number, bounds
       bounds.maxY = Math.max(bounds.maxY, worldY + pty);
     }
   }
+
+  // Literal waypoints on a route. Nothing else in the tree accounts for
+  // them, so a connection routed around an obstacle fell outside the
+  // auto-fit frame and rendered with its middle clipped away. Points that
+  // name a node are skipped — that node already contributes its own bounds.
+  if (node.path?.route?.length) {
+    for (const ref of node.path.route) {
+      if (!Array.isArray(ref) || ref.length !== 2) continue;
+      const [ptx, pty] = ref;
+      if (typeof ptx !== 'number' || typeof pty !== 'number') continue;
+      bounds.minX = Math.min(bounds.minX, worldX + ptx);
+      bounds.minY = Math.min(bounds.minY, worldY + pty);
+      bounds.maxX = Math.max(bounds.maxX, worldX + ptx);
+      bounds.maxY = Math.max(bounds.maxY, worldY + pty);
+    }
+  }
   if (w > 0 || h > 0) {
     // Text is anchored the way the renderer anchors it (SVG text-anchor
     // start/middle/end), so an aligned label grows to one side only.

@@ -22,7 +22,7 @@ function createMockBackend() {
     popOpacity: () => calls.push({ method: 'popOpacity', args: [] }),
     drawRect: (w, h, radius, fill, stroke) => calls.push({ method: 'drawRect', args: [w, h, radius, fill, stroke] }),
     drawEllipse: (rx, ry, fill, stroke) => calls.push({ method: 'drawEllipse', args: [rx, ry, fill, stroke] }),
-    drawText: (content, size, fill, align, bold, mono) => calls.push({ method: 'drawText', args: [content, size, fill, align, bold, mono] }),
+    drawText: (content, size, fill, align, bold, mono, lines, lineHeight, stroke) => calls.push({ method: 'drawText', args: [content, size, fill, align, bold, mono, lines, lineHeight, stroke] }),
     drawPath: (segments, fill, stroke, progress) => calls.push({ method: 'drawPath', args: [segments, fill, stroke, progress] }),
     drawImage: (src, w, h, fit) => calls.push({ method: 'drawImage', args: [src, w, h, fit] }),
   };
@@ -92,6 +92,37 @@ describe('emitFrame', () => {
     expect(drawCall!.args[0]).toBe('Hello');
     expect(drawCall!.args[1]).toBe(14);
     expect(drawCall!.args[4]).toBe(true); // bold
+  });
+
+  it('passes a text node its halo, colour resolved', () => {
+    const { backend, calls } = createMockBackend();
+    const node = createNode({
+      id: 't',
+      text: { content: 'Hello', size: 14 },
+      fill: { h: 0, s: 0, l: 90 },
+      _halo: { color: { h: 0, s: 0, l: 8 }, width: 2, blur: 3 },
+    });
+    emitFrame(backend, [node], [node]);
+    const drawCall = calls.find(c => c.method === 'drawText');
+    expect(drawCall!.args[8]).toMatchObject({ width: 2, blur: 3 });
+    expect(drawCall!.args[8].color).toMatchObject({ r: 20, g: 20, b: 20 });
+  });
+
+  it('does not ring text with a container stroke', () => {
+    const { backend, calls } = createMockBackend();
+    // group draws a dashed border on the node that holds its own title —
+    // inheriting it would halo every label in the border colour.
+    const node = createNode({
+      id: 'g',
+      rect: { w: 200, h: 100 },
+      stroke: { color: { h: 0, s: 0, l: 40 }, width: 2 },
+      children: [
+        createNode({ id: 'g.title', text: { content: 'Group', size: 11 }, fill: { h: 0, s: 0, l: 80 } }),
+      ],
+    });
+    emitFrame(backend, [node], [node]);
+    const drawCall = calls.find(c => c.method === 'drawText');
+    expect(drawCall!.args[8]).toBeNull();
   });
 
   it('emits drawPath for a path node with points', () => {

@@ -165,7 +165,11 @@ objects
 
   l_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 320,900
   l_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 520,900
-  l: line from=l_src to=l_dst label="line" color=coral`,
+  l: line from=l_src to=l_dst label="line" color=coral
+
+  p_src: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 640,900
+  p_dst: rect 40x30 radius=4 fill midnightblue stroke steelblue width=1 at 840,900
+  p: arrow from=p_src to=p_dst label="plate" labelBg=plate color=steelblue`,
   },
   {
     name: 'state-shapes',
